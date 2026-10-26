@@ -134,8 +134,26 @@ jobs:
         run: |
           set -ex
           mkdir -p build logs
-          xcrun metal -std=metal3.0 -c chapter1/trace_kernel.metal \
-            -target air64-apple-macos13.0.0 -o build/trace_kernel.air
+          # Introspect the SDK's metal_raytracing header (where is ray_query gated?)
+          METAL_TOOL="$(xcrun --find metal)"
+          METAL_INC="$(dirname "$METAL_TOOL")/../metal/include"
+          grep -n "ray_query" "$METAL_INC/metal_raytracing" | head -8 || true
+          grep -n "__METAL_VERSION__" "$METAL_INC/metal_raytracing" | head -12 || true
+          # Cascade over -std values until one compiles the Metal 3 ray_query kernel
+          OK_STD=""
+          for STD in metal3.2 metal3.1 metal3.0 metal2.4; do
+            if xcrun metal -std="$STD" -c chapter1/trace_kernel.metal \
+                 -target air64-apple-macos14.0.0 -o build/trace_kernel.air; then
+              OK_STD="$STD"; break
+            fi
+            rm -f build/trace_kernel.air
+          done
+          if [ -z "$OK_STD" ]; then
+            echo "FATAL: no -std value compiled the ray_query kernel"
+            exit 1
+          fi
+          echo "METAL_STD=$OK_STD" >> "$GITHUB_ENV"
+          echo "using -std=$OK_STD"
           xcrun metallib build/trace_kernel.air -o build/trace_kernel.metallib
           clang -fobjc-arc -framework Metal -framework Foundation \
             chapter1/probe_metal_rt.m -o build/probe_metal_rt
@@ -152,8 +170,19 @@ jobs:
           clang -fobjc-arc -target arm64-apple-ios16.0.0 -isysroot "$SDK" \
             -framework Metal -framework Foundation \
             -c chapter1/probe_metal_rt.m -o build/probe_metal_rt.ios.o
-          xcrun -sdk iphoneos metal -std=metal3.0 -c chapter1/trace_kernel.metal \
-            -target air64-apple-ios16.0.0 -o build/trace_kernel.ios.air
+          OK_STD=""
+          for STD in "${METAL_STD:-metal3.1}" metal3.2 metal3.1 metal3.0 metal2.4; do
+            if xcrun -sdk iphoneos metal -std="$STD" -c chapter1/trace_kernel.metal \
+                 -target air64-apple-ios17.0.0 -o build/trace_kernel.ios.air; then
+              OK_STD="$STD"; break
+            fi
+            rm -f build/trace_kernel.ios.air
+          done
+          if [ -z "$OK_STD" ]; then
+            echo "FATAL: no -std value compiled the ray_query kernel for iOS"
+            exit 1
+          fi
+          echo "iOS MSL std: $OK_STD"
           xcrun -sdk iphoneos metallib build/trace_kernel.ios.air \
             -o build/trace_kernel.ios.metallib
           clang -target arm64-apple-ios16.0.0 -isysroot "$SDK" \
