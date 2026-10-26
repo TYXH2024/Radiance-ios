@@ -43,7 +43,7 @@ typedef struct {
 
 typedef struct {
     float distance;
-    uint32_t geometry_id;
+    uint32_t primitive_id;
     uint32_t hit;
     uint32_t pad;
 } ProbeResult;
@@ -288,7 +288,9 @@ int main(int argc, char **argv) {
         [traceEnc setBuffer:rayBuffer offset:0 atIndex:0];
         [traceEnc setBuffer:resultBuffer offset:0 atIndex:1];
         [traceEnc setBuffer:countBuffer offset:0 atIndex:2];
-        [traceEnc setAccelerationStructure:tlas atIndex:0];
+        // Metal binds acceleration structures at BUFFER indices
+        // (MTLComputeCommandEncoder.h: setAccelerationStructure:atBufferIndex:)
+        [traceEnc setAccelerationStructure:tlas atBufferIndex:3];
         NSUInteger threadsPerGroup = 64;
         MTLSize groupSize = MTLSizeMake(threadsPerGroup, 1, 1);
         MTLSize groupCount =
@@ -319,8 +321,8 @@ int main(int argc, char **argv) {
                     hitOk++;
                 } else {
                     if (bad < 5) {
-                        printf("[mismatch] ray %u: expected hit@5.0 got hit=%u dist=%f geom=%u\n",
-                               i, results[i].hit, results[i].distance, results[i].geometry_id);
+                        printf("[mismatch] ray %u: expected hit@5.0 got hit=%u dist=%f prim=%u\n",
+                               i, results[i].hit, results[i].distance, results[i].primitive_id);
                     }
                     bad++;
                 }
