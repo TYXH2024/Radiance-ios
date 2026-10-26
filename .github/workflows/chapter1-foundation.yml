@@ -6,6 +6,7 @@ on:
     branches: [ main ]
     paths:
       - 'chapter1/**'
+      - 'ios/**'
       - '.github/workflows/chapter1-foundation.yml'
       - 'docs/chapter-1-foundation-test.md'
 
@@ -86,13 +87,63 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
   # ------------------------------------------------------------------
+  # ios16 native core (incident fix): cross-compile libcore.dylib for
+  # iphoneos arm64 from the reconstructed v7 source.
+  # Signal-safety rules (docs/incident-2026-10-26/INCIDENT_REPORT.md §4b):
+  #   R1 claim = FULL libcore __TEXT; R2 whitelist forward (JVM/JIT only);
+  #   R3 official-API zero-fault probe.
+  # ------------------------------------------------------------------
+  ios16-core:
+    name: ios16 libcore.dylib (iphoneos arm64)
+    needs: source-evidence
+    runs-on: macos-26
+    steps:
+      - name: Checkout Radiance-ios
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21 (jni.h)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Cross-compile libcore.dylib (arm64 iphoneos)
+        run: |
+          set -ex
+          mkdir -p build
+          SDK="$(xcrun --sdk iphoneos --show-sdk-path)"
+          JH="${JAVA_HOME:-$(/usr/libexec/java_home)}"
+          clang -target arm64-apple-ios14.0.0 -isysroot "$SDK" \
+            -I "$JH/include" -I "$JH/include/darwin" \
+            -O2 -fvisibility=hidden -lobjc \
+            -shared -o build/libcore.dylib \
+            ios/libcore_v7.c
+          file build/libcore.dylib
+          nm -gU build/libcore.dylib | head
+          test -f build/libcore.dylib
+          echo "IOS16_LIBCORE_BUILD_OK"
+
+      - name: Smoke-check exported surface
+        run: |
+          set -ex
+          nm -gU build/libcore.dylib | grep -q "_JNI_OnLoad"
+          echo "JNI_OnLoad exported"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios16-libcore
+          path: build/libcore.dylib
+          if-no-files-found: error
+
+  # ------------------------------------------------------------------
   # GPU-level evidence (macOS Apple Silicon). Best-effort: macOS runner
   # acquisition can be capacity/billing-blocked on free accounts; the
   # source-evidence job above carries the architectural facts regardless.
   # ------------------------------------------------------------------
   foundation-probe:
     name: gpu probes (${{ matrix.runner }})
-    needs: source-evidence
+    needs: [source-evidence, ios16-core]
     strategy:
       fail-fast: false
       matrix:
