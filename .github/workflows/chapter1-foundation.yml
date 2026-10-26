@@ -1,0 +1,135 @@
+name: chapter1-foundation
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+    paths:
+      - 'chapter1/**'
+      - '.github/workflows/chapter1-foundation.yml'
+      - 'docs/chapter-1-foundation-test.md'
+
+jobs:
+  foundation-probe:
+    name: foundation probes (${{ matrix.runner }})
+    strategy:
+      fail-fast: false
+      matrix:
+        # macos-14 = M1 (Apple7, Metal RT API via software/inline traversal)
+        # macos-26 = M-series with Apple9/10-class GPU (dedicated intersection HW), when available
+        runner: [ macos-14, macos-26 ]
+    runs-on: ${{ matrix.runner }}
+    continue-on-error: ${{ matrix.runner == 'macos-26' }}
+    steps:
+      - name: Checkout Radiance-ios
+        uses: actions/checkout@v4
+
+      - name: Checkout Prisma launcher (shipped MoltenVK binary + Vulkan headers)
+        uses: actions/checkout@v4
+        with:
+          repository: Gsjsjzhznsz/Prisma-Minecraft-iOS-Launcher2
+          path: launcher
+          fetch-depth: 1
+
+      - name: Inspect the launcher's shipped libMoltenVK.dylib (iOS arm64 build)
+        run: |
+          set -x
+          DYLIB="launcher/Natives/resources/Frameworks/libMoltenVK.dylib"
+          file "$DYLIB"
+          echo "--- version markers ---"
+          strings "$DYLIB" | grep -m 5 -E 'MoltenVK-[0-9]' || echo "(no MoltenVK-x.y.z strings)"
+          echo "--- RT extension strings inside shipped binary ---"
+          for E in VK_KHR_acceleration_structure VK_KHR_ray_tracing_pipeline VK_KHR_ray_query; do
+            if strings "$DYLIB" | grep -q "$E"; then
+              echo "$E: PRESENT"
+            else
+              echo "$E: ABSENT"
+            fi
+          done
+          echo "--- surface entry points (renderer lock evidence) ---"
+          for S in vkCreateMetalSurfaceEXT vkCreateIOSSurfaceMVK; do
+            if strings "$DYLIB" | grep -q "$S"; then echo "$S: exported"; fi
+          done
+
+      - name: Build probe assets (macOS)
+        run: |
+          set -ex
+          mkdir -p build logs
+          xcrun metal -c chapter1/trace_kernel.metal \
+            -target air64-apple-macos13.0.0 -o build/trace_kernel.air
+          xcrun metallib build/trace_kernel.air -o build/trace_kernel.metallib
+          clang -fobjc-arc -framework Metal -framework Foundation \
+            chapter1/probe_metal_rt.m -o build/probe_metal_rt
+
+      - name: Run Metal RT probe (macOS, real GPU)
+        run: |
+          ./build/probe_metal_rt build/trace_kernel.metallib chapter1/trace_kernel.metal \
+            | tee logs/metal_rt_macos.log
+
+      - name: Cross-compile probes for iOS (iphoneos arm64)
+        run: |
+          set -ex
+          SDK="$(xcrun --sdk iphoneos --show-sdk-path)"
+          clang -fobjc-arc -target arm64-apple-ios16.0.0 -isysroot "$SDK" \
+            -framework Metal -framework Foundation \
+            -c chapter1/probe_metal_rt.m -o build/probe_metal_rt.ios.o
+          xcrun -sdk iphoneos metal -c chapter1/trace_kernel.metal \
+            -target air64-apple-ios16.0.0 -o build/trace_kernel.ios.air
+          xcrun -sdk iphoneos metallib build/trace_kernel.ios.air \
+            -o build/trace_kernel.ios.metallib
+          clang -target arm64-apple-ios16.0.0 -isysroot "$SDK" \
+            -I launcher/Natives/external/MobileGlues/MobileGlues-cpp/include \
+            -c chapter1/probe_moltenvk.c -o build/probe_moltenvk.ios.o
+          echo "iOS_CROSS_COMPILE_OK"
+          file build/probe_metal_rt.ios.o build/trace_kernel.ios.metallib build/probe_moltenvk.ios.o
+
+      - name: Install MoltenVK (macOS runtime)
+        run: |
+          set -ex
+          brew install molten-vk 2>/dev/null || brew upgrade molten-vk
+          MVK_DYLIB="$(find "$(brew --cellar)/molten-vk" -name libMoltenVK.dylib 2>/dev/null | head -n 1 || true)"
+          if [ -z "$MVK_DYLIB" ]; then
+            MVK_DYLIB="$(find /opt/homebrew /usr/local -name libMoltenVK.dylib 2>/dev/null | head -n 1 || true)"
+          fi
+          if [ -z "$MVK_DYLIB" ]; then
+            echo "FATAL: libMoltenVK.dylib not found after brew install molten-vk"
+            exit 1
+          fi
+          echo "MVK_DYLIB=$MVK_DYLIB" >> "$GITHUB_ENV"
+          echo "using $MVK_DYLIB"
+          strings "$MVK_DYLIB" | grep -m 3 -E 'MoltenVK-[0-9]' || true
+
+      - name: Build and run MoltenVK probe (macOS, real GPU)
+        run: |
+          set -ex
+          clang -I launcher/Natives/external/MobileGlues/MobileGlues-cpp/include \
+            chapter1/probe_moltenvk.c -o build/probe_moltenvk
+          MVK_DYLIB="$MVK_DYLIB" ./build/probe_moltenvk | tee logs/moltenvk_macos.log
+
+      - name: Write run summary
+        if: always()
+        run: |
+          {
+            echo "## Chapter 1 — Foundation Probe Results (${{ matrix.runner }})"
+            echo
+            echo "### Probe A: Metal Ray Tracing (the iOS RT API path)"
+            echo '```'
+            cat logs/metal_rt_macos.log || echo "(log missing)"
+            echo '```'
+            echo
+            echo "### Probe B: MoltenVK capability matrix"
+            echo '```'
+            cat logs/moltenvk_macos.log || echo "(log missing)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: chapter1-${{ matrix.runner }}
+          path: |
+            logs/
+            build/*.metallib
+            build/*.ios.o
+          if-no-files-found: warn
