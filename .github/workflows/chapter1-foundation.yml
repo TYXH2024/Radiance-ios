@@ -96,7 +96,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        runner: [ macos-15, macos-26 ]
+        # macos-26 acquires runners instantly on this account; macos-14/15
+        # repeatedly failed runner acquisition (cancelled after long queue),
+        # so the GPU evidence job runs on macos-26 only.
+        runner: [ macos-26 ]
     runs-on: ${{ matrix.runner }}
     continue-on-error: true
     steps:
@@ -164,10 +167,21 @@ jobs:
           clang -fobjc-arc -framework Metal -framework Foundation \
             chapter1/probe_metal_rt.m -o build/probe_metal_rt
 
-      - name: Run Metal RT probe (macOS, real GPU)
+      - name: Run Metal RT probe (macOS GPU)
         run: |
+          set -o pipefail
           ./build/probe_metal_rt build/trace_kernel.metallib chapter1/trace_kernel.metal \
             | tee logs/metal_rt_macos.log
+          rc=${PIPESTATUS[0]}
+          # exit 3 = METAL_RT_API_UNAVAILABLE: GitHub macOS VMs expose a
+          # paravirtual GPU ("Apple Paravirtual device", Apple5) without ray
+          # tracing. Compile+toolchain paths are still fully validated here;
+          # runtime RT verification runs on real hardware (A17 Pro+ device).
+          if [ "$rc" -eq 3 ]; then
+            echo "::warning::Metal RT not available on this runner's VM GPU (paravirtual) — runtime trace skipped, toolchain validated"
+          elif [ "$rc" -ne 0 ]; then
+            exit "$rc"
+          fi
 
       - name: Cross-compile probes for iOS (iphoneos arm64)
         run: |

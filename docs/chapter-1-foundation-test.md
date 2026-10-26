@@ -13,9 +13,10 @@
 
 **底子成立，且方向唯一明确：**
 
-1. **硬件光追只能走 Metal RT 直连**。iOS 上唯一的 Vulkan 实现 MoltenVK（无论上游最新 main 还是启动器内置 1.4.3）都没有实现 Vulkan 光追三扩展。这不是性能问题，是 API 缺位——所以"移植"的正确形态是：MCVR 的 Vulkan 栈继续跑光栅/计算/UI，**光追子系统整体换成 Metal RT 后端**。
-2. **Vulkan 侧地基完好**。MCVR 除 RT 三扩展外的全部硬性需求（Vulkan 1.3+ 实例、sync2、push descriptor、deferred host operations、descriptor indexing、BDA 等）都在 MoltenVK 的能力清单内，待 Probe B 实测确认。
-3. **Metal RT 侧待实测确认**（Probe A）：BLAS/TLAS 构建、`ray_query` 求交、mask 剔除、数值正确性。Apple9+（A17 Pro 起）有专用求交硬件；Apple6–8 API 可用但走内联遍历。
+1. **硬件光追只能走 Metal RT 直连**。iOS 上唯一的 Vulkan 实现 MoltenVK（上游源码零实现 + 启动器内置 dylib 二进制零字符串，双重复核）没有 Vulkan 光追三扩展。所以"移植"的正确形态是：MCVR 的 Vulkan 栈继续跑光栅/计算/UI，**光追子系统整体换成 Metal RT 后端**，资源互操作经实测存在的 `VK_EXT_metal_objects` 桥。
+2. **Vulkan 侧地基实测成立（含 4 项已定处置的缺口）**。在真实 MoltenVK（1.4.2，macOS runner 实测；与启动器内置 1.4.3 同源相邻版本）上对照 MCVR 12 项硬门槛：8 项直接 PRESENT；`synchronization_2` 扩展名缺失但 Vulkan 1.3 核心特性 `synchronization2=true`（已晋升核心，MCVR 改判读即可）；`vertex_input_dynamic_state` 缺失（MCVR 侧降级为管线重编译即可）；RT 三项缺失（即 Metal RT 后端的职责本身）。
+3. **Metal RT 工具链实测全通**：`ray_query` 内核以 MSL `metal3.2` 编译为 macOS air64 与 iOS air64 两份 metallib；探针宿主代码交叉编译为 iOS arm64 .o。运行时 RT 验证受限于 CI 环境（GitHub macOS VM 的 GPU 为 "Apple Paravirtual device"/Apple5 家族，无光追），需在真机（A17 Pro+）执行——探针二进制本身就是真机测试工具，将在第二章经启动器上真机跑。
+4. **双渲染器锁定兼容性成立**：MobileGlues 与 MoltenVK 两条渲染器路径的 Vulkan 底座都是 MoltenVK，Probe B 的矩阵对两者同时成立；Radiance 采用 Vulkan UI 变体后不经过 GL，转译层不影响 Radiance 本体。
 
 ---
 
@@ -126,41 +127,85 @@ MCVR ──┬── 光栅 / 计算 / UI / 后处理 / 资源管理 ──► V
 
 ## 5. CI 实测结果
 
-> 以下由 `.github/workflows/chapter1-foundation.yml` 自动生成，运行后回填。
+运行记录：commit `631823a`（macos-26 job，Xcode 16.4）+ `source evidence (linux)` job。workflow：`.github/workflows/chapter1-foundation.yml`。
 
-### 5.1 Probe A — Metal RT（待回填）
+### 5.1 Linux 源码证据链（全部通过）
 
-```
-（待 CI 运行：VERDICT 行 + 关键计时数据）
-```
+- MoltenVK 上游 main（浅克隆 HEAD）：`VK_KHR_ray_query` / `VK_KHR_ray_tracing_pipeline` / `VK_KHR_acceleration_structure` / `VK_KHR_pipeline_library` 在 `MoltenVK/MoltenVK/Vulkan/` 全部 **0 次出现**；`VK_KHR_deferred_host_operations` 存在（>0，仅作为独立扩展）
+- 启动器内置 `libMoltenVK.dylib`（iOS arm64 Mach-O）：三个 RT 扩展字符串全部 **ABSENT**；`vkCreateMetalSurfaceEXT` / `vkCreateIOSSurfaceMVK` 导出符号存在（渲染器锁定路径的 surface 证据）
+- `probe_moltenvk.c` 以启动器 vendored 的 Vulkan 头编译通过（clang -Wall -Wextra）
 
-### 5.2 Probe B — MoltenVK 矩阵（待回填）
+### 5.2 Probe A — Metal RT（工具链通过；运行时受 CI 环境限制）
 
-```
-（待 CI 运行：实例版本、设备扩展矩阵、特性链、VERDICT 行）
-```
+- **MSL 内核编译**：`xcrun metal -std=metal3.2`，macOS 目标 `air64-apple-macos14.0.0` 与 iOS 目标 `air64-apple-ios17.0.0` 均通过；`metallib` 版本 1.2.8
+- **iOS 交叉编译产物**：`probe_metal_rt.ios.o`、`probe_moltenvk.ios.o` 均为 `Mach-O 64-bit object arm64`；`trace_kernel.ios.metallib` 为 `MetalLib executable`
+- **运行时**：CI 的 macOS VM GPU 为 `"Apple Paravirtual device"`（Apple5 家族，paravirtual 虚拟 GPU），`supportsRaytracing=NO` → 探针按设计输出 `VERDICT: METAL_RT_API_UNAVAILABLE` 并以专用退出码 3 结束（workflow 已将该情形标记为环境性跳过）。**这是 CI 环境限制而非平台限制**：Apple6+ 家族的真实 GPU（A14+/M1+）API 可用，Apple9+（A17 Pro/M3+）有专用求交硬件。运行时 RT 验证将在真机执行（探针二进制即测试工具）。
 
-### 5.3 iOS arm64 交叉编译（待回填）
+### 5.3 Probe B — MoltenVK 能力矩阵（macos-26 实测，brew MoltenVK 1.4.2）
 
-```
-（待 CI 运行：iOS_CROSS_COMPILE_OK + 产物 file 类型）
-```
+设备：`Apple Paravirtual device`，`deviceType=integrated`，`vendorID=0x106b (Apple)`，实例以 MCVR 同款 `apiVersion=1.3` 创建成功，设备报告 `apiVersion=1.3.357`（设备版本受实例版本封顶，属 Vulkan 标准行为）。共 **129 个设备扩展**。
 
-### 5.4 启动器内置 dylib 二进制验证（待回填）
+MCVR 硬门槛矩阵（physical_device.cpp:112 清单）：
 
-```
-（待 CI 运行：file 类型 + RT 扩展字符串 ABSENT 确认 + surface 符号确认）
-```
+| 扩展 | 状态 | 处置 |
+| --- | --- | --- |
+| VK_KHR_swapchain | **PRESENT** | 现成 |
+| VK_KHR_deferred_host_operations | **PRESENT** | 现成 |
+| VK_KHR_push_descriptor | **PRESENT** | 现成 |
+| VK_KHR_spirv_1_4 | **PRESENT** | 现成 |
+| VK_KHR_image_format_list | **PRESENT** | 现成 |
+| VK_EXT_descriptor_indexing | **PRESENT** | 现成 |
+| VK_EXT_extended_dynamic_state2 | **PRESENT** | 现成 |
+| VK_EXT_extended_dynamic_state3 | **PRESENT** | 现成 |
+| VK_KHR_synchronization_2 | ABSENT（扩展名） | **核心特性 `synchronization2=true`**（Vulkan 1.3 晋升核心）→ MCVR 改为按特性判读即可 |
+| VK_EXT_vertex_input_dynamic_state | ABSENT | MCVR 侧降级：顶点输入状态回退为管线重编译路径 |
+| VK_KHR_ray_tracing_pipeline | ABSENT | 即 Metal RT 后端的职责（预期内） |
+| VK_KHR_acceleration_structure | ABSENT | 同上 |
+
+Vulkan-RT 附加项（信息性）：`ray_query` / `pipeline_library` / `ray_tracing_position_fetch` / `ray_tracing_maintenance1` 全部 ABSENT（与上游源码证据一致）；**`VK_EXT_metal_objects` PRESENT（spec 2）**——Vulkan↔Metal 资源互操作桥存在，混合架构的资源互通前提成立；`VK_KHR_maintenance5` PRESENT。
+
+特性链（vkGetPhysicalDeviceFeatures2）：`shaderDrawParameters` / `bufferDeviceAddress` / `runtimeDescriptorArray` / `descriptorBindingPartiallyBound` / `hostQueryReset` / `timelineSemaphore` / **`synchronization2`** / `maintenance4` 全部 **true**；`accelerationStructure` / `rayTracingPipeline` / `rayTracingPipelineTraceRaysIndirect` / `rayQuery` 全部 false（预期内）。
+
+**VERDICT: MOLTENVK_MCVR_GATE_MISSING_4_EXTENSIONS** —— 四项缺口全部有明确处置路径（见上表）。
+
+### 5.4 启动器内置 dylib 二进制验证
+
+`Natives/resources/Frameworks/libMoltenVK.dylib`：`Mach-O 64-bit dynamically linked shared library arm64`（iOS 构建）；RT 扩展字符串 ABSENT；`vkCreateMetalSurfaceEXT` / `vkCreateIOSSurfaceMVK` 导出。二进制为 iOS 切片故无法在 macOS CI 加载运行，运行时矩阵由同源相邻版本（brew 1.4.2）代理，二进制级验证与源码级证据双重覆盖。
+
+### 5.5 过程中校准的 Metal API 事实（第二章直接复用）
+
+实测纠正了若干文档/记忆错误，全部经真实 SDK 头文件与 SPIRV-Cross 参考输出证实：
+
+| 项 | 事实 |
+| --- | --- |
+| MSL 内联光追类型 | `raytracing::intersection_query<raytracing::instancing, raytracing::triangle_data>`（不存在 `ray_query` 模板；Xcode 16.4 头文件零命中） |
+| 求交循环 | `q.reset(raytracing::ray(o,d,tmin,tmax), AS, mask, params)` → `while(q.next()) q.commit_triangle_intersection()` → `q.get_committed_*()` |
+| AS 绑定 | 着色器 `[[buffer(n)]]` + 宿主 `setAccelerationStructure:atBufferIndex:`（无 `[[acceleration_structure(n)]]` 属性） |
+| AS 构建 | 专用 `[commandBuffer accelerationStructureCommandEncoder]`（MTLAccelerationStructureCommandEncoder），非 compute encoder |
+| 实例结构体 | `MTLAccelerationStructureInstanceDescriptor{MTLPackedFloat4x3 transformationMatrix; options; mask; intersectionFunctionTableOffset; accelerationStructureIndex}` |
+| 设备查询 | `MTLDevice.supportsRaytracing`（小写 t）；`MTLGPUFamilyApple9` 为最后一个家族枚举（无 Apple10） |
+| MSL 语言版本 | `-std=metal3.2/3.1/3.0` 合法（`metal2.4` 非法拼写）；ray query 需 Metal 3 语言级 |
+| 着色器链对齐 | SPIRV-Cross（GLSL→SPIR-V→MSL 正是移植链）为 Vulkan ray query 发射的正是上述 MSL 形态 → 探针内核形状 = 移植目标形状 |
 
 ---
 
 ## 6. 第一章结论与第二章路线
 
-（待 CI 结果回填后定稿）
+### 6.1 结论
 
-**若 Probe A = METAL_RT_OK 且 Probe B 非 RT 项全 PRESENT**：
-底子完全成立。第二章进入 MCVR 的 iOS 交叉编译与 Metal surface 后端（P0：无 RT 模式跑通 Vulkan 基础渲染）；第三章做 Metal RT 后端最小闭环（单 BLAS 出首帧）。
+**底子成立。** 三根支柱的实测状态：
 
-**若 Probe A 失败**：按失败环节定位（API 缺位 / 编译失败 / 数值错误），评估替代方案（intersection function table 管线 vs ray_query）。
+1. **Vulkan 地基（两锁定渲染器共用）**：MoltenVK 满足 MCVR 12 项硬门槛中的 8 项，其余 4 项处置路径全部明确（sync2 按核心特性判读、vertex input dynamic state 降级、RT 三项归 Metal RT 后端）。`VK_EXT_metal_objects` 互操作桥实测存在。
+2. **Metal RT 地基**：iOS 工具链全通（MSL 3.2 光追内核 → iOS metallib；宿主代码 → iOS arm64 .o）；API 用法已对真实 SDK 校准；运行时验证待真机（CI 的 paravirtual GPU 无 RT 属环境限制）。
+3. **移植路线判定**：唯一合理架构 = **MCVR 内嵌 Metal RT 后端**（Vulkan 走光栅/计算，RT 走 Metal，经 VK_EXT_metal_objects 互通资源），着色器链 GLSL→SPIR-V（shaderc 原样）→MSL（SPIRV-Cross，其 ray query 输出形态与探针内核一致）。
 
-**若 Probe B 意外缺失非 RT 项**：逐项评估绕行或降级（push descriptor / EDS3 等在 MCVR 中多为可选增强路径）。
+### 6.2 第二章路线（P0：无 RT 模式跑通 Vulkan 基础渲染）
+
+1. MCVR iOS 交叉编译（CMake iOS toolchain，剥离 GLFW/DLSS/XeSS/FFX，shaderc 交叉编译——启动器 NG-GL4ES 已有 glslang 内嵌先例）
+2. `RadianceClient.java` 增加 darwin 分支（os.name="Mac OS X" → 释放并加载 libcore.dylib）
+3. MCVR 新增 Metal/CAMetalLayer surface 后端（`window_surface.cpp` 仿 Xlib 后端写法，`vkCreateMetalSurfaceEXT`；启动器 GLFW shim 已提供 CAMetalLayer）
+4. `physical_device.cpp` 设备门放宽（RT 三扩展 + sync2 核心判读 + vertex_input_dynamic_state 降级）——**四项全部有本报告实测依据**
+5. 构建变体：`radianceUiBackend=vulkan`（免 GL 互操作，双渲染器兼容的前提）
+6. 在真机（A17 Pro+）经启动器加载，跑通 Vulkan 基础渲染 + 顺手执行 Probe A 二进制（补上运行时 RT 验证）
+
+第三章（P1）起做 Metal RT 后端最小闭环：单 BLAS 场景出首帧光——探针的 BLAS/TLAS/intersection_query 代码就是其种子。
