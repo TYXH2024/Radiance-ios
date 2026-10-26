@@ -50,7 +50,7 @@ kernel void probe_trace_kernel(
 
     raytracing::intersection_params params;
     raytracing::intersection_query<raytracing::instancing, raytracing::triangle_data> q;
-    q.reset(ray(rays[gid].origin, rays[gid].direction, 0.0f, 1.0e9f),
+    q.reset(raytracing::ray(rays[gid].origin, rays[gid].direction, 0.0f, 1.0e9f),
             scene, rays[gid].mask, params);
     while (q.next()) {
         q.commit_triangle_intersection();

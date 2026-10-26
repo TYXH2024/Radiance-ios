@@ -134,11 +134,17 @@ jobs:
         run: |
           set -ex
           mkdir -p build logs
-          # Introspect the SDK's metal_raytracing header (which query API does it expose?)
+          # Introspect the metal_raytracing header (toolchain copy + SDK copy)
           METAL_TOOL="$(xcrun --find metal)"
           METAL_INC="$(dirname "$METAL_TOOL")/../metal/include"
-          grep -n "intersection_query" "$METAL_INC/metal_raytracing" | head -8 || true
-          grep -n "ray_query" "$METAL_INC/metal_raytracing" | head -8 || true
+          SDK_INC="$(xcrun --show-sdk-path)/usr/include"
+          for H in "$METAL_INC/metal_raytracing" "$SDK_INC/metal_raytracing"; do
+            if [ -f "$H" ]; then
+              echo "--- $H"
+              grep -n "intersection_query" "$H" | head -6 || true
+              grep -n "ray_query" "$H" | head -6 || true
+            fi
+          done
           # Cascade over -std values until one compiles the Metal 3 ray_query kernel
           OK_STD=""
           for STD in metal3.2 metal3.1 metal3.0 metal2.4; do
