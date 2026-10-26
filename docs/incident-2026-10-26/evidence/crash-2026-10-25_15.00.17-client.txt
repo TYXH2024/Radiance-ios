@@ -1,0 +1,152 @@
+---- Minecraft Crash Report ----
+// Why is it breaking :(
+
+Time: 2026-10-25 15:00:17
+Description: Initializing game
+
+java.lang.IllegalStateException: OpenGL UI requires Fabric to create an OpenGL window
+	at knot//com.radiance.client.opengl_ui.OpenGLUiBridge.adoptWindowContext(OpenGLUiBridge.java:260)
+	at knot//net.minecraft.class_1041.redirect$baa000$radiance$adoptGLFWContext(class_1041.java:582)
+	at knot//net.minecraft.class_1041.<init>(class_1041.java:117)
+	at knot//net.minecraft.class_3682.method_16038(class_3682.java:21)
+	at knot//net.minecraft.class_310.<init>(class_310.java:504)
+	at knot//net.minecraft.client.main.Main.main(Main.java:250)
+	at net.fabricmc.loader.impl.game.minecraft.MinecraftGameProvider.launch(MinecraftGameProvider.java:517)
+	at net.fabricmc.loader.impl.launch.knot.Knot.launch(Knot.java:72)
+	at net.fabricmc.loader.impl.launch.knot.KnotClient.main(KnotClient.java:23)
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(Unknown Source)
+	at java.base/java.lang.reflect.Method.invoke(Unknown Source)
+	at net.kdt.pojavlaunch.Tools.launchMinecraft(Tools.java:134)
+	at net.kdt.pojavlaunch.PojavLauncher.launchMinecraft(PojavLauncher.java:385)
+	at net.kdt.pojavlaunch.PojavLauncher.main(PojavLauncher.java:53)
+
+
+A detailed walkthrough of the error, its code path and all known details is as follows:
+---------------------------------------------------------------------------------------
+
+-- Head --
+Thread: Render thread
+Stacktrace:
+	at knot//com.radiance.client.opengl_ui.OpenGLUiBridge.adoptWindowContext(OpenGLUiBridge.java:260)
+	at knot//net.minecraft.class_1041.redirect$baa000$radiance$adoptGLFWContext(class_1041.java:582)
+	at knot//net.minecraft.class_1041.<init>(class_1041.java:117)
+	at knot//net.minecraft.class_3682.method_16038(class_3682.java:21)
+	at knot//net.minecraft.class_310.<init>(class_310.java:504)
+
+-- Initialization --
+Details:
+	Modules: 
+Stacktrace:
+	at knot//net.minecraft.client.main.Main.main(Main.java:250)
+	at net.fabricmc.loader.impl.game.minecraft.MinecraftGameProvider.launch(MinecraftGameProvider.java:517)
+	at net.fabricmc.loader.impl.launch.knot.Knot.launch(Knot.java:72)
+	at net.fabricmc.loader.impl.launch.knot.KnotClient.main(KnotClient.java:23)
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(Unknown Source)
+	at java.base/java.lang.reflect.Method.invoke(Unknown Source)
+	at net.kdt.pojavlaunch.Tools.launchMinecraft(Tools.java:134)
+	at net.kdt.pojavlaunch.PojavLauncher.launchMinecraft(PojavLauncher.java:385)
+	at net.kdt.pojavlaunch.PojavLauncher.main(PojavLauncher.java:53)
+
+-- System Details --
+Details:
+	Minecraft Version: 1.21.4
+	Minecraft Version ID: 1.21.4
+	Operating System: Mac OS X (aarch64) version 18.3.2
+	Java Version: 21.0.8-internal, N/A
+	Java VM Version: OpenJDK 64-Bit Server VM (mixed mode), Oracle Corporation
+	Memory: 192459144 bytes (183 MiB) / 390070272 bytes (372 MiB) up to 4009754624 bytes (3824 MiB)
+	CPUs: 8
+	Processor Vendor: 
+	Processor Name: 
+	Identifier:  Family  Model  Stepping 
+	Microarchitecture: unknown
+	Frequency (GHz): 2.40
+	Number of physical packages: 1
+	Number of physical CPUs: 8
+	Number of logical CPUs: 8
+	Graphics card #0 name: unknown
+	Graphics card #0 vendor: unknown
+	Graphics card #0 VRAM (MiB): 0.00
+	Graphics card #0 deviceId: unknown
+	Graphics card #0 versionInfo: unknown
+	Memory slot #0 capacity (MiB): 0.00
+	Memory slot #0 clockSpeed (GHz): 0.00
+	Memory slot #0 type: unknown
+	Virtual memory max (MiB): 7645.08
+	Virtual memory used (MiB): 5019.67
+	Swap memory total (MiB): 0.00
+	Swap memory used (MiB): 0.00
+	Space in storage for jna.tmpdir (MiB): <path not set>
+	Space in storage for org.lwjgl.system.SharedLibraryExtractPath (MiB): <path not set>
+	Space in storage for io.netty.native.workdir (MiB): <path not set>
+	Space in storage for java.io.tmpdir (MiB): available: 5098.37, total: 121710.27
+	Space in storage for workdir (MiB): available: 5098.37, total: 121710.27
+	JVM Flags: 15 total; -Xms128M -Xmx3823M -Xlog:gc,safepoint:stdout:time,uptime -XX:+UnlockExperimentalVMOptions -XX:+DisablePrimordialThreadGuardPages -XX:ReservedCodeCacheSize=64m -XX:InitialCodeCacheSize=16m -XX:CodeCacheExpansionSize=4m -XX:+UseG1GC -XX:MaxGCPauseMillis=50 -XX:+UseStringDeduplication -XX:SoftRefLRUPolicyMSPerMB=250 -Xss32M -XX:ErrorFile=/private/var/mobile/Containers/Data/Application/132BB6A9-CD8E-40EA-8202-AA41493AF270/Documents/hs_err_pid%p.log -Xbootclasspath/a:/private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/libs_caciocavallo17/cacio-shared-1.18-SNAPSHOT.jar:/private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/libs_caciocavallo17/cacio-tta-1.18-SNAPSHOT.jar
+	Fabric Mods: 
+		fabric-api: Fabric API 0.110.5+1.21.4
+			fabric-api-base: Fabric API Base 0.4.52+8ca5486f82
+			fabric-api-lookup-api-v1: Fabric API Lookup API (v1) 1.6.83+7feeb73382
+			fabric-biome-api-v1: Fabric Biome API (v1) 15.0.3+f12498d082
+			fabric-block-api-v1: Fabric Block API (v1) 1.0.30+7feeb73382
+			fabric-block-view-api-v2: Fabric BlockView API (v2) 1.0.18+7feeb73382
+			fabric-blockrenderlayer-v1: Fabric BlockRenderLayer Registration (v1) 2.0.6+7feeb73382
+			fabric-client-tags-api-v1: Fabric Client Tags 1.1.26+7feeb73382
+			fabric-command-api-v1: Fabric Command API (v1) 1.2.60+f71b366f82
+			fabric-command-api-v2: Fabric Command API (v2) 2.2.39+e496eb1582
+			fabric-commands-v0: Fabric Commands (v0) 0.2.77+df3654b382
+			fabric-content-registries-v0: Fabric Content Registries (v0) 9.1.11+7feeb73382
+			fabric-convention-tags-v1: Fabric Convention Tags 2.1.5+7f945d5b82
+			fabric-convention-tags-v2: Fabric Convention Tags (v2) 2.9.5+15afce7982
+			fabric-crash-report-info-v1: Fabric Crash Report Info (v1) 0.3.5+7feeb73382
+			fabric-data-attachment-api-v1: Fabric Data Attachment API (v1) 1.4.2+9aea556b82
+			fabric-data-generation-api-v1: Fabric Data Generation API (v1) 22.1.1+5bea021682
+			fabric-dimensions-v1: Fabric Dimensions API (v1) 4.0.9+7feeb73382
+			fabric-entity-events-v1: Fabric Entity Events (v1) 2.0.10+60fccc7682
+			fabric-events-interaction-v0: Fabric Events Interaction (v0) 4.0.0+a4eebcf082
+			fabric-game-rule-api-v1: Fabric Game Rule API (v1) 1.0.61+7feeb73382
+			fabric-item-api-v1: Fabric Item API (v1) 11.1.11+203e6b2382
+			fabric-item-group-api-v1: Fabric Item Group API (v1) 4.1.20+7feeb73382
+			fabric-key-binding-api-v1: Fabric Key Binding API (v1) 1.0.55+7feeb73382
+			fabric-keybindings-v0: Fabric Key Bindings (v0) 0.2.53+df3654b382
+			fabric-lifecycle-events-v1: Fabric Lifecycle Events (v1) 2.5.2+bf2a60eb82
+			fabric-loot-api-v2: Fabric Loot API (v2) 3.0.30+3f89f5a582
+			fabric-loot-api-v3: Fabric Loot API (v3) 1.0.18+203e6b2382
+			fabric-message-api-v1: Fabric Message API (v1) 6.0.23+7feeb73382
+			fabric-model-loading-api-v1: Fabric Model Loading API (v1) 4.0.1+84404cdd82
+			fabric-networking-api-v1: Fabric Networking API (v1) 4.3.7+cc0fa2fe82
+			fabric-object-builder-api-v1: Fabric Object Builder API (v1) 18.0.4+6383078582
+			fabric-particles-v1: Fabric Particles (v1) 4.0.12+7feeb73382
+			fabric-recipe-api-v1: Fabric Recipe API (v1) 8.0.2+203e6b2382
+			fabric-registry-sync-v0: Fabric Registry Sync (v0) 6.0.0+cc0fa2fe82
+			fabric-renderer-api-v1: Fabric Renderer API (v1) 5.0.0+84404cdd82
+			fabric-renderer-indigo: Fabric Renderer - Indigo 2.0.0+84404cdd82
+			fabric-rendering-data-attachment-v1: Fabric Rendering Data Attachment (v1) 0.3.56+73761d2e82
+			fabric-rendering-fluids-v1: Fabric Rendering Fluids (v1) 3.1.17+7feeb73382
+			fabric-rendering-v1: Fabric Rendering (v1) 10.0.0+6a293bdb82
+			fabric-resource-conditions-api-v1: Fabric Resource Conditions API (v1) 5.0.12+203e6b2382
+			fabric-resource-loader-v0: Fabric Resource Loader (v0) 3.0.9+203e6b2382
+			fabric-screen-api-v1: Fabric Screen API (v1) 2.0.36+7feeb73382
+			fabric-screen-handler-api-v1: Fabric Screen Handler API (v1) 1.3.105+7feeb73382
+			fabric-sound-api-v1: Fabric Sound API (v1) 1.0.31+7feeb73382
+			fabric-transfer-api-v1: Fabric Transfer API (v1) 5.4.5+1885ad7482
+			fabric-transitive-access-wideners-v1: Fabric Transitive Access Wideners (v1) 6.3.1+56e78b9b82
+		fabricloader: Fabric Loader 0.20.1
+			mixinextras: MixinExtras 0.5.5
+		java: OpenJDK 64-Bit Server VM 21
+		minecraft: Minecraft 1.21.4
+		radiance: Radiance 0.1.6-alpha-ios1
+			org_yaml_snakeyaml: snakeyaml 2.5
+	Launched Version: 1.21.4
+	Backend library: LWJGL version 3.3.3
+	Backend API: Unknown
+	Window size: <not initialized>
+	GFLW Platform: x11
+	GL Caps: Using framebuffer using OpenGL 3.2
+	GL debug messages: <disabled>
+	Is Modded: Definitely; Client brand changed to 'fabric'
+	Universe: 404
+	Type: Client (map_client.txt)
+	Locale: zh_CN_#Hans
+	System encoding: UTF-8
+	File encoding: UTF-8
+	CPU: 8x
