@@ -134,7 +134,7 @@ jobs:
         run: |
           set -ex
           mkdir -p build logs
-          xcrun metal -c chapter1/trace_kernel.metal \
+          xcrun metal -std=metal3.0 -c chapter1/trace_kernel.metal \
             -target air64-apple-macos13.0.0 -o build/trace_kernel.air
           xcrun metallib build/trace_kernel.air -o build/trace_kernel.metallib
           clang -fobjc-arc -framework Metal -framework Foundation \
@@ -152,7 +152,7 @@ jobs:
           clang -fobjc-arc -target arm64-apple-ios16.0.0 -isysroot "$SDK" \
             -framework Metal -framework Foundation \
             -c chapter1/probe_metal_rt.m -o build/probe_metal_rt.ios.o
-          xcrun -sdk iphoneos metal -c chapter1/trace_kernel.metal \
+          xcrun -sdk iphoneos metal -std=metal3.0 -c chapter1/trace_kernel.metal \
             -target air64-apple-ios16.0.0 -o build/trace_kernel.ios.air
           xcrun -sdk iphoneos metallib build/trace_kernel.ios.air \
             -o build/trace_kernel.ios.metallib
