@@ -59,13 +59,13 @@ static int apple_family_of(id<MTLDevice> device) {
     static const MTLGPUFamily families[] = {
         MTLGPUFamilyApple1, MTLGPUFamilyApple2, MTLGPUFamilyApple3, MTLGPUFamilyApple4,
         MTLGPUFamilyApple5, MTLGPUFamilyApple6, MTLGPUFamilyApple7, MTLGPUFamilyApple8,
+        MTLGPUFamilyApple9, // Apple9+ = dedicated intersection hardware (A17 Pro / M3+).
+        // No Apple10 enum exists; newer GPUs stay reported as Apple9-class here.
     };
     int family = 0;
     for (size_t i = 0; i < sizeof(families) / sizeof(families[0]); i++) {
         if ([device supportsFamily:families[i]]) { family = (int)(i + 1); }
     }
-    if ([device supportsFamily:MTLGPUFamilyApple9]) { family = 9; }
-    if ([device supportsFamily:MTLGPUFamilyApple10]) { family = 10; }
     return family;
 }
 
@@ -87,11 +87,11 @@ int main(int argc, char **argv) {
         printf("[device] gpuFamily=Apple%d\n", family);
         printf("[device] maxThreadgroupMemory=%llu B\n",
                (unsigned long long)device.maxThreadgroupMemoryLength);
-        printf("[device] supportsRayTracing=%s\n", device.supportsRayTracing ? "YES" : "NO");
+        printf("[device] supportsRaytracing=%s\n", device.supportsRaytracing ? "YES" : "NO");
         printf("[device] dedicatedIntersectionHW(Apple9+)=%s\n",
                [device supportsFamily:MTLGPUFamilyApple9] ? "YES" : "NO");
 
-        if (!device.supportsRayTracing) {
+        if (!device.supportsRaytracing) {
             printf("VERDICT: METAL_RT_API_UNAVAILABLE\n");
             return 3;
         }
@@ -136,7 +136,8 @@ int main(int argc, char **argv) {
                                  options:MTLResourceStorageModeShared];
 
         id<MTLCommandBuffer> blasCmd = [queue commandBuffer];
-        id<MTLComputeCommandEncoder> blasEnc = [blasCmd computeCommandEncoder];
+        id<MTLAccelerationStructureCommandEncoder> blasEnc =
+            [blasCmd accelerationStructureCommandEncoder];
         [blasEnc buildAccelerationStructure:blas
                                   descriptor:blasDescriptor
                                scratchBuffer:blasScratch
@@ -157,15 +158,21 @@ int main(int argc, char **argv) {
         // ------------------------------------------------------------------
         // TLAS: one instance, identity transform, mask 0xFFFFFFFF
         // ------------------------------------------------------------------
-        MTLAccelerationStructureInstance instance;
+        MTLAccelerationStructureInstanceDescriptor instance;
         memset(&instance, 0, sizeof(instance));
-        instance.transform = simd_float3x4(simd_make_float4(1, 0, 0, 0),
-                                           simd_make_float4(0, 1, 0, 0),
-                                           simd_make_float4(0, 0, 1, 0));
-        instance.accelerationStructureIndex = 0;
+        // MTLPackedFloat4x3 = 4 packed float3 columns (48 bytes). Identity transform:
+        // columns[0]=(1,0,0) columns[1]=(0,1,0) columns[2]=(0,0,1) columns[3]=(0,0,0)
+        static const float kIdentityColumns[12] = {
+            1.0f, 0.0f, 0.0f,
+            0.0f, 1.0f, 0.0f,
+            0.0f, 0.0f, 1.0f,
+            0.0f, 0.0f, 0.0f,
+        };
+        memcpy(&instance.transformationMatrix, kIdentityColumns, sizeof(kIdentityColumns));
+        instance.options = MTLAccelerationStructureInstanceOptionNone;
         instance.mask = 0xFFFFFFFFu;
         instance.intersectionFunctionTableOffset = 0;
-        instance.options = 0;
+        instance.accelerationStructureIndex = 0;
 
         id<MTLBuffer> instanceBuffer =
             [device newBufferWithBytes:&instance length:sizeof(instance)
@@ -176,7 +183,7 @@ int main(int argc, char **argv) {
         tlasDescriptor.instanceCount = 1;
         tlasDescriptor.instanceDescriptorBuffer = instanceBuffer;
         tlasDescriptor.instanceDescriptorBufferOffset = 0;
-        tlasDescriptor.instanceDescriptorStride = sizeof(MTLAccelerationStructureInstance);
+        tlasDescriptor.instanceDescriptorStride = sizeof(MTLAccelerationStructureInstanceDescriptor);
         tlasDescriptor.instancedAccelerationStructures = @[ blas ];
 
         t0 = clockms();
@@ -189,7 +196,8 @@ int main(int argc, char **argv) {
                                  options:MTLResourceStorageModeShared];
 
         id<MTLCommandBuffer> tlasCmd = [queue commandBuffer];
-        id<MTLComputeCommandEncoder> tlasEnc = [tlasCmd computeCommandEncoder];
+        id<MTLAccelerationStructureCommandEncoder> tlasEnc =
+            [tlasCmd accelerationStructureCommandEncoder];
         [tlasEnc buildAccelerationStructure:tlas
                                   descriptor:tlasDescriptor
                                scratchBuffer:tlasScratch
@@ -210,8 +218,8 @@ int main(int argc, char **argv) {
         // ------------------------------------------------------------------
         NSError *error = nil;
         id<MTLLibrary> library =
-            [device newLibraryWithFile:[NSString stringWithUTF8String:metallibPath]
-                                 error:&error];
+            [device newLibraryWithURL:[NSURL fileURLWithPath:
+                [NSString stringWithUTF8String:metallibPath]] error:&error];
         if (library == nil) {
             printf("FATAL: cannot load metallib '%s': %s\n", metallibPath,
                    error.localizedDescription.UTF8String);
