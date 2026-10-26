@@ -101,7 +101,7 @@ int main(int argc, char **argv) {
     }
     uint32_t vmaj = 0, vmin = 0, vpat = 0;
     decodeApiVersion(instanceVersion, &vmaj, &vmin, &vpat);
-    printFlags("[instance] supported Vulkan version", vmaj, vmin, vpat);
+    print_flags("[instance] supported Vulkan version", vmaj, vmin, vpat);
     printf("[instance] Vulkan 1.3+ (MCVR instance floor): %s\n",
            (instanceVersion >= VK_API_VERSION_1_3) ? "PASS" : "FAIL");
 
