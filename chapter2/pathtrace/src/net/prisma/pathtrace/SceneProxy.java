@@ -1,0 +1,469 @@
+package net.prisma.pathtrace;
+
+import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
+
+/**
+ * 场景摄取代理 —— 上游 ChunkProxy 的 Metal 版降维实现（轮询驱动）。
+ *
+ * 摄取链路（每轮 POLL_MS=500ms）：
+ *   MinecraftClient.world → ClientWorld.worldRenderer → WorldRenderer.chunks
+ *   (BuiltChunkStorage) → chunks[] (ChunkBuilder$BuiltChunk)
+ *   脏判定：BuiltChunk.data（AtomicReference<ChunkData>）引用变化 = MC 已发布
+ *   新 mesh；sectionPos 变化 = 重定位（上游 setSectionPos mixin 的轮询等价物）。
+ *   重建（每轮限额 MAX_REBUILD_PER_POLL）：SectionBuilder.build(自有 ThreadLocal
+ *   BlockBufferAllocatorStorage) → Map<RenderLayer, BuiltBuffer> → 顶点
+ *   ByteBuffer + vertexCount + stride → JNI rebuildSingleNative。
+ *
+ * 与上游的刻意差异（设计 §2）：轮询 vs mixin 事件；同步拷贝后即 close vs
+ * takeChunk 所有权转移；单线程限量 vs 双池重要度调度。
+ */
+final class SceneProxy {
+
+    /** 轮询间隔（ms）。 */
+    private static final long POLL_MS = 500L;
+    /** 每轮最大重建区块数（v0.3：8→16，全量 600 槽位排空约 19s）。 */
+    private static final int MAX_REBUILD_PER_POLL = 16;
+    /** 摄取运行下限（ms）——S6 验证前的最短积累窗口（v0.3：20s→15s）。 */
+    private static final long MIN_INGEST_MS = 15_000L;
+    /** 摄取运行上限（ms）——超时强制进入 S6（SCENE_EMPTY 候选）。 */
+    private static final long MAX_INGEST_MS = 150_000L;
+    /** 强制收口时间（ms）——积压未排空也进入 S6（v0.3 新增，防毒丸阻塞）。 */
+    private static final long FORCE_READY_MS = 35_000L;
+    /** 静置阈值（ms）——重建活动停止后视为已收敛（v0.3 新增）。 */
+    private static final long IDLE_SETTLE_MS = 6_000L;
+    /** TLAS tick 节流（ms）。 */
+    private static final long TLAS_TICK_MS = 1000L;
+
+    /** builtChunk index → 上次摄取状态（data 引用 identity + sectionPos + generation）。 */
+    private final Map<Integer, SlotState> slots = new ConcurrentHashMap<>();
+    private final ProbeReport r;
+    private final String metallibPath;
+    private volatile boolean running = true;
+    private volatile boolean gridInited = false;
+
+    /** v0.3：摄取期相机位置缓存（每轮刷新；S6 容错——用户可能在窗口结束后
+     * 立即退出世界，此时直读相机可能拿到重置后的 Camera）。 */
+    volatile float[] lastCameraPos;
+
+    // 统计
+    int polls = 0;
+    int rebuilds = 0;
+    private boolean colorOffsetEchoed = false;
+    int invalidations = 0;
+    int relocations = 0;
+    int nonEmptyChunks = 0;
+    long firstReadyMs = -1;
+    long lastActivityMs = 0;
+    private final long startNs = System.nanoTime();
+    private final AtomicLong generation = new AtomicLong(1);
+
+    private static final class SlotState {
+        Object lastDataRef;
+        long lastSectionPos;
+        long generation;
+        boolean ready;
+    }
+
+    SceneProxy(ProbeReport r, String metallibPath) {
+        this.r = r;
+        this.metallibPath = metallibPath;
+    }
+
+    void stop() {
+        running = false;
+    }
+
+    /**
+     * 主循环：返回判定所需统计（阻塞至 MIN/MAX 窗口内 ready 判据满足或超时）。
+     */
+    void run() {
+        Object mc = Mappings.call(null, Mappings.C_MC, Mappings.M_MC_GET_INSTANCE);
+        long lastTlasTick = 0;
+        boolean announced = false;
+
+        while (running) {
+            try {
+                Thread.sleep(POLL_MS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return;
+            }
+            polls++;
+            if (!running) {
+                break;
+            }
+
+            Object world = Mappings.get(mc, Mappings.C_MC, Mappings.F_MC_WORLD);
+            if (world == null) {
+                if (!announced) {
+                    r.info("等待进入世界（mc.world == null）…");
+                    announced = true;
+                }
+                continue;
+            }
+            if (announced) {
+                r.pass("已进入世界，开始网格发现");
+                announced = false;
+            }
+
+            // v0.3：相机位置缓存（S6 容错；失败不影响摄取）
+            try {
+                lastCameraPos = readCameraPos();
+            } catch (Throwable ignored) {
+                // 相机尚不可读（菜单/加载中）——下轮重试
+            }
+
+            // WorldRenderer → BuiltChunkStorage
+            Object worldRenderer = Mappings.get(world, Mappings.C_CLIENT_WORLD,
+                    Mappings.F_CW_WORLD_RENDERER);
+            if (worldRenderer == null) {
+                continue;
+            }
+            Object storage = Mappings.get(worldRenderer, Mappings.C_WORLD_RENDERER,
+                    Mappings.F_WR_CHUNKS);
+            if (storage == null) {
+                continue;
+            }
+
+            Object chunkArr = Mappings.get(storage, Mappings.C_STORAGE, Mappings.F_ST_CHUNKS);
+            if (!(chunkArr instanceof Object[])) {
+                continue;
+            }
+            Object[] chunks = (Object[]) chunkArr;
+            if (chunks.length == 0) {
+                continue;
+            }
+
+            // 首次发现网格：initNative（幂等：gridInited 守卫）
+            if (!gridInited && chunks.length > 0) {
+                firstGridInit(chunks.length, storage);
+            }
+
+            // 扫描脏区块（data 引用变化 / sectionPos 变化 / 从未摄取）
+            int nonEmpty = 0;
+            int rebuiltThisPoll = 0;
+            int pendingDirty = 0;
+
+            for (Object builtChunk : chunks) {
+                if (builtChunk == null) {
+                    continue;
+                }
+                int index = (Integer) Mappings.get(builtChunk, Mappings.C_BUILT_CHUNK,
+                        Mappings.F_BC_INDEX);
+                long sectionPos = (Long) Mappings.call(builtChunk, Mappings.C_BUILT_CHUNK,
+                        Mappings.M_BC_GET_SECTION_POS);
+                Object data = Mappings.get(builtChunk, Mappings.C_BUILT_CHUNK, Mappings.F_BC_DATA);
+                // data 是 AtomicReference（JDK 类，直接 cast）
+                Object chunkData = data instanceof java.util.concurrent.atomic.AtomicReference
+                        ? ((java.util.concurrent.atomic.AtomicReference<?>) data).get() : null;
+
+                SlotState st = slots.computeIfAbsent(index, k -> new SlotState());
+                boolean dataChanged = chunkData != st.lastDataRef;
+                boolean moved = sectionPos != st.lastSectionPos;
+                // v0.3：从未摄取（generation==0）的槽位永远视为脏——v0.2 的
+                // 根因是首轮扫描把全部 600 个 data 引用快照进 lastDataRef，
+                // 每轮 8 个 cap 截流后其余 592 个被标记为“干净”永不摄取
+                //（真机实测 30/600 的机制）。
+                boolean neverIngested = st.generation == 0;
+                st.lastDataRef = chunkData;
+                st.lastSectionPos = sectionPos;
+
+                if (chunkData != null) {
+                    nonEmpty++;
+                }
+
+                if (moved && st.generation > 0) {
+                    // 重定位（网格平移）：首版直接按重建处理（rebuild 更新 origin）
+                    relocations++;
+                }
+
+                boolean dirty = (dataChanged || moved || neverIngested) && chunkData != null;
+                if (dirty) {
+                    pendingDirty++;
+                }
+
+                if (dirty && rebuiltThisPoll < MAX_REBUILD_PER_POLL) {
+                    if (rebuild(builtChunk, index)) {
+                        rebuiltThisPoll++;
+                        lastActivityMs = elapsedMs();
+                    }
+                } else if (dataChanged && chunkData == null && st.generation > 0) {
+                    invalidate(builtChunk, index);
+                    lastActivityMs = elapsedMs();
+                }
+            }
+            if (nonEmpty != this.nonEmptyChunks) {
+                this.nonEmptyChunks = nonEmpty;
+            }
+
+            // TLAS tick（节流）
+            long elapsedMs = elapsedMs();
+            if (elapsedMs - lastTlasTick > TLAS_TICK_MS) {
+                lastTlasTick = elapsedMs;
+                try {
+                    Native.frameTickNative();
+                } catch (Throwable t) {
+                    r.fail("frameTickNative 异常: " + t);
+                }
+            }
+
+            // ready 判据（v0.3：积压排空 / 静置 / 强制 三条件之一 + 最短窗口）
+            boolean settled = pendingDirty == 0
+                    || (elapsedMs - lastActivityMs) > IDLE_SETTLE_MS
+                    || elapsedMs >= FORCE_READY_MS;
+            if (firstReadyMs < 0 && rebuilds >= 8 && elapsedMs >= MIN_INGEST_MS && settled) {
+                firstReadyMs = elapsedMs;
+            }
+            if (firstReadyMs >= 0 && elapsedMs - firstReadyMs > 4000L) {
+                r.pass(String.format("摄取窗口完成（%d 次重建 / %d 非空区块 / 积压 %d / %.1fs）",
+                        rebuilds, nonEmpty, pendingDirty, elapsedMs / 1000.0));
+                return;
+            }
+            if (elapsedMs > MAX_INGEST_MS) {
+                r.info("摄取超时上限（150s）——进入验证段");
+                return;
+            }
+        }
+    }
+
+    private boolean firstGridInit(int numChunks, Object storage) {
+        try {
+            int sizeX = (Integer) Mappings.get(storage, Mappings.C_STORAGE, Mappings.F_ST_SIZE_X);
+            int sizeY = (Integer) Mappings.get(storage, Mappings.C_STORAGE, Mappings.F_ST_SIZE_Y);
+            int sizeZ = (Integer) Mappings.get(storage, Mappings.C_STORAGE, Mappings.F_ST_SIZE_Z);
+            Native.initNative(numChunks, sizeX, sizeY, sizeZ, 0, metallibPath, r.getFile());
+            r.pass(String.format("网格初始化: %d 槽位 (sizeX=%d sizeY=%d sizeZ=%d)",
+                    numChunks, sizeX, sizeY, sizeZ));
+            gridInited = true;
+            return true;
+        } catch (Throwable t) {
+            r.fail("网格初始化失败: " + t);
+            running = false;
+            return false;
+        }
+    }
+
+    /**
+     * 单区块重建：SectionBuilder.build → 逐 layer 顶点收集 → JNI。
+     */
+    private boolean rebuild(Object builtChunk, int index) {
+        long t0 = System.nanoTime();
+        try {
+            Object origin = Mappings.call(builtChunk, Mappings.C_BUILT_CHUNK,
+                    Mappings.M_BC_GET_ORIGIN);
+            int ox = (Integer) Mappings.call(origin, Mappings.C_VEC3I, Mappings.M_VEC3I_GET_X);
+            int oy = (Integer) Mappings.call(origin, Mappings.C_VEC3I, Mappings.M_VEC3I_GET_Y);
+            int oz = (Integer) Mappings.call(origin, Mappings.C_VEC3I, Mappings.M_VEC3I_GET_Z);
+
+            // WorldRenderer.chunkBuilder → ChunkBuilder.sectionBuilder
+            Object world = Mappings.get(Mappings.call(null, Mappings.C_MC,
+                    Mappings.M_MC_GET_INSTANCE), Mappings.C_MC, Mappings.F_MC_WORLD);
+            Object worldRenderer = Mappings.get(world, Mappings.C_CLIENT_WORLD,
+                    Mappings.F_CW_WORLD_RENDERER);
+            Object chunkBuilder = Mappings.get(worldRenderer, Mappings.C_WORLD_RENDERER,
+                    Mappings.F_WR_CHUNK_BUILDER);
+            Object sectionBuilder = Mappings.get(chunkBuilder, Mappings.C_CHUNK_BUILDER,
+                    Mappings.F_CB_SECTION_BUILDER);
+            if (sectionBuilder == null) {
+                return false;
+            }
+
+            // region
+            Object sectionPosObj = Mappings.call(null, Mappings.C_SECTION_POS,
+                    Mappings.M_SP_FROM_BLOCKPOS, origin);
+            ConstructorRef regionBuilderCtor = ctorRegionBuilder();
+            Object regionBuilder = regionBuilderCtor.newInstance();
+            Object region = Mappings.call(regionBuilder, Mappings.C_REGION_BUILDER,
+                    Mappings.M_RB_BUILD, world, sectionPosObj);
+            if (region == null) {
+                // 区块源未加载 → 失效
+                invalidate(builtChunk, index);
+                return false;
+            }
+
+            // 自有 ThreadLocal allocator storage（上游同款纪律：BufferAllocator
+            // 必须归我们，MC 的会被复用）
+            Object storage = allocStorage.get();
+            Object sorter = Mappings.get(null, Mappings.C_VERTEX_SORTER, Mappings.F_VS_BY_DISTANCE);
+            Object renderData = Mappings.call(sectionBuilder, Mappings.C_SECTION_BUILDER,
+                    Mappings.M_SB_BUILD, sectionPosObj, region, sorter, storage);
+
+            Object buffersMap = Mappings.get(renderData, Mappings.C_RENDER_DATA,
+                    Mappings.F_RD_BUFFERS);
+            if (!(buffersMap instanceof Map) || ((Map<?, ?>) buffersMap).isEmpty()) {
+                Mappings.call(renderData, Mappings.C_RENDER_DATA, Mappings.M_RD_CLOSE);
+                invalidate(builtChunk, index);
+                return false;
+            }
+
+            Map<?, ?> buffers = (Map<?, ?>) buffersMap;
+            List<ByteBuffer> vertexBuffers = new ArrayList<>(buffers.size());
+            List<Integer> counts = new ArrayList<>(buffers.size());
+            List<Integer> strides = new ArrayList<>(buffers.size());
+            List<Integer> colorOffsets = new ArrayList<>(buffers.size());
+            int totalVerts = 0;
+
+            // VertexFormatElement.COLOR 静态实例（Mappings 审计过的 field_52108）。
+            // MC 把方块染色（草绿/水蓝…）烘进顶点色 —— 它就是 2.2 的 albedo。
+            Object colorElement = null;
+            try {
+                colorElement = Mappings.get(null, Mappings.C_VERTEX_ELEM, Mappings.F_VE_COLOR);
+            } catch (Throwable t) {
+                colorElement = null;
+            }
+
+            for (Object builtBuffer : buffers.values()) {
+                Object params = Mappings.call(builtBuffer, Mappings.C_BUILT_BUFFER,
+                        Mappings.M_BB_GET_PARAMS);
+                int vertexCount = (Integer) Mappings.call(params, Mappings.C_DRAW_PARAMS,
+                        Mappings.M_DP_VERTEX_COUNT);
+                Object format = Mappings.call(params, Mappings.C_DRAW_PARAMS, Mappings.M_DP_FORMAT);
+                int stride = (Integer) Mappings.call(format, Mappings.C_VERTEX_FORMAT,
+                        Mappings.M_VF_VERTEX_SIZE);
+                int colorOff = -1;
+                if (colorElement != null) {
+                    try {
+                        Boolean has = (Boolean) Mappings.call(format, Mappings.C_VERTEX_FORMAT,
+                                Mappings.M_VF_HAS, colorElement);
+                        if (has != null && has) {
+                            colorOff = (Integer) Mappings.call(format, Mappings.C_VERTEX_FORMAT,
+                                    Mappings.M_VF_GET_OFFSET, colorElement);
+                        }
+                    } catch (Throwable t) {
+                        colorOff = -1;
+                    }
+                }
+                ByteBuffer buf = (ByteBuffer) Mappings.call(builtBuffer, Mappings.C_BUILT_BUFFER,
+                        Mappings.M_BB_GET_BUFFER);
+                if (vertexCount <= 0 || buf == null) {
+                    continue;
+                }
+                if (vertexCount % 4 != 0) {
+                    r.fail(String.format("非 QUADS 顶点数 (%d) @ index=%d —— 跳过该 layer",
+                            vertexCount, index));
+                    continue;
+                }
+                vertexBuffers.add(buf);
+                counts.add(vertexCount);
+                strides.add(stride);
+                colorOffsets.add(colorOff);
+                totalVerts += vertexCount;
+            }
+
+            if (colorOffsets.size() > 0 && !colorOffsetEchoed) {
+                colorOffsetEchoed = true;
+                StringBuilder ev = new StringBuilder();
+                for (int i = 0; i < colorOffsets.size(); i++) {
+                    if (ev.length() > 0) { ev.append("  "); }
+                    ev.append(String.format("layer%d(stride=%d colorOff=%d)",
+                            i, strides.get(i), colorOffsets.get(i)));
+                }
+                r.info("顶点格式取证: " + ev + "（COLOR 元素偏移由 VertexFormat.getOffset"
+                        + "(COLOR) 动态解析——2.2 albedo 提取通路）");
+            }
+
+            long gen = generation.incrementAndGet();
+            boolean submitted = false;
+            if (!vertexBuffers.isEmpty()) {
+                Native.rebuildSingleNative(ox, oy, oz, index, gen, vertexBuffers.size(),
+                        vertexBuffers.toArray(new ByteBuffer[0]),
+                        toIntArray(counts), toIntArray(strides), toIntArray(colorOffsets));
+                submitted = true;
+                rebuilds++;
+                SlotState st = slots.get(index);
+                if (st != null) {
+                    st.generation = gen;
+                    st.ready = true;
+                }
+                double ms = (System.nanoTime() - t0) / 1e6;
+                if (rebuilds <= 20 || rebuilds % 50 == 0) {
+                    r.info(String.format("rebuild #%d: index=%d origin=(%d,%d,%d) "
+                            + "layers=%d verts=%d (%.1f ms)",
+                            rebuilds, index, ox, oy, oz, vertexBuffers.size(), totalVerts, ms));
+                }
+            }
+
+            // 释放我们 allocator 的重建产物（顶点已在 native 侧同步拷贝）
+            Mappings.call(renderData, Mappings.C_RENDER_DATA, Mappings.M_RD_CLOSE);
+            return submitted;
+        } catch (Throwable t) {
+            Throwable c = t.getCause() != null ? t.getCause() : t;
+            r.fail(String.format("rebuild 异常 @ index=%d: %s", index, c));
+            return false;
+        }
+    }
+
+    private void invalidate(Object builtChunk, int index) {
+        try {
+            Object origin = Mappings.call(builtChunk, Mappings.C_BUILT_CHUNK,
+                    Mappings.M_BC_GET_ORIGIN);
+            int ox = (Integer) Mappings.call(origin, Mappings.C_VEC3I, Mappings.M_VEC3I_GET_X);
+            int oy = (Integer) Mappings.call(origin, Mappings.C_VEC3I, Mappings.M_VEC3I_GET_Y);
+            int oz = (Integer) Mappings.call(origin, Mappings.C_VEC3I, Mappings.M_VEC3I_GET_Z);
+            long gen = generation.incrementAndGet();
+            Native.invalidateSingle(index, ox, oy, oz, gen);
+            invalidations++;
+            SlotState st = slots.get(index);
+            if (st != null) {
+                st.generation = gen;
+                st.ready = false;
+            }
+        } catch (Throwable t) {
+            r.fail("invalidate 异常 @ index=" + index + ": " + t);
+        }
+    }
+
+    private final ThreadLocal<Object> allocStorage = ThreadLocal.withInitial(() -> {
+        try {
+            java.lang.reflect.Constructor<?> ctor = Mappings.res(
+                    "ctor:" + Mappings.C_ALLOC_STORAGE);
+            return ctor.newInstance();
+        } catch (Throwable t) {
+            throw new IllegalStateException("BlockBufferAllocatorStorage 构造失败", t);
+        }
+    });
+
+    private static ConstructorRef ctorRegionBuilder() {
+        return new ConstructorRef();
+    }
+
+    private static final class ConstructorRef {
+        Object newInstance() throws Exception {
+            java.lang.reflect.Constructor<?> ctor = Mappings.res(
+                    "ctor:" + Mappings.C_REGION_BUILDER);
+            return ctor.newInstance();
+        }
+    }
+
+    private static int[] toIntArray(List<Integer> list) {
+        int[] arr = new int[list.size()];
+        for (int i = 0; i < list.size(); i++) {
+            arr[i] = list.get(i);
+        }
+        return arr;
+    }
+
+    /** v0.3：相机位置读取（与 PathtraceMod.cameraPos 同链路；全部符号
+     * 已入 S3 审计）。失败由调用方吞掉（缓存下轮重试）。 */
+    private float[] readCameraPos() {
+        Object mc = Mappings.call(null, Mappings.C_MC, Mappings.M_MC_GET_INSTANCE);
+        Object gameRenderer = Mappings.get(mc, Mappings.C_MC, Mappings.F_MC_GAME_RENDERER);
+        Object camera = Mappings.get(gameRenderer, Mappings.C_GAME_RENDERER,
+                Mappings.F_CAMERA_POS);
+        Object pos = Mappings.call(camera, Mappings.C_CAMERA, Mappings.M_CAMERA_GET_POS);
+        float x = ((Double) Mappings.get(pos, Mappings.C_VEC3D, Mappings.F_VEC3D_X)).floatValue();
+        float y = ((Double) Mappings.get(pos, Mappings.C_VEC3D, Mappings.F_VEC3D_Y)).floatValue();
+        float z = ((Double) Mappings.get(pos, Mappings.C_VEC3D, Mappings.F_VEC3D_Z)).floatValue();
+        return new float[] {x, y, z};
+    }
+
+    private long elapsedMs() {
+        return (System.nanoTime() - startNs) / 1_000_000L;
+    }
+}

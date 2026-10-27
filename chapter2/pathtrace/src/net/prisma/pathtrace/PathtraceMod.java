@@ -1,0 +1,466 @@
+package net.prisma.pathtrace;
+
+import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
+import java.util.concurrent.atomic.AtomicBoolean;
+
+/**
+ * 路径追踪主控 —— Radiance 移植第二章 2.2 阶段交付物（path tracing 引擎首帧）。
+ *
+ * 验证问题（docs/chapter2-pathtrace-design.md）：
+ *   Q1 摄取链在 2.2 摆放契约（免 recentring + t=origin）下是否复现 2.1 的
+ *      健康度（600 区块 / ~169k 三角 / 零积压）？
+ *   Q2 简化摆放是否真机等价（整数格线抽查 + 哨兵）？
+ *   Q3 全链路径追踪能否渲染出一帧可目检的图（相机 ray → TLAS → albedo →
+ *      太阳直射+阴影 ray → 漫反射弹射 → 累积 → tonemap → PNG）？
+ *   Q4 实测吞吐（atomic 计数器，非估算）是多少 Mray/s？
+ *
+ * 执行序（报告 S 段）：
+ *   S0 环境快照 → S1 解包 dylib/metallib → S2 System.load →
+ *   S3 反射符号审计 → S4/S5 网格发现与摄取 → S5 统计汇总 →
+ *   S6 场景摆放抽查（哨兵 + 相机姿态 + 整数格线）→
+ *   S7 离屏路径追踪渲染（PNG 落盘 + 统计自证）→ VERDICT。
+ *
+ * 归因开关：-Dpathtrace.disabled=true / PATHTRACE_DISABLED=1
+ * → 只写环境快照，零原生调用（闪退 A/B 对照）。
+ */
+public final class PathtraceMod {
+
+    public static void main(String[] args) {
+        runAll("standalone-main");
+    }
+
+    private static final AtomicBoolean STARTED = new AtomicBoolean(false);
+
+    // ---- S7 渲染参数（v0.1 固定；2.2 后续版本做渐进/实时）----
+    private static final int RENDER_W = 480;
+    private static final int RENDER_H = 270;
+    private static final int RENDER_SPP = 24;
+    private static final int RENDER_BOUNCES = 2;
+
+    static void runAll(String triggerSource) {
+        if (!STARTED.compareAndSet(false, true)) {
+            return;
+        }
+        ProbeReport r = new ProbeReport("pathtrace_report.txt");
+        r.header("路径追踪探针 (pathtrace 0.1.0)");
+        r.info("触发方式: " + triggerSource);
+
+        if (isDisabled()) {
+            r.stage("S0 环境快照（探针已禁用: pathtrace.disabled）");
+            envSnapshot(r);
+            r.finish("-", "探针被 pathtrace.disabled 禁用，本次未解包/未装载/未执行任何原生调用。"
+                    + "用途：闪退归因对照。");
+            return;
+        }
+
+        r.stage("S0 环境快照");
+        envSnapshot(r);
+
+        // ---- S1 解包 ----
+        r.stage("S1 解包原生资产（JAR -> game 目录）");
+        Path dir = Paths.get(System.getProperty("user.dir", "."), "pathtrace");
+        Path dylib;
+        Path metallib;
+        try {
+            Files.createDirectories(dir);
+            dylib = extract("/pathtrace/libradiance_pathtrace.dylib", dir);
+            metallib = extract("/pathtrace/pathtrace.metallib", dir);
+            r.pass("解包完成: " + dylib + " (" + Files.size(dylib) + " B)");
+            r.info("metallib: " + metallib + " (" + Files.size(metallib) + " B)");
+        } catch (Throwable t) {
+            r.fail("S1 解包失败（JAR 资产缺失或目录不可写）", t);
+            r.finish("EXTRACT_FAIL", "原生资产解包失败。附整份报告回报。");
+            return;
+        }
+
+        // ---- S2 装载 ----
+        r.stage("S2 System.load 装载 dylib（投送通道验证）");
+        try {
+            System.load(dylib.toAbsolutePath().toString());
+            r.pass("dylib 装载成功（与 2.0/2.1 相同的受信装载链）");
+        } catch (Throwable t) {
+            r.fail("S2 dylib 装载失败", t);
+            r.finish("LOAD_FAIL", "System.load 失败。附整份报告回报。");
+            return;
+        }
+
+        // ---- S3 反射符号审计 ----
+        r.stage("S3 反射符号审计（intermediary 符号表逐项解析）");
+        boolean symbolsOk;
+        try {
+            symbolsOk = Mappings.resolveAll(r);
+        } catch (Throwable t) {
+            r.fail("S3 符号审计异常", t);
+            symbolsOk = false;
+        }
+        if (!symbolsOk) {
+            r.finish("REFLECT_FAIL", "存在未解析符号（共 " + Mappings.FAILURES.size()
+                    + " 个，报告已逐项列出）。2.2 新增符号（VertexFormatElement.COLOR/"
+                    + "getOffset/has、Camera yaw/pitch）若在此失败，即为 mappings 与真机"
+                    + "运行时的真实不一致。附整份报告回报。");
+            return;
+        }
+        r.pass("符号表全量解析通过（" + Mappings.RESOLVED.size() + " 项）");
+
+        // ---- S4/S5 网格发现 + 摄取（SceneProxy 主循环阻塞运行）----
+        r.stage("S4/S5 网格发现与摄取（轮询 500ms，等待进入世界；顶点+COLOR 双提取）");
+        SceneProxy proxy = new SceneProxy(r, metallib.toAbsolutePath().toString());
+        try {
+            proxy.run();
+        } catch (Throwable t) {
+            r.fail("摄取主循环异常", t);
+            r.finish("NATIVE_FAIL", "摄取循环异常终止。附整份报告回报。");
+            return;
+        }
+
+        // ---- 统计与 S6 ----
+        r.stage("S5 统计汇总");
+        long[] stats;
+        try {
+            stats = Native.sceneStatsNative();
+        } catch (Throwable t) {
+            r.fail("sceneStatsNative 异常", t);
+            r.finish("NATIVE_FAIL", "场景统计读取失败。附整份报告回报。");
+            return;
+        }
+        long readyBlas = stats[0];
+        long totalTris = stats[1];
+        long totalVerts = stats[2];
+        long tlasBuilds = stats[3];
+        long blasBuilds = stats[4];
+        long vertexBytes = stats[5];
+        long indexBytes = stats[6];
+        long tlasBytes = stats[7];
+        r.info(String.format("Java 侧: polls=%d rebuilds=%d invalidations=%d relocations=%d "
+                        + "非空区块=%d",
+                proxy.polls, proxy.rebuilds, proxy.invalidations, proxy.relocations,
+                proxy.nonEmptyChunks));
+        r.info(String.format("Native 侧: readyBLAS=%d BLAS构建=%d TLAS重建=%d（含 shading pools）",
+                readyBlas, blasBuilds, tlasBuilds));
+        r.info(String.format("几何: 三角形=%d 顶点=%d 顶点缓冲=%.1f KB 索引缓冲=%.1f KB "
+                        + "TLAS=%.1f KB",
+                totalTris, totalVerts, vertexBytes / 1024.0, indexBytes / 1024.0,
+                tlasBytes / 1024.0));
+
+        // =================================================================
+        // S6 场景摆放抽查（2.2 契约：顶点原样入库 + t=origin）
+        // =================================================================
+        r.stage("S6 场景摆放抽查（哨兵 + 相机姿态 + 整数格线）");
+        float[] pose = null;
+        try {
+            pose = cameraPose();
+        } catch (Throwable t) {
+            r.fail("相机姿态读取异常", t);
+        }
+        boolean cameraOk = pose != null;
+        if (cameraOk) {
+            r.pass(String.format("相机姿态: pos=(%.2f, %.2f, %.2f) yaw=%.1f pitch=%.1f",
+                    pose[0], pose[1], pose[2], pose[3], pose[4]));
+        } else {
+            r.fail("相机姿态不可读（直读失败）——S6/S7 未执行");
+        }
+
+        boolean sentinelOk = false;
+        int sentinelBits = 0;
+        try {
+            sentinelBits = Native.sentinelProbeNative();
+            sentinelOk = sentinelBits == 7;
+            if (sentinelOk) {
+                r.pass("哨兵求交 PASS（位码=7：单位实例/平移实例/阴性对照全部正确——"
+                        + "矩阵平移编码 flat[9..11] 维持 2.1 v0.5 真机结论）");
+            } else {
+                r.fail("哨兵求交 FAIL（位码=" + sentinelBits + "）——"
+                        + "实例机制/矩阵编码回归，与 2.1 结论冲突，请回报。");
+            }
+        } catch (Throwable t) {
+            r.fail("哨兵求交异常", t);
+        }
+
+        // 整数格线抽查：6 轴向 ray；正确摆放下命中面必落在整数格线
+        //（水面/植被等非立方几何除外——与 2.1 v0.5 的 8/9 一致性预期）。
+        int spotHits = 0;
+        int integerHits = 0;
+        boolean downHit = false;
+        if (cameraOk && tlasBuilds > 0 && readyBlas > 0) {
+            float[][] dirs = {
+                {1, 0, 0}, {-1, 0, 0}, {0, 1, 0}, {0, -1, 0}, {0, 0, 1}, {0, 0, -1},
+            };
+            String[] names = {"+X", "-X", "+Y(上)", "-Y(下)", "+Z", "-Z"};
+            for (int i = 0; i < dirs.length; i++) {
+                try {
+                    float[] res = Native.castRayNative(pose[0], pose[1], pose[2],
+                            dirs[i][0], dirs[i][1], dirs[i][2], 512f);
+                    if (res != null && res[0] > 0.5f) {
+                        spotHits++;
+                        float px = pose[0] + res[1] * dirs[i][0];
+                        float py = pose[1] + res[1] * dirs[i][1];
+                        float pz = pose[2] + res[1] * dirs[i][2];
+                        boolean ix = nearInteger(px);
+                        boolean iy = nearInteger(py);
+                        boolean iz = nearInteger(pz);
+                        boolean grid = ix || iy || iz;
+                        if (grid) {
+                            integerHits++;
+                        }
+                        if (i == 3) {
+                            downHit = true;
+                        }
+                        String gridTag = grid
+                                ? String.format("整数格线 %s%s%s",
+                                        ix ? "x" : "", iy ? "y" : "", iz ? "z" : "")
+                                : "非整数（非立方几何？）";
+                        int[] org = Native.instanceOriginNative((int) res[2]);
+                        String attr = org != null
+                                ? String.format(" → section=(%d,%d,%d)", org[0], org[1], org[2])
+                                : "";
+                        r.pass(String.format(
+                                "ray %s: HIT distance=%.2f hitPoint=(%.2f, %.2f, %.2f)"
+                                        + " [%s] (instance=%d)%s",
+                                names[i], res[1], px, py, pz, gridTag, (int) res[2], attr));
+                    } else {
+                        r.info("ray " + names[i] + ": miss（512 格内无几何）");
+                    }
+                } catch (Throwable t) {
+                    r.fail("castRay " + names[i] + " 异常: " + t);
+                }
+            }
+        } else if (!cameraOk) {
+            // already reported above
+        } else {
+            r.fail("TLAS 尚未构建（无就绪几何）——S6/S7 未执行");
+        }
+
+        boolean placementOk = cameraOk && tlasBuilds > 0 && readyBlas > 0
+                && downHit && integerHits >= 2;
+        if (cameraOk && tlasBuilds > 0 && readyBlas > 0 && !placementOk) {
+            r.fail(String.format("摆放抽查未达标（命中=%d 整数格线=%d 脚下地板=%s）——"
+                            + "2.2 契约（t=origin + 免 recentring）在真机上不等价于 2.1 已验证"
+                            + "布局的可能性存在；请附整份报告回报（v0.5 同场景：-Y 1.62 命中地板、"
+                            + "8/9 整数格线）",
+                    spotHits, integerHits, downHit ? "有" : "无"));
+        } else if (placementOk) {
+            r.pass(String.format("摆放抽查 PASS（%d 命中 / %d 整数格线 / 脚下地板命中——"
+                            + "免 recentring + t=origin 与 2.1 已验证布局等价）",
+                    spotHits, integerHits));
+        }
+
+        // =================================================================
+        // S7 离屏路径追踪渲染
+        // =================================================================
+        r.stage("S7 离屏路径追踪渲染（相机 ray → TLAS → albedo → 太阳直射+阴影 → "
+                + "弹射 → 累积 → tonemap → PNG）");
+        int[] image = null;
+        if (placementOk) {
+            // 中心 ray 交叉验证：单 ray 仪器（scene_trace_kernel）与渲染 kernel
+            // 使用同一 TLAS——中心像素内容应与此预测一致（证据行，不参与判定）。
+            try {
+                float yawR = (float) Math.toRadians(pose[3]);
+                float pitchR = (float) Math.toRadians(pose[4]);
+                float fx = (float) (-Math.sin(yawR) * Math.cos(pitchR));
+                float fy = (float) (-Math.sin(pitchR));
+                float fz = (float) (Math.cos(yawR) * Math.cos(pitchR));
+                float[] res = Native.castRayNative(pose[0], pose[1], pose[2], fx, fy, fz, 1024f);
+                if (res != null && res[0] > 0.5f) {
+                    r.pass(String.format(
+                            "中心 ray 预测: HIT distance=%.2f hitPoint=(%.2f, %.2f, %.2f)"
+                                    + " —— 画面中心应为几何表面",
+                            res[1], pose[0] + res[1] * fx, pose[1] + res[1] * fy,
+                            pose[2] + res[1] * fz));
+                } else {
+                    r.info("中心 ray 预测: miss —— 画面中心应为天空（相机朝天/朝空）");
+                }
+            } catch (Throwable t) {
+                r.fail("中心 ray 交叉验证异常: " + t);
+            }
+
+            try {
+                image = Native.renderPathtraceNative(pose[0], pose[1], pose[2],
+                        pose[3], pose[4], RENDER_W, RENDER_H, RENDER_SPP, RENDER_BOUNCES);
+                if (image == null) {
+                    r.fail("渲染派发失败（native 返回 null；详见 [render] 行）");
+                }
+            } catch (Throwable t) {
+                r.fail("renderPathtraceNative 异常", t);
+            }
+        } else if (cameraOk) {
+            r.info("摆放抽查未通过/未执行——渲染跳过（先修摆放，再谈图像）");
+        }
+
+        // ---- PNG 落盘 + 图像统计自证 ----
+        Path pngPath = Paths.get(System.getProperty("user.dir", "."), "pathtrace_frame.png");
+        boolean imageOk = false;
+        if (image != null) {
+            try {
+                PngWriter.write(pngPath, RENDER_W, RENDER_H, image);
+                r.pass("PNG 落盘: " + pngPath + " (" + Files.size(pngPath) + " B, "
+                        + RENDER_W + "x" + RENDER_H + ", spp=" + RENDER_SPP
+                        + ", bounces=" + RENDER_BOUNCES + ")");
+                imageOk = analyzeImage(r, image, RENDER_W, RENDER_H);
+            } catch (Throwable t) {
+                r.fail("PNG 写盘/统计异常", t);
+            }
+        }
+
+        // =================================================================
+        // 判定（零粉饰纪律：每一档都有明确的失败语义与回报请求）
+        // =================================================================
+        String verdict;
+        String message;
+        if (!cameraOk) {
+            verdict = "CAMERA_FAIL";
+            message = "相机姿态不可读——S6/S7 未执行。附整份报告回报。";
+        } else if (tlasBuilds == 0 || readyBlas == 0) {
+            verdict = "SCENE_EMPTY";
+            message = "TLAS 未构建或零就绪 BLAS——摄取未完成（对比 2.1 v0.5: 157 ready/"
+                    + "169k 三角）。附整份报告回报。";
+        } else if (!sentinelOk) {
+            verdict = "SENTINEL_FAIL";
+            message = "哨兵求交失败（位码=" + sentinelBits + "）——实例机制或矩阵编码回归，"
+                    + "与 2.1 v0.5 真机结论冲突。请附整份报告回报（[sentinel] 行）。";
+        } else if (!placementOk) {
+            verdict = "PLACEMENT_FAIL";
+            message = "摆放抽查未达标（脚下地板缺失或整数格线不足 2）——2.2 简化契约"
+                    + "（免 recentring + t=origin）与已验证布局不等价的嫌疑。"
+                    + "请附整份报告回报（ray 行）。";
+        } else if (image == null) {
+            verdict = "RENDER_FAIL";
+            message = "摆放与哨兵均通过，但路径追踪派发失败（native null / 异常；"
+                    + "详见 [render] 行）。请附整份报告回报。";
+        } else if (!imageOk) {
+            verdict = "IMAGE_DEGENERATE";
+            message = "渲染完成但图像统计退化（全黑/平场/颜色数不足——详见 S7 统计行）。"
+                    + "请附整份报告与 pathtrace_frame.png 回报。";
+        } else {
+            verdict = "PATHTRACE_OK";
+            message = "2.2 路径追踪引擎首帧成立：摄取链在简化摆放契约下复现健康度，"
+                    + "哨兵与整数格线维持 2.1 结论，离屏路径追踪渲染出可目检图像"
+                    + "（pathtrace_frame.png，眼见为实）。实测吞吐见 [render] 行"
+                    + "（atomic 计数，非估算）。—— 2.2 v0.1 达成：下一步渐进积累/实时化"
+                    + "与 GL 管线合成（2.3）。";
+        }
+        r.finish(verdict, message);
+
+        // ---- 收尾释放 ----
+        try {
+            Native.shutdownNative();
+        } catch (Throwable ignored) {
+        }
+    }
+
+    // ---- 工具 ----
+
+    private static boolean nearInteger(float v) {
+        float d = Math.abs(v - Math.round(v));
+        return d < 0.05f;
+    }
+
+    /**
+     * 图像统计自证（零粉饰）：亮度分布 + 量化颜色多样性 + 主色占比。
+     * 返回 true = 图像非退化。
+     */
+    private static boolean analyzeImage(ProbeReport r, int[] argb, int w, int h) {
+        double sum = 0;
+        double min = 1;
+        double max = 0;
+        int[] buckets = new int[4096];
+        for (int p : argb) {
+            int rr = (p >> 16) & 0xFF;
+            int gg = (p >> 8) & 0xFF;
+            int bb = p & 0xFF;
+            double l = (0.2126 * rr + 0.7152 * gg + 0.0722 * bb) / 255.0;
+            sum += l;
+            if (l < min) { min = l; }
+            if (l > max) { max = l; }
+            buckets[((rr >> 4) << 8) | ((gg >> 4) << 4) | (bb >> 4)]++;
+        }
+        double mean = sum / argb.length;
+        int distinct = 0;
+        for (int b : buckets) {
+            if (b > 0) { distinct++; }
+        }
+        // 主色 top-4（证据行：天空色/地形色应可辨识）
+        int[] topIdx = {-1, -1, -1, -1};
+        for (int k = 0; k < 4; k++) {
+            int best = -1;
+            int bestCount = -1;
+            for (int i = 0; i < buckets.length; i++) {
+                if (buckets[i] > bestCount) {
+                    boolean already = false;
+                    for (int j = 0; j < k; j++) {
+                        if (topIdx[j] == i) { already = true; }
+                    }
+                    if (!already) {
+                        best = i;
+                        bestCount = buckets[i];
+                    }
+                }
+            }
+            topIdx[k] = best;
+        }
+        StringBuilder top = new StringBuilder();
+        for (int k = 0; k < 4; k++) {
+            if (topIdx[k] < 0 || buckets[topIdx[k]] <= 0) { continue; }
+            if (top.length() > 0) { top.append("  "); }
+            top.append(String.format("#%03X %.1f%%",
+                    topIdx[k], buckets[topIdx[k]] * 100.0 / argb.length));
+        }
+        r.info(String.format("图像统计: 平均亮度=%.3f 范围=[%.3f..%.3f] 量化颜色数=%d",
+                mean, min, max, distinct));
+        r.info("主色 top-4（4-bit 量化）: " + top);
+        boolean ok = mean > 0.02 && mean < 0.98 && (max - min) >= 0.08 && distinct >= 16;
+        if (ok) {
+            r.pass("图像自证 PASS（非全黑/非平场/颜色多样性足够）");
+        } else {
+            r.fail("图像自证 FAIL（mean=" + String.format("%.3f", mean)
+                    + " range=" + String.format("%.3f..%.3f", min, max)
+                    + " distinct=" + distinct + "）");
+        }
+        return ok;
+    }
+
+    private static float[] cameraPose() throws Exception {
+        Object mc = Mappings.call(null, Mappings.C_MC, Mappings.M_MC_GET_INSTANCE);
+        Object gameRenderer = Mappings.get(mc, Mappings.C_MC, Mappings.F_MC_GAME_RENDERER);
+        Object camera = Mappings.get(gameRenderer, Mappings.C_GAME_RENDERER, Mappings.F_CAMERA_POS);
+        Object pos = Mappings.call(camera, Mappings.C_CAMERA, Mappings.M_CAMERA_GET_POS);
+        float x = ((Double) Mappings.get(pos, Mappings.C_VEC3D, Mappings.F_VEC3D_X)).floatValue();
+        float y = ((Double) Mappings.get(pos, Mappings.C_VEC3D, Mappings.F_VEC3D_Y)).floatValue();
+        float z = ((Double) Mappings.get(pos, Mappings.C_VEC3D, Mappings.F_VEC3D_Z)).floatValue();
+        float yaw = (Float) Mappings.call(camera, Mappings.C_CAMERA, Mappings.M_CAMERA_GET_YAW);
+        float pitch = (Float) Mappings.call(camera, Mappings.C_CAMERA, Mappings.M_CAMERA_GET_PITCH);
+        return new float[] {x, y, z, yaw, pitch};
+    }
+
+    private static boolean isDisabled() {
+        return Boolean.getBoolean("pathtrace.disabled")
+                || "1".equals(System.getenv("PATHTRACE_DISABLED"));
+    }
+
+    private static void envSnapshot(ProbeReport r) {
+        r.info("java.version  = " + System.getProperty("java.version"));
+        r.info("java.vm.name  = " + System.getProperty("java.vm.name"));
+        r.info("os.name       = " + System.getProperty("os.name") + " / "
+                + System.getProperty("os.arch"));
+        r.info("user.dir      = " + System.getProperty("user.dir"));
+        r.info("AMETHYST_RENDERER = " + System.getenv("AMETHYST_RENDERER"));
+        r.info("GALLIUM_DRIVER     = " + System.getenv("GALLIUM_DRIVER"));
+        r.info("pojav.lwjgl.version = " + System.getProperty("pojav.lwjgl.version"));
+        r.info("org.lwjgl.opengl.libname = " + System.getProperty("org.lwjgl.opengl.libname"));
+        r.info("org.lwjgl.vulkan.libname = " + System.getProperty("org.lwjgl.vulkan.libname"));
+    }
+
+    private static Path extract(String resource, Path dir) throws Exception {
+        Path out = dir.resolve(Paths.get(resource).getFileName());
+        try (InputStream in = PathtraceMod.class.getResourceAsStream(resource)) {
+            if (in == null) {
+                throw new IllegalStateException("JAR 资产缺失: " + resource);
+            }
+            Files.copy(in, out, StandardCopyOption.REPLACE_EXISTING);
+        }
+        return out;
+    }
+}

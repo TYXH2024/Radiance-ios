@@ -2,6 +2,8 @@
 
 > 设计文档：`docs/chapter2-scene-ingestion-design.md`
 > 前置：2.0 `metal-rt-probe` 真机判定 METAL_RT_OK（投送通道 + 进程内 Metal RT 已验证）
+>
+> **✅ 阶段终局（2026-10-27）：v0.5.0 真机判定 SCENE_INGEST_OK——哨兵 3/3、SECTION-LOCAL R=(0,0,0) 精确、命中面整数格线自证。2.1 闭环，后续演进在 `chapter2/pathtrace`（2.2）。现场记录：`docs/chapter2-scene-ingestion-field/`**
 
 ## 验证问题
 

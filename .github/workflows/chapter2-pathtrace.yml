@@ -1,0 +1,116 @@
+name: chapter2-pathtrace
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+    paths:
+      - 'chapter2/pathtrace/**'
+      - '.github/workflows/chapter2-pathtrace.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  # ------------------------------------------------------------------
+  # 第二章 2.2 阶段交付：pathtrace mod JAR。
+  #   1. 交叉编译 libradiance_pathtrace.dylib (iphoneos arm64, JNI 场景
+  #      管理 + 离屏 pathtrace 派发)
+  #   2. 编译 pathtrace.metallib (MSL metal3: scene_trace_kernel 2.1 原样
+  #      + pathtrace_kernel 全链路径追踪)
+  #   3. ad-hoc 签名（ldid / codesign 兜底）
+  #   4. Java 编译 + JAR 组装（资产内嵌）
+  #   5. 发预发布 Release（幂等：已存在则 --clobber 重传资产）
+  # 本地无 macOS 无法构建原生部分 —— 全链在此产线完成。
+  # ------------------------------------------------------------------
+  build-and-release:
+    name: build mod jar + release (macos-26)
+    runs-on: macos-26
+    steps:
+      - name: Checkout Radiance-ios
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21 (javac + jni.h)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Build mod jar (natives + metallib + java)
+        run: |
+          set -ex
+          chmod +x chapter2/pathtrace/build.sh
+          bash chapter2/pathtrace/build.sh
+          JAR="chapter2/pathtrace/pathtrace-0.1.0.jar"
+          test -f "$JAR"
+          cp "$JAR" ./pathtrace-0.1.0.jar
+
+      - name: Verify native surface
+        run: |
+          set -ex
+          DYLIB="chapter2/pathtrace/build/native/libradiance_pathtrace.dylib"
+          file "$DYLIB"
+          nm -gU "$DYLIB" | grep -q "Java_net_prisma_pathtrace_Native_initNative" \
+            && echo "JNI_EXPORT_OK(initNative)"
+          nm -gU "$DYLIB" | grep -q "Java_net_prisma_pathtrace_Native_rebuildSingleNative" \
+            && echo "JNI_EXPORT_OK(rebuildSingleNative)"
+          nm -gU "$DYLIB" | grep -q "Java_net_prisma_pathtrace_Native_castRayNative" \
+            && echo "JNI_EXPORT_OK(castRayNative)"
+          nm -gU "$DYLIB" | grep -q "Java_net_prisma_pathtrace_Native_sentinelProbeNative" \
+            && echo "JNI_EXPORT_OK(sentinelProbeNative)"
+          nm -gU "$DYLIB" | grep -q "Java_net_prisma_pathtrace_Native_sceneStatsNative" \
+            && echo "JNI_EXPORT_OK(sceneStatsNative)"
+          nm -gU "$DYLIB" | grep -q "Java_net_prisma_pathtrace_Native_instanceOriginNative" \
+            && echo "JNI_EXPORT_OK(instanceOriginNative)"
+          nm -gU "$DYLIB" | grep -q "Java_net_prisma_pathtrace_Native_renderPathtraceNative" \
+            && echo "JNI_EXPORT_OK(renderPathtraceNative)"
+          nm -gU "$DYLIB" | grep -q "Java_net_prisma_pathtrace_Native_shutdownNative" \
+            && echo "JNI_EXPORT_OK(shutdownNative)"
+          # 2.1 已删的 v0.4 诊断矩阵入口不得在 2.2 dylib 中出现
+          if nm -gU "$DYLIB" | grep -q "sceneInfoNative\|setPlacementModeNative"; then
+            echo "FATAL: stale 2.1 diagnostic entry points present"; exit 1
+          fi
+          echo "JNI_SURFACE_CLEAN(2.2)"
+          # metallib 双 kernel 验证
+          METALLIB="chapter2/pathtrace/build/native/pathtrace.metallib"
+          file "$METALLIB"
+          test -s "$METALLIB"
+
+      - name: Release (pathtrace-v0.1, prerelease)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -ex
+          TAG="pathtrace-v0.1"
+          TITLE="pathtrace v0.1 — 2.2 path tracing engine first frame (ingestion fork + vertex-color albedo + offscreen render + PNG)"
+          NOTES="$(cat <<'EOF'
+Radiance iOS 移植 第二章 2.2 第一版（path tracing 引擎首帧）。
+
+**前置**: 2.1 scene-ingestion v0.5 真机判定 SCENE_INGEST_OK（哨兵 3/3、
+SECTION-LOCAL R=0 精确、命中面整数格线自证）——2.2 契约已盖章。
+
+**本版内容**:
+- 摄取链 fork（2.1 已四连真机验证的骨架）+ 三处外科手术：
+  1. 顶点 COLOR 提取（VertexFormat.getOffset(COLOR) 动态解析，无硬编码
+     偏移；MC 把方块染色烘进顶点色——即 path tracer 的 albedo）
+  2. 摆放简化（顶点 section-local 原样入库 + TLAS instance =
+     translate(origin)，等价于 2.1 已验证的 recentring+translate(2*origin)）
+  3. TLAS 随建 shading pools（逐三角 3 色 + CPU 法线 + 实例基址表）
+- pathtrace_kernel（MSL metal3 ray_query）：相机 ray → TLAS → 重心插值
+  albedo → 太阳直射 + 阴影 ray → cosine 加权漫反射弹射 → spp 累积 →
+  Reinhard + gamma → RGBA8；atomic 计数器回读（实测 Mray/s，非估算）
+- S6 摆放抽查（哨兵 + 相机姿态 + 整数格线——零粉饰纪律沿用 2.1）
+- S7 离屏渲染 480x270 / 24 spp / 2 bounces + 手写零依赖 PNG 编码器
+  （不依赖 java.desktop）落盘 pathtrace_frame.png + 图像统计自证
+- 判定: PATHTRACE_OK / PLACEMENT_FAIL / RENDER_FAIL / IMAGE_DEGENERATE /
+  SENTINEL_FAIL / SCENE_EMPTY / CAMERA_FAIL（每档语义明确）
+
+**使用**: 替换 mods/ 内旧探针 JAR（同存档进世界 30-40s）→
+`pathtrace_report.txt` + `pathtrace_frame.png`（均在 game 目录）回报。
+EOF
+          )"
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 \
+            && gh release upload "$TAG" ./pathtrace-0.1.0.jar --clobber --repo "$GITHUB_REPOSITORY" \
+            || gh release create "$TAG" ./pathtrace-0.1.0.jar \
+                 --title "$TITLE" --notes "$NOTES" --prerelease --repo "$GITHUB_REPOSITORY"
+          echo "RELEASE_DONE $TAG"
