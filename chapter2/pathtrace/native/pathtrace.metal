@@ -216,7 +216,7 @@ kernel void pathtrace_kernel(
             const float dist = q.get_committed_distance();
             const uint32_t inst = q.get_committed_instance_id();
             const uint32_t prim = q.get_committed_primitive_id();
-            const float2 bary = q.get_committed_triangle_barycentric_coords();
+            const float2 bary = q.get_committed_triangle_barycentric_coord();
             const uint32_t tri = instTriBase[inst] + prim;
 
             float3 n = float3(triNormals[tri]);
