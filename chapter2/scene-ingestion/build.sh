@@ -7,7 +7,7 @@ set -euo pipefail
 cd "$(dirname "$0")"
 
 MOD_ID="sceneingest"
-VERSION="0.4.0"
+VERSION="0.5.0"
 JAR_NAME="scene-ingestion-${VERSION}.jar"
 
 # ------------------------------------------------------------------

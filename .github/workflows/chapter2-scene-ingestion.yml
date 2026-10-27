@@ -39,9 +39,9 @@ jobs:
           set -ex
           chmod +x chapter2/scene-ingestion/build.sh
           bash chapter2/scene-ingestion/build.sh
-          JAR="chapter2/scene-ingestion/scene-ingestion-0.4.0.jar"
+          JAR="chapter2/scene-ingestion/scene-ingestion-0.5.0.jar"
           test -f "$JAR"
-          cp "$JAR" ./scene-ingestion-0.4.0.jar
+          cp "$JAR" ./scene-ingestion-0.5.0.jar
 
       - name: Verify native surface
         run: |
@@ -70,7 +70,7 @@ jobs:
         with:
           name: scene-ingestion-jar
           path: |
-            scene-ingestion-0.4.0.jar
+            scene-ingestion-0.5.0.jar
             chapter2/scene-ingestion/build/native/libradiance_scene.dylib
             chapter2/scene-ingestion/build/native/scene_trace.metallib
           if-no-files-found: error
@@ -78,47 +78,50 @@ jobs:
       - name: Publish prerelease (idempotent)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: scene-ingestion-v0.4
+          TAG: scene-ingestion-v0.5
         run: |
           set -x
           NOTES_FILE=release-notes.md
           cat > "$NOTES_FILE" <<'EOF'
-          # scene-ingestion v0.4 — 第二章 2.1 阶段探针（矩阵回归修复 + 诊断矩阵）
+          # scene-ingestion v0.5 — 第二章 2.1 收口确认版（哨兵仪器修复 + R 估计器修复）
 
-          **v0.4 变更**（v0.3 真机实测回收后定位）：
+          **v0.5 变更**（v0.4 真机实测回收后的严谨性复核——判定 SCENE_INGEST_OK(13/14) 成立，但报告内有两处探针缺陷必须修复，2.1 才算真正闭环）：
 
-          1. **TLAS 实例矩阵编码修复（关键——v0.3 的"修复"方向反了）**：`transformationMatrix` 的类型是 `MTLPackedFloat4x3`，Apple 文档明确定义为"**4x4 矩阵的前三行，列主序**"（columns 为 4 个 packed float3，底行隐含 [0,0,0,1]）。**平移在第 4 列 = flat[9..11]**；单位阵+平移的正确编码是 `[1,0,0, 0,1,0, 0,0,1, tx,ty,tz]`（即 2.0 探针单位变换 / v0.2 平移的同款布局）。v0.3 把平移写到 flat[3]/[7]/[11]，在真布局下解码为剪切型垃圾矩阵（col1=(tx,0,1)、col2=(0,ty,0)）——这就是 v0.3 真机六向全 miss 的根因（摄取本体 4.6× 规模复验全绿，几何健康）。
-          2. **顶点空间审计（raw-AABB）**：设计 §4 假设提取顶点为世界绝对坐标并 recentring；但 MC 1.18+ 的区块网格顶点在烘焙时就是 **section 局部坐标**（渲染侧才 translate(sectionOrigin−camera)）——若如此，recentring+translate(origin) 会把几何塌缩到世界原点。v0.4 在 rebuild 时逐槽记录原始顶点 AABB，S6 审计 e=rawCenter−8 的分布：随 origin 变化→世界绝对；恒定常数 R→区块局部(+R)。
-          3. **哨兵求交（隔离验证）**：零 MC 数据的单三角 BLAS + 双实例 TLAS（单位变换 + 平移 K=(4096,0,4096)）+ 两阳一阴三条 ray——单独验证实例机制与矩阵平移编码，与场景数据解耦。
-          4. **双假设锦标赛 + 自动选优**：布局模式 ABS（t=origin）vs MEASURED（t=2·origin−R，R 来自 AABB 实测），各 6 向 ray 实测命中数，胜者自动应用并进入 14 ray 终验（6 轴向 + 8 对角，含命中区块 section 归因）——**无论顶点空间是哪种，一次真机运行即可闭环 2.1**。
+          1. **哨兵求交修复（v0.4 报告位码=4 的根因）**：v0.4 的哨兵顶点按 `float[3][3]`（36 B）打包，而几何描述符声明 `vertexStride=16 B`——第 3 个顶点越界读 12 B（共享内存 OOB），BLAS 编码出垃圾三角形：两条阳性 ray 全 miss、阴性对照"空泛通过"。**真实场景路径不受影响**（其顶点缓冲恒为精确 simd_float3 数组——锦标赛 5/6 + 终验 13/14 命中即是实例机制与矩阵编码的实证）。v0.5 顶点改为 `simd_float3[3]`（48 B，与 stride 匹配）并新增 GPU 读回回显行（`[sentinel] vert readback`）自证字节正确。
+          2. **R 估计器修复（v0.4 胜出布局带 ~2.07 格 Y 系统偏移的根因）**：v0.4 用远槽 e=rawCenter−8 的**中位数**估 R——但 section 局部顶点的 e 并非常数（部分高度 section 把 rawCenter 拖低），实测中位数 (0,−2.07,0) 被应用到胜出布局，使所有 Y 法向面整体偏移 +2.07 格。**整数面证据**：扣除该偏移后所有命中面精确落在整数格线（+Y 93.07→91.00、−Y 19.07→17.00、对角 67.07→65.00），而 X/Z 面本就精确（26.00/8.00/−27.00/−18.00，因 R_x=R_z=0）；眼高交叉验证 92.62 = 91.00 + 1.62（MC 精确眼高）——真实 R=(0,0,0)。v0.5 改用**包围盒判定**：远槽全局 raw AABB ⊆ [−1..17]³ → SECTION-LOCAL，R=(0,0,0) 精确（v0.4 实测 [−0.2..16.2]）；中位数仅作无法判定时的回退。
+          3. **命中点回显（新增自证）**：每条命中 ray 现在回显 `hitPoint` 世界坐标——正确摆放下命中面坐标应落在整数格线上（报告内直接目检零系统偏移）。
+
+          **判定语义不变（反"为成功调参"纪律）**：OK 仅来自真实 ray 命中真实几何；哨兵状态独立上报、不参与判定放宽；v0.5 不放宽任何通过判据，只修复两台"坏掉的仪器"并加严自证。
+
+          **预期（若根因分析正确）**：哨兵 3/3 PASS；AABB 包围盒判定 SECTION-LOCAL、R=(0,0,0)；MEASURED（t=2·origin）胜出且命中面全部落在整数格线。达成即 2.1 正式闭环，2.2 路径追踪引擎按已验证契约开工：**网格顶点为 section 局部坐标；BLAS 存 v−origin；TLAS instance = translate(2·origin)**（2.2 可简化为免 recentring + t=origin，摆放等价）。
 
           **用途**：把真实 MC 世界的区块网格摄入 Metal 加速结构（每区块 BLAS + 实例 TLAS 动态重建），并以世界空间 ray 求交验证全链路。
 
           ## 安装
-          1. 下载 `scene-ingestion-0.4.0.jar`，放入 mods/ 目录（**替换** v0.3，勿共存；与 metal-rt-probe 建议也不要共存）。
+          1. 下载 `scene-ingestion-0.5.0.jar`，放入 mods/ 目录（**替换** v0.4，勿共存；与 metal-rt-probe 建议也不要共存）。
           2. 渲染器保持 **zink** 档。
           3. 启动游戏并**进入一个存档世界**（本探针在进世界后才开始摄取），在世界内停留约 30–40 秒（全量排空约 19s + 验证窗口）。
           4. 报告完成后（游戏内 log 出现 `[scene] shutdown`）即可退出世界；S6 使用缓存相机位置，退出后完成也不受影响。
 
           ## 产出
           - 游戏目录生成 `scene_ingestion_report.txt` —— **请整份回传**
-          - 判定 `SCENE_INGEST_OK` = 2.1 场景摄取成立（真实几何进 BLAS/TLAS 且可求交）
+          - 判定 `SCENE_INGEST_OK` + 哨兵 PASS + hitPoint 整数格线 = 2.1 正式闭环
 
           ## 判定表
           | 判定 | 含义 |
           |---|---|
-          | SCENE_INGEST_OK | 终验电池（14 ray）至少一命中；胜出布局模式会在判定行给出（ABS=顶点世界绝对 / MEASURED=顶点区块局部） |
+          | SCENE_INGEST_OK | 终验电池（14 ray）至少一命中；判定行给出胜出布局与 R；命中面整数格线自证零系统偏移 |
           | SCENE_EMPTY | 摄取窗口内无就绪 BLAS（未进世界/区块 mesh 始终为空） |
           | REFLECT_FAIL | S3 反射符号解析失败（报告逐符号定位——MC 版本不符的指纹） |
           | NATIVE_FAIL | 原生段 FATAL/异常 |
-          | SENTINEL_FAIL | 哨兵求交失败：隔离 TLAS 的单位/平移实例验证未通过——实例机制或矩阵编码问题，与场景数据无关 |
+          | SENTINEL_FAIL | 哨兵求交失败：v0.5 已修复仪器缺陷——若复现即为实例机制/矩阵编码的真实问题 |
           | EXTRACTION_GARBAGE | 顶点提取存在异常数据（NaN/巨跨度）且锦标赛全 miss——顶点格式/stride 嫌疑 |
-          | NATIVE_MISMATCH | 哨兵通过 + AABB 健康 + 双假设锦标赛均 0 命中——顶点空间非两种假设之一，或更深的摆放问题 |
+          | NATIVE_MISMATCH | 哨兵通过 + AABB 健康 + 双假设锦标赛均 0 命中——顶点空间非两假设之一，或更深摆放问题 |
           | CAMERA_FAIL | 相机不可读且无缓存（几何已摄取但未发射 ray；需回报） |
           | LOAD_FAIL / EXTRACT_FAIL | 投送通道受阻（同 2.0） |
 
           ## 报告段
-          S0 环境 → S1 解包 → S2 装载 → S3 反射符号审计 → S4/S5 网格发现与摄取 → S6 诊断矩阵（**[aabb] 审计行 / [sentinel] 哨兵行 / 锦标赛 [ABS]/[MEASURED] ray 行 / 终验 14 ray 行**）→ 判定。
+          S0 环境 → S1 解包 → S2 装载 → S3 反射符号审计 → S4/S5 网格发现与摄取 → S6 诊断矩阵（**[aabb] 包围盒判定 / [sentinel] 读回回显+哨兵 / 锦标赛 [ABS]/[MEASURED] / 终验 14 ray 含 hitPoint 与区块归因**）→ 判定。
 
           ## 归因开关
           `-Dsceneingest.disabled=true`（或 `SCENEINGEST_DISABLED=1`）：零原生调用，闪退 A/B 对照。
@@ -126,14 +129,14 @@ jobs:
           ## 说明
           - 读取路径为全反射（intermediary 符号，yarn 1.21.4+build.8 离线校验）+ 500ms 轮询，零 mixin/refmap/Loom 依赖；
           - 自建 MTLDevice/queue，与 zink/MoltenVK 渲染主链零共享；
-          - 顶点 BLAS 内存 recentred 坐标；TLAS 实例平移在两种布局模式间由锦标赛自动选优（胜出模式即 2.2 引擎的顶点空间答案）。
+          - 实例矩阵平移在 flat[9..11]（MTLPackedFloat4x3，Apple 文档定谳）；TLAS 布局由锦标赛自动选优，v0.4 真机已裁定顶点为 section 局部坐标。
           EOF
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" scene-ingestion-0.4.0.jar --clobber
+            gh release upload "$TAG" scene-ingestion-0.5.0.jar --clobber
           else
-            gh release create "$TAG" scene-ingestion-0.4.0.jar \
+            gh release create "$TAG" scene-ingestion-0.5.0.jar \
               --prerelease --target main \
-              --title "scene-ingestion v0.4 — instance matrix regression fixed (doc-confirmed) + vertex-space diagnostic matrix" \
+              --title "scene-ingestion v0.5 — sentinel instrument fix + bounds-based R estimator + hit-point echo (2.1 closure confirmation)" \
               --notes-file "$NOTES_FILE"
           fi
 
@@ -144,7 +147,7 @@ jobs:
             echo "## Chapter 2 — scene-ingestion build (macos-26)"
             echo "- Native dylib: iphoneos arm64, 8 key JNI exports verified"
             echo "- metallib: scene_trace kernel (metal3 std cascade)"
-            echo "- Artifact: scene-ingestion-0.4.0.jar (dylib + metallib + msl embedded)"
+            echo "- Artifact: scene-ingestion-0.5.0.jar (dylib + metallib + msl embedded)"
             echo "- Release: scene-ingestion-v0.4 (prerelease, idempotent upload)"
-            echo "- v0.4: instance matrix encoding fixed (MTLPackedFloat4x3, translation at flat[9..11] — doc-confirmed; v0.3 regression); raw-AABB vertex-space audit; isolated sentinel TLAS; two-hypothesis placement tournament with auto-selection"
+            echo "- v0.5: sentinel vertex buffer size/stride mismatch fixed (36B->48B simd_float3[3] + GPU readback echo); bounds-based R estimator (section-local => R=0 exactly, median demoted to fallback); hit-point echo on every hit (integer-grid self-check)"
           } >> "$GITHUB_STEP_SUMMARY"

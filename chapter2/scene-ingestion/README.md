@@ -28,9 +28,10 @@ Fabric CLIENT_STARTED → 后台摄取线程（500ms 轮询，零 mixin/refmap�
   TLAS 节流重建（1s）：instance transform = translate(t)，t 由布局模式决定
     （v0.4：ABS t=origin / MEASURED t=2·origin−R，矩阵平移在 flat[9..11]，
      MTLPackedFloat4x3 = 4x4 前三行列主序 —— Apple 文档定谳）
-  验证（v0.4 诊断矩阵）：S6.0 回显 → S6.1 哨兵（隔离 TLAS）→ S6.2 raw-AABB
-    审计 → S6.3 双假设锦标赛（6 ray × 2 模式）→ S6.4 自动选优 + 14 ray 终验
-    （6 轴向 + 8 对角，命中归因到 section origin）
+  验证（v0.5 诊断矩阵）：S6.0 回显 → S6.1 哨兵（隔离 TLAS + 顶点读回回显）→
+    S6.2 raw-AABB 包围盒判定（SECTION-LOCAL → R=0 精确；中位数仅回退）→
+    S6.3 双假设锦标赛（6 ray × 2 模式）→ S6.4 自动选优 + 14 ray 终验
+    （6 轴向 + 8 对角，hitPoint 整数格线自证 + 归因到 section origin）
 ```
 
 ## 组成
@@ -49,11 +50,11 @@ Fabric CLIENT_STARTED → 后台摄取线程（500ms 轮询，零 mixin/refmap�
 
 | 判定 | 含义 |
 |---|---|
-| SCENE_INGEST_OK | 终验电池（14 ray）至少一命中；判定行给出胜出布局（ABS=顶点世界绝对 / MEASURED=顶点区块局部）—— 2.2 路径追踪引擎绿灯 |
+| SCENE_INGEST_OK | 终验电池（14 ray）至少一命中；判定行给出胜出布局与 R；hitPoint 行以整数格线自证零系统偏移 —— 2.2 路径追踪引擎绿灯 |
 | SCENE_EMPTY | 摄取窗口内无就绪 BLAS（未进世界/区块 mesh 始终为空） |
 | REFLECT_FAIL | S3 反射符号解析失败（报告逐符号定位——MC 版本不符的指纹） |
 | NATIVE_FAIL | 原生段 FATAL/异常 |
-| SENTINEL_FAIL | 隔离 TLAS 哨兵求交失败——实例机制/矩阵编码问题，与场景数据无关 |
+| SENTINEL_FAIL | 隔离 TLAS 哨兵求交失败——v0.5 已修复仪器缺陷（顶点缓冲 36→48 B），若复现即为实例机制/矩阵编码的真实问题 |
 | EXTRACTION_GARBAGE | 顶点提取异常（NaN/巨跨度）且锦标赛全 miss——顶点格式/stride 嫌疑 |
 | NATIVE_MISMATCH | 哨兵通过 + AABB 健康 + 双假设锦标赛均 0 命中——顶点空间非两假设之一，或更深摆放问题 |
 | CAMERA_FAIL | 相机不可读且无缓存（几何已摄取但未发射 ray；需回报） |
@@ -61,7 +62,7 @@ Fabric CLIENT_STARTED → 后台摄取线程（500ms 轮询，零 mixin/refmap�
 
 ## 使用（真机）
 
-1. Release 下载 `scene-ingestion-0.4.0.jar` 放 mods/（**替换**旧版，勿共存；建议移除 metal-rt-probe 避免重复报告）
+1. Release 下载 `scene-ingestion-0.5.0.jar` 放 mods/（**替换**旧版，勿共存；建议移除 metal-rt-probe 避免重复报告）
 2. 渲染器保持 zink 档
 3. 启动游戏，**进入一个存档世界**，停留约 30–40 秒（全量排空约 19s + 验证窗口；log 出现 [scene] shutdown 后即可退出）
 4. 回传游戏目录 `scene_ingestion_report.txt` 整份

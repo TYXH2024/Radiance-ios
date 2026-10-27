@@ -39,7 +39,7 @@ public final class SceneIngestionMod {
             return;
         }
         ProbeReport r = new ProbeReport("scene_ingestion_report.txt");
-        r.header("场景摄取探针 (scene-ingestion 0.4.0)");
+        r.header("场景摄取探针 (scene-ingestion 0.5.0)");
         r.info("触发方式: " + triggerSource);
 
         if (isDisabled()) {
@@ -140,7 +140,7 @@ public final class SceneIngestionMod {
                 totalTris, totalVerts, vertexBytes / 1024.0, indexBytes / 1024.0,
                 tlasBytes / 1024.0));
 
-        r.stage("S6 场景求交验证（v0.4 诊断矩阵：回显/哨兵/AABB 审计/双假设锦标赛/选优终验）");
+        r.stage("S6 场景求交验证（v0.5 诊断矩阵：回显/哨兵/AABB 包围盒判定/双假设锦标赛/选优终验）");
         float[] cam = null;
         try {
             cam = cameraPos();
@@ -162,6 +162,7 @@ public final class SceneIngestionMod {
         boolean extractionGarbage = false;
         int aabbAbs = 0;
         int aabbFam2 = 0;
+        float rX = 0, rY = 0, rZ = 0;
         int hitsAbs = -1;
         int hitsMeasured = -1;
         int winner = -1;
@@ -171,14 +172,20 @@ public final class SceneIngestionMod {
             r.pass(String.format("相机位置: (%.2f, %.2f, %.2f)", cam[0], cam[1], cam[2]));
 
             // ---- S6.0/S6.2 场景信息与 raw-AABB 审计 ----
-            // 测定提取顶点的空间（世界绝对 vs 区块局部+R）；native 侧已逐槽
-            // rp() 回显证据行（[aabb] 前缀）并缓存实测 R。
+            // 测定提取顶点的空间（v0.5：包围盒判定优先——远槽全局 raw AABB
+            // ⊆ [-1..17]³ 即 SECTION-LOCAL，R=(0,0,0) 精确；中位数仅作回退。
+            // v0.4 的中位数估计器被部分高度 section 偏置到 (0,-2.07,0)，
+            // 使胜出摆的所有 Y 法向面带 +2.07 格系统偏移——整数面取证已证）
+            // native 侧已逐槽 rp() 回显证据行并缓存实测 R。
             try {
                 float[] info = Native.sceneInfoNative(cam[0], cam[1], cam[2]);
                 if (info != null && info.length >= 8) {
                     aabbAbs = (int) info[4];
                     aabbFam2 = (int) info[5];
                     int garbage = (int) info[6];
+                    rX = info[0];
+                    rY = info[1];
+                    rZ = info[2];
                     extractionGarbage = garbage > 0;
                     r.info(String.format(
                             "AABB 审计汇总: ABS票=%d 局部族票=%d 垃圾槽位=%d "
@@ -195,17 +202,20 @@ public final class SceneIngestionMod {
             }
 
             // ---- S6.1 哨兵求交（隔离 TLAS：单位实例 + 平移实例 + 阴性对照）----
-            // v0.3 的矩阵“修复”方向反了（正确布局平移在 flat[9..11]，
-            // Apple 文档 MTLPackedFloat4x3 = 4x4 前三行列主序）；哨兵以零 MC
-            // 数据单独验证 v0.4 修复后的矩阵平移编码。
+            // v0.5 修复：v0.4 的哨兵顶点按 float[3][3]（36 B）打包而
+            // vertexStride=16 B——第三个顶点越界读 12 B，BLAS 编码出垃圾三角形
+            // （真机位码=4 的根因；仪器缺陷，非实例机制问题——真实场景
+            // 锦标赛 5/6 + 终验 13/14 才是实例机制的实证）。v0.5 顶点改
+            // simd_float3[3]（48 B）并新增 GPU 读回回显行。
             try {
                 int bits = Native.sentinelProbeNative();
                 sentinelOk = (bits & 7) == 7;
                 if (sentinelOk) {
-                    r.pass("哨兵求交 PASS：TLAS 实例机制 + v0.4 矩阵平移编码真机验证成立");
+                    r.pass("哨兵求交 PASS：TLAS 实例机制 + 矩阵平移编码真机验证成立");
                 } else {
                     r.fail("哨兵求交 FAIL（位码=" + bits + "，b0=单位实例 b1=平移实例 "
-                            + "b2=阴性对照）—— 实例机制或矩阵编码仍异常，与场景数据无关");
+                            + "b2=阴性对照）—— v0.5 已修复顶点缓冲尺寸/stride 不匹配；"
+                            + "若此判定复现，即为实例机制/矩阵编码的真实问题，请回报");
                 }
             } catch (Throwable t) {
                 r.fail("sentinelProbeNative 异常: " + t);
@@ -285,9 +295,11 @@ public final class SceneIngestionMod {
                     + readyBlas + "，三角形=" + totalTris + "，终验命中 " + hits + "/"
                     + FULL_DIRS.length + "，胜出布局=" + (winner == 0
                             ? "ABS（t=origin，顶点为世界绝对坐标）"
-                            : "MEASURED（t=2·origin−R，顶点为区块局部坐标，R 见 [aabb] 行）")
-                    + (sentinelOk ? "；哨兵求交 PASS。" : "；⚠哨兵未过但真实求交命中——异常状态，请回报。")
-                    + (extractionGarbage ? "；注意：存在异常 AABB 槽位（详见 [aabb] 行）。" : "")
+                            : "MEASURED（t=2·origin−R，顶点为 section 局部坐标，R=("
+                                    + String.format("%.1f, %.1f, %.1f", rX, rY, rZ) + ")）")
+                    + "。命中面坐标应落在整数格线上（hitPoint 行自证零系统偏移）。"
+                    + (sentinelOk ? "哨兵求交 PASS。" : "⚠哨兵未过但真实求交命中——异常状态，请回报。")
+                    + (extractionGarbage ? "注意：存在异常 AABB 槽位（详见 [aabb] 行）。" : "")
                     + "2.1 场景摄取成立 —— 2.2 路径追踪引擎绿灯。";
         } else if (!sentinelOk) {
             verdict = "SENTINEL_FAIL";
@@ -333,6 +345,9 @@ public final class SceneIngestionMod {
     /**
      * 发射一组 ray（native 侧归一化方向）；tag 非空时附加在每行尾部用于
      * 锦标赛区分；attribute=true 时对命中微 instance 归因到 section origin。
+     * v0.5：命中行回显 hitPoint 世界坐标——正确摆放下命中面应落在整数格线
+     * （报告内直接目检零系统偏移；v0.4 的 +2.07 格 Y 偏移正是靠这组整数面
+     * 取证发现的）。
      */
     private static int castBattery(ProbeReport r, float[] cam, float[][] dirs,
             String[] names, String tag, boolean attribute) {
@@ -344,6 +359,11 @@ public final class SceneIngestionMod {
                         dirs[i][0], dirs[i][1], dirs[i][2], 512f);
                 if (res != null && res[0] > 0.5f) {
                     hits++;
+                    float len = (float) Math.sqrt(dirs[i][0] * dirs[i][0]
+                            + dirs[i][1] * dirs[i][1] + dirs[i][2] * dirs[i][2]);
+                    float px = cam[0] + res[1] * dirs[i][0] / len;
+                    float py = cam[1] + res[1] * dirs[i][1] / len;
+                    float pz = cam[2] + res[1] * dirs[i][2] / len;
                     String attr = "";
                     if (attribute) {
                         int[] org = Native.instanceOriginNative((int) res[2]);
@@ -352,8 +372,10 @@ public final class SceneIngestionMod {
                                     org[0], org[1], org[2]);
                         }
                     }
-                    r.pass(String.format("ray %s: HIT distance=%.2f (instance=%d)%s",
-                            label, res[1], (int) res[2], attr));
+                    r.pass(String.format(
+                            "ray %s: HIT distance=%.2f hitPoint=(%.2f, %.2f, %.2f)"
+                                    + " (instance=%d)%s",
+                            label, res[1], px, py, pz, (int) res[2], attr));
                 } else {
                     r.info("ray " + label + ": miss（512 格内无几何）");
                 }

@@ -1,0 +1,188 @@
+==============================================================
+场景摄取探针 (scene-ingestion 0.4.0) —— Radiance 移植第二章 2.1
+时间: Tue Oct 27 20:54:07 CST 2026
+报告文件: /var/mobile/Containers/Data/Application/132BB6A9-CD8E-40EA-8202-AA41493AF270/Documents/instances/default/versions/fabric-loader-0.20.1-1.21.4/game/scene_ingestion_report.txt
+==============================================================
+
+[INFO ] 触发方式: CLIENT_STARTED
+
+---- S0 环境快照 ----
+[INFO ] java.version  = 21.0.8-internal
+[INFO ] java.vm.name  = OpenJDK 64-Bit Server VM
+[INFO ] os.name       = Mac OS X / aarch64
+[INFO ] user.dir      = /var/mobile/Containers/Data/Application/132BB6A9-CD8E-40EA-8202-AA41493AF270/Documents/instances/default/versions/fabric-loader-0.20.1-1.21.4/game
+[INFO ] AMETHYST_RENDERER = libOSMesa.8.dylib
+[INFO ] GALLIUM_DRIVER     = null
+[INFO ] pojav.lwjgl.version = 333
+[INFO ] org.lwjgl.opengl.libname = libOSMesa.8.dylib
+[INFO ] org.lwjgl.vulkan.libname = MoltenVK
+
+---- S1 解包原生资产（JAR -> game 目录） ----
+[PASS ] 解包完成: /var/mobile/Containers/Data/Application/132BB6A9-CD8E-40EA-8202-AA41493AF270/Documents/instances/default/versions/fabric-loader-0.20.1-1.21.4/game/sceneingest/libradiance_scene.dylib (112688 B)
+[INFO ] metallib: /var/mobile/Containers/Data/Application/132BB6A9-CD8E-40EA-8202-AA41493AF270/Documents/instances/default/versions/fabric-loader-0.20.1-1.21.4/game/sceneingest/scene_trace.metallib (5560 B)
+
+---- S2 System.load 装载 dylib（投送通道验证） ----
+[PASS ] dylib 装载成功（与 2.0 相同的受信装载链）
+
+---- S3 反射符号审计（intermediary 符号表逐项解析） ----
+[PASS ] class net.minecraft.class_310
+[PASS ] class net.minecraft.class_761
+[PASS ] class net.minecraft.class_769
+[PASS ] class net.minecraft.class_846
+[PASS ] class net.minecraft.class_846$class_851
+[PASS ] class net.minecraft.class_2382
+[PASS ] class net.minecraft.class_2338
+[PASS ] class net.minecraft.class_4076
+[PASS ] class net.minecraft.class_6850
+[PASS ] class net.minecraft.class_853
+[PASS ] class net.minecraft.class_9810
+[PASS ] class net.minecraft.class_9810$class_9811
+[PASS ] class net.minecraft.class_9801
+[PASS ] class net.minecraft.class_9801$class_4574
+[PASS ] class net.minecraft.class_293
+[PASS ] class net.minecraft.class_8251
+[PASS ] class net.minecraft.class_750
+[PASS ] class net.minecraft.class_4184
+[PASS ] class net.minecraft.class_243
+[PASS ] class net.minecraft.class_757
+[PASS ] class net.minecraft.class_638
+[PASS ] class net.minecraft.class_1937
+[PASS ] field net.minecraft.class_310#field_1687
+[PASS ] field net.minecraft.class_310#field_1773
+[PASS ] field net.minecraft.class_638#field_17780
+[PASS ] field net.minecraft.class_761#field_4112
+[PASS ] field net.minecraft.class_761#field_45614
+[PASS ] field net.minecraft.class_769#field_4150
+[PASS ] field net.minecraft.class_769#field_4148
+[PASS ] field net.minecraft.class_769#field_4149
+[PASS ] field net.minecraft.class_769#field_4147
+[PASS ] field net.minecraft.class_846#field_52171
+[PASS ] field net.minecraft.class_846$class_851#field_29641
+[PASS ] field net.minecraft.class_846$class_851#field_4467
+[PASS ] field net.minecraft.class_846$class_851#field_4459
+[PASS ] field net.minecraft.class_9810$class_9811#field_52168
+[PASS ] field net.minecraft.class_8251#field_43360
+[PASS ] field net.minecraft.class_757#field_18765
+[PASS ] field net.minecraft.class_243#field_1352
+[PASS ] field net.minecraft.class_243#field_1351
+[PASS ] field net.minecraft.class_243#field_1350
+[PASS ] method net.minecraft.class_310#method_1551
+[PASS ] method net.minecraft.class_846$class_851#method_3670
+[PASS ] method net.minecraft.class_846$class_851#method_62975
+[PASS ] method net.minecraft.class_2382#method_10263
+[PASS ] method net.minecraft.class_2382#method_10264
+[PASS ] method net.minecraft.class_2382#method_10260
+[PASS ] method net.minecraft.class_4076#method_18682
+[PASS ] method net.minecraft.class_6850#method_39969
+[PASS ] method net.minecraft.class_9810#method_60904
+[PASS ] method net.minecraft.class_9810$class_9811#method_60905
+[PASS ] method net.minecraft.class_9801#method_60818
+[PASS ] method net.minecraft.class_9801#method_60822
+[PASS ] method net.minecraft.class_9801$class_4574#comp_749
+[PASS ] method net.minecraft.class_9801$class_4574#comp_750
+[PASS ] method net.minecraft.class_9801$class_4574#comp_752
+[PASS ] method net.minecraft.class_293#method_1362
+[PASS ] method net.minecraft.class_4184#method_19326
+[PASS ] ctor net.minecraft.class_750()
+[PASS ] ctor net.minecraft.class_6850()
+[PASS ] 符号表全量解析通过（60 项）
+
+---- S4/S5 网格发现与摄取（轮询 500ms，等待进入世界） ----
+[INFO ] 等待进入世界（mc.world == null）…
+[PASS ] 已进入世界，开始网格发现
+[scene] device=Apple M3 GPU raytracing=YES
+[scene] slot grid initialized: 600 chunks
+[scene] ray_query pipeline ready (threadsPerThreadgroup=1024)
+[PASS ] 网格初始化: 600 槽位 (sizeX=5 sizeY=24 sizeZ=5)
+[rebuild] index=0 origin=(0,-64,0) layers=1 verts=1024 tris=512 (blas 12.63 ms, total builds=1)
+[INFO ] rebuild #1: index=0 origin=(0,-64,0) layers=1 verts=1024 (57.4 ms)
+[rebuild] index=1 origin=(16,-64,0) layers=1 verts=1024 tris=512 (blas 0.94 ms, total builds=2)
+[INFO ] rebuild #2: index=1 origin=(16,-64,0) layers=1 verts=1024 (17.7 ms)
+[rebuild] index=2 origin=(32,-64,0) layers=1 verts=1024 tris=512 (blas 0.95 ms, total builds=3)
+[INFO ] rebuild #3: index=2 origin=(32,-64,0) layers=1 verts=1024 (17.8 ms)
+[rebuild] index=3 origin=(48,-64,0) layers=1 verts=1024 tris=512 (blas 0.82 ms, total builds=4)
+[INFO ] rebuild #4: index=3 origin=(48,-64,0) layers=1 verts=1024 (13.1 ms)
+[rebuild] index=4 origin=(-16,-64,0) layers=1 verts=1024 tris=512 (blas 0.82 ms, total builds=5)
+[INFO ] rebuild #5: index=4 origin=(-16,-64,0) layers=1 verts=1024 (10.0 ms)
+[rebuild] index=6 origin=(16,-48,0) layers=1 verts=68 tris=34 (blas 0.80 ms, total builds=6)
+[INFO ] rebuild #6: index=6 origin=(16,-48,0) layers=1 verts=68 (5.3 ms)
+[rebuild] index=13 origin=(48,-32,0) layers=1 verts=8 tris=4 (blas 0.63 ms, total builds=7)
+[INFO ] rebuild #7: index=13 origin=(48,-32,0) layers=1 verts=8 (4.8 ms)
+[rebuild] index=18 origin=(48,-16,0) layers=2 verts=3768 tris=1884 (blas 3.56 ms, total builds=8)
+[INFO ] rebuild #8: index=18 origin=(48,-16,0) layers=2 verts=3768 (29.8 ms)
+[rebuild] index=20 origin=(0,0,0) layers=2 verts=2412 tris=1206 (blas 1.12 ms, total builds=9)
+[INFO ] rebuild #9: index=20 origin=(0,0,0) layers=2 verts=2412 (16.3 ms)
+[rebuild] index=21 origin=(16,0,0) layers=3 verts=4008 tris=2004 (blas 1.20 ms, total builds=10)
+[INFO ] rebuild #10: index=21 origin=(16,0,0) layers=3 verts=4008 (11.4 ms)
+……（rebuild #11–#172 为同型行：origin/layer/verts/tris/blas 耗时，省略；
+完整序列见用户回传记录——600 非空区块全量排空，0 积压）……
+[tlas] rebuilt in 2.56 ms (instances=16, as=3728 B, total=1 builds, mode=ABS)
+[tlas] rebuilt in 0.81 ms (instances=48, as=10640 B, total=2 builds, mode=ABS)
+[tlas] rebuilt in 0.82 ms (instances=80, as=17552 B, total=3 builds, mode=ABS)
+[tlas] rebuilt in 0.98 ms (instances=112, as=26512 B, total=4 builds, mode=ABS)
+[tlas] rebuilt in 0.90 ms (instances=138, as=32176 B, total=5 builds, mode=ABS)
+[tlas] rebuilt in 0.78 ms (instances=157, as=36256 B, total=6 builds, mode=ABS)
+[PASS ] 摄取窗口完成（173 次重建 / 600 非空区块 / 积压 0 / 19.3s）
+
+---- S5 统计汇总 ----
+[INFO ] Java 侧: polls=36 rebuilds=173 invalidations=443 relocations=0 非空区块=600
+[INFO ] Native 侧: readyBLAS=157 BLAS构建=173 TLAS重建=11
+[INFO ] 几何: 三角形=168974 顶点=337948 顶点缓冲=5280.4 KB 索引缓冲=1980.2 KB TLAS=35.4 KB
+
+---- S6 场景求交验证（v0.4 诊断矩阵：回显/哨兵/AABB 审计/双假设锦标赛/选优终验） ----
+[PASS ] 相机位置: (26.08, 92.62, 7.56)
+[aabb] far slots=80, e=rawCenter-8: median=(0.0, -2.1, 0.0) spread=(13.0, 16.0, 13.0)
+[aabb] slot origin=(0,-64,0) raw=[0.0..16.0, 0.0..0.0, 0.0..16.0]
+[aabb] slot origin=(16,-64,0) raw=[0.0..16.0, 0.0..0.0, 0.0..16.0]
+[aabb] slot origin=(32,-64,0) raw=[0.0..16.0, 0.0..0.0, 0.0..16.0]
+[aabb] slot origin=(48,-64,0) raw=[0.0..16.0, 0.0..0.0, 0.0..16.0]
+[aabb] slot origin=(-16,-64,0) raw=[0.0..16.0, 0.0..0.0, 0.0..16.0]
+[aabb] slot origin=(16,80,0) raw=[3.0..16.0, 0.0..16.0, 0.0..16.0]  <- camera section
+[aabb] grid span (origin+16): x[-16..64] y[-64..128] z[-32..48]
+[aabb] global raw AABB: [-0.2..16.2, -0.2..16.0, -0.2..16.1] (ready=157 rawValid=157 garbage=0)
+[aabb] verdict: extracted vertices look CHUNK-LOCAL (constant e; local-family votes=80, ABS=0; R=(0.0, -2.1, 0.0))
+[INFO ] AABB 审计汇总: ABS票=0 局部族票=80 垃圾槽位=0 实测 R=(0.0, -2.1, 0.0)
+[PASS ] 顶点提取数据健康（无 NaN/巨跨度/越界坐标）
+[sentinel] identity instance: ray (256,64,256)-Y -> MISS (dist=-1.00 instance=4294967295, expect HIT dist~64 instance=0)
+[sentinel] translated instance K=(4096,0,4096): ray (4352,64,4352)-Y -> MISS (dist=-1.00 instance=4294967295, expect HIT dist~64 instance=1)
+[sentinel] negative control: ray (256,64,256)+Y -> MISS (expect MISS)
+[sentinel] verdict: identity=FAIL translated=FAIL control=OK
+[FAIL ] 哨兵求交 FAIL（位码=4，b0=单位实例 b1=平移实例 b2=阴性对照）—— 实例机制或矩阵编码仍异常，与场景数据无关
+[INFO ] ray +X [ABS]: miss（512 格内无几何）
+[INFO ] ray -X [ABS]: miss（512 格内无几何）
+[INFO ] ray +Y(上) [ABS]: miss（512 格内无几何）
+[INFO ] ray -Y(下) [ABS]: miss（512 格内无几何）
+[INFO ] ray +Z [ABS]: miss（512 格内无几何）
+[INFO ] ray -Z [ABS]: miss（512 格内无几何）
+[INFO ] 锦标赛 ABS（t=origin，世界绝对假设）: 0/6 命中
+[scene] placement mode -> MEASURED (t=2*origin-R)
+[tlas] rebuilt in 0.76 ms (instances=157, as=36256 B, total=12 builds, mode=MEASURED)
+[INFO ] ray +X [MEASURED]: miss（512 格内无几何）
+[PASS ] ray -X [MEASURED]: HIT distance=0.08 (instance=23)
+[PASS ] ray +Y(上) [MEASURED]: HIT distance=0.45 (instance=23)
+[PASS ] ray -Y(下) [MEASURED]: HIT distance=73.55 (instance=13)
+[PASS ] ray +Z [MEASURED]: HIT distance=0.44 (instance=23)
+[PASS ] ray -Z [MEASURED]: HIT distance=34.56 (instance=111)
+[INFO ] 锦标赛 MEASURED（t=2·origin−R，区块局部假设）: 5/6 命中
+[PASS ] 选优: winner=MEASURED（锦标赛 ABS 0 : MEASURED 5；AABB 审计 ABS 0 : 局部 80）
+[INFO ] ray +X: miss（512 格内无几何）
+[PASS ] ray -X: HIT distance=0.08 (instance=23) → 命中区块 section=(16,80,0)
+[PASS ] ray +Y(上): HIT distance=0.45 (instance=23) → 命中区块 section=(16,80,0)
+[PASS ] ray -Y(下): HIT distance=73.55 (instance=13) → 命中区块 section=(16,16,0)
+[PASS ] ray +Z: HIT distance=0.44 (instance=23) → 命中区块 section=(16,80,0)
+[PASS ] ray -Z: HIT distance=34.56 (instance=111) → 命中区块 section=(16,80,-32)
+[PASS ] ray 对角+++: HIT distance=0.77 (instance=23) → 命中区块 section=(16,80,0)
+[PASS ] ray 对角++-: HIT distance=0.77 (instance=23) → 命中区块 section=(16,80,0)
+[PASS ] ray 对角+-+: HIT distance=0.77 (instance=23) → 命中区块 section=(16,80,0)
+[PASS ] ray 对角+--: HIT distance=44.27 (instance=108) → 命中区块 section=(48,64,-32)
+[PASS ] ray 对角-++: HIT distance=0.13 (instance=23) → 命中区块 section=(16,80,0)
+[PASS ] ray 对角-+-: HIT distance=0.13 (instance=23) → 命中区块 section=(16,80,0)
+[PASS ] ray 对角--+: HIT distance=0.13 (instance=23) → 命中区块 section=(16,80,0)
+[PASS ] ray 对角---: HIT distance=0.13 (instance=23) → 命中区块 section=(16,80,0)
+[INFO ] 终验电池: 13/14 命中（6 轴向 + 8 对角，maxDist 512）
+
+==============================================================
+最终判定: SCENE_INGEST_OK
+真实世界几何已进入 Metal 加速结构且世界空间求交成立：ready BLAS=157，三角形=168974，终验命中 13/14，胜出布局=MEASURED（t=2·origin−R，顶点为区块局部坐标，R 见 [aabb] 行）；⚠哨兵未过但真实求交命中——异常状态，请回报。2.1 场景摄取成立 —— 2.2 路径追踪引擎绿灯。
+==============================================================
+[scene] shutdown — all GPU resources released

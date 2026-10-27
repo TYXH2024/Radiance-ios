@@ -758,6 +758,16 @@ Java_net_prisma_sceneingest_Native_castRayNative(
 // three rays (two positive, one negative control). Validates the instance
 // machinery and the matrix translation encoding with zero MC data involved.
 //
+// v0.5 fix (root cause of the v0.4 field failure, bits=4): the sentinel
+// verts were packed as float[3][3] (36 B) while the geometry descriptor
+// declared vertexStride = sizeof(simd_float3) = 16 B — vertex 2 read 12 B
+// past the 36 B allocation (shared-memory OOB) and the BLAS encoded a
+// garbage triangle, so both positive rays missed and the negative control
+// "passed" vacuously. The real-scene path was never affected (it uploads
+// exact simd_float3 arrays — the v0.4 tournament 5/6 + final battery 13/14
+// are the field proof of the instance machinery). Verts now stored as
+// simd_float3[3] (48 B) matching the stride, with a GPU readback echo line.
+//
 // Geometry: local triangle (0,0,0)-(1024,0,0)-(0,0,1024), plane y=0 covering
 // x,z >= 0, x+z <= 1024. Instances: #0 identity (world 0..1024 area),
 // #1 translate K=(4096,0,4096) (world 4096..5120 area).
@@ -779,8 +789,12 @@ Java_net_prisma_sceneingest_Native_sentinelProbeNative(JNIEnv *env, jclass cls) 
     }
 
     // -- sentinel triangle BLAS --
-    static const float kVerts[3][3] = {
-        {0.0f, 0.0f, 0.0f}, {1024.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1024.0f},
+    // simd_float3[3] = 48 B — matches vertexStride = sizeof(simd_float3).
+    _Static_assert(sizeof(simd_float3) == 16, "sentinel vertex stride must be 16 B");
+    const simd_float3 kVerts[3] = {
+        simd_make_float3(0.0f, 0.0f, 0.0f),
+        simd_make_float3(1024.0f, 0.0f, 0.0f),
+        simd_make_float3(0.0f, 0.0f, 1024.0f),
     };
     static const uint32_t kIdx[3] = {0, 1, 2};
     id<MTLBuffer> vb = [g_device newBufferWithBytes:kVerts length:sizeof(kVerts)
@@ -790,6 +804,18 @@ Java_net_prisma_sceneingest_Native_sentinelProbeNative(JNIEnv *env, jclass cls) 
     if (vb == nil || ib == nil) {
         rp("[sentinel] FATAL: buffer allocation failed");
         return 0;
+    }
+    // Readback echo — proves the bytes on the GPU-side buffer are the intended
+    // triangle (guards the v0.4-class size/stride mismatch from ever recurring
+    // silently; shared storage mode keeps contents CPU-readable).
+    {
+        const simd_float3 *echo = (const simd_float3 *)vb.contents;
+        rp("[sentinel] vert readback: (%.1f, %.1f, %.1f) (%.1f, %.1f, %.1f) "
+           "(%.1f, %.1f, %.1f) — stride %zu B, buffer %zu B",
+           echo[0].x, echo[0].y, echo[0].z,
+           echo[1].x, echo[1].y, echo[1].z,
+           echo[2].x, echo[2].y, echo[2].z,
+           sizeof(simd_float3), (size_t)vb.length);
     }
     MTLAccelerationStructureTriangleGeometryDescriptor *geo =
         [MTLAccelerationStructureTriangleGeometryDescriptor descriptor];
@@ -921,12 +947,27 @@ Java_net_prisma_sceneingest_Native_sentinelProbeNative(JNIEnv *env, jclass cls) 
     return bits;
 }
 
-// S6.0/S6.2 raw-AABB audit: measures the vertex space of the extracted
-// geometry. For each ready slot with a valid raw AABB, computes
-// e = rawCenter - 8 (per axis):
-//   world-absolute vertices: e_i ~= origin_i        (varies per slot)
-//   chunk-local(+R):         e_i ~= R (constant)    (R=0 = section-local)
-// Far slots (|origin| >= 64 on any axis) carry the discriminating votes.
+// S6.0/S6.2 raw-AABB audit (v0.5): measures the vertex space of the extracted
+// geometry and derives the placement offset R for MEASURED mode.
+//
+// v0.5 fix (root cause of the v0.4 R bias): the v0.4 estimator took the
+// MEDIAN of e = rawCenter - 8 over far slots. For section-local vertices e is
+// NOT constant — partial-height sections (bedrock floors, terrain shells)
+// drag rawCenter below 8, biasing the median to (0, -2.07, 0) in the v0.4
+// field run. That R was applied to the winning placement and displaced every
+// Y-normal face by exactly +2.07 blocks (integer-face proof: after removing
+// the bias all v0.4 hit faces land on integer block boundaries — +Y 93.07 ->
+// 91.00, -Y 19.07 -> 17.00, diagonal 67.07 -> 65.00 — while X/Z faces were
+// already exact at 26.00/8.00/-27.00/-18.00 because R_x = R_z = 0; the eye
+// cross-check 92.62 = 91.00 + 1.62 matches MC's exact eye height).
+//
+// The correct discriminator is a BOUNDS test: for section-local vertices the
+// global raw AABB over far slots is a subset of [-1..17]^3 (v0.4 field data:
+// [-0.2..16.2, -0.2..16.0, -0.2..16.1]), while world-absolute vertices near
+// far slots range over the thousands. Bounds hit => R = (0,0,0) exactly.
+// The legacy median remains only as a fallback when bounds are inconclusive
+// (reported as low-confidence).
+//
 // rp()s the evidence lines, stores the measured R for MEASURED mode, and
 // returns {Rx, Ry, Rz, farCount, absVotes, fam2Votes, garbage, readyCount}
 // (floats; counts as truncated floats).
@@ -937,32 +978,34 @@ Java_net_prisma_sceneingest_Native_sceneInfoNative(
     jfloat out[8] = {0, 0, 0, 0, 0, 0, 0, 0};
     jfloatArray result = (*env)->NewFloatArray(env, 8);
 
+    // ---- Pass 1: counts, garbage screen, global raw bounds, far slots,
+    // camera slot (single sweep). ----
     uint32_t readyCount = 0, rawValid = 0, garbage = 0;
+    NSUInteger farCount = 0;
+    NSMutableArray<SceneSlot *> *far = [NSMutableArray array];
+    SceneSlot *camSlot = nil;
+    float wmin[3] = {FLT_MAX, FLT_MAX, FLT_MAX};
+    float wmax[3] = {-FLT_MAX, -FLT_MAX, -FLT_MAX};
     if (g_slots != nil) {
         for (SceneSlot *s in g_slots) {
             if (!s.ready) { continue; }
             readyCount++;
             if (!s.rawValid) { garbage++; continue; }
-            float spanX = s.rawMaxX - s.rawMinX;
-            float spanY = s.rawMaxY - s.rawMinY;
-            float spanZ = s.rawMaxZ - s.rawMinZ;
-            if (spanX > 512 || spanY > 512 || spanZ > 512
+            float span[3] = {s.rawMaxX - s.rawMinX, s.rawMaxY - s.rawMinY,
+                             s.rawMaxZ - s.rawMinZ};
+            if (span[0] > 512 || span[1] > 512 || span[2] > 512
                     || fabsf(s.rawMinX) > 1e7f || fabsf(s.rawMinY) > 1e7f
                     || fabsf(s.rawMinZ) > 1e7f) {
                 garbage++;
                 continue;
             }
             rawValid++;
-        }
-    }
-
-    // Collect far slots for the vote; also remember the camera's own slot.
-    NSUInteger farCount = 0;
-    NSMutableArray<SceneSlot *> *far = [NSMutableArray array];
-    SceneSlot *camSlot = nil;
-    if (g_slots != nil) {
-        for (SceneSlot *s in g_slots) {
-            if (!s.ready || !s.rawValid) { continue; }
+            float mn[3] = {s.rawMinX, s.rawMinY, s.rawMinZ};
+            float mx[3] = {s.rawMaxX, s.rawMaxY, s.rawMaxZ};
+            for (int a = 0; a < 3; a++) {
+                if (mn[a] < wmin[a]) { wmin[a] = mn[a]; }
+                if (mx[a] > wmax[a]) { wmax[a] = mx[a]; }
+            }
             if (camSlot == nil
                     && camX >= (float)s.ox && camX < (float)s.ox + 16.0f
                     && camY >= (float)s.oy && camY < (float)s.oy + 16.0f
@@ -976,10 +1019,23 @@ Java_net_prisma_sceneingest_Native_sceneInfoNative(
         farCount = far.count;
     }
 
-    // e_i per far slot (per axis) + median R + spread.
+    // ---- Bounds test: section-local => R = (0,0,0) exactly. ----
     float Rx = 0, Ry = 0, Rz = 0;
     uint32_t absVotes = 0, fam2Votes = 0;
-    if (farCount >= 4) {
+    BOOL sectionLocal = NO;
+    if (rawValid >= 4 && farCount >= 4
+            && wmax[0] <= 17.0f && wmax[1] <= 17.0f && wmax[2] <= 17.0f
+            && wmin[0] >= -1.0f && wmin[1] >= -1.0f && wmin[2] >= -1.0f) {
+        sectionLocal = YES;
+        Rx = 0; Ry = 0; Rz = 0;
+        fam2Votes = (uint32_t)farCount; // every far slot's raw AABB is in-bounds
+        rp("[aabb] bounds test: global raw AABB [%.1f..%.1f, %.1f..%.1f, "
+           "%.1f..%.1f] within [-1..17] over %u far slots "
+           "-> SECTION-LOCAL, R=(0,0,0) exactly",
+           wmin[0], wmax[0], wmin[1], wmax[1], wmin[2], wmax[2],
+           (unsigned)farCount);
+    } else if (farCount >= 4) {
+        // ---- Legacy e-median estimator (fallback, low confidence). ----
         NSUInteger n = farCount;
         float *ex = (float *)malloc(n * sizeof(float));
         float *ey = (float *)malloc(n * sizeof(float));
@@ -998,8 +1054,8 @@ Java_net_prisma_sceneingest_Native_sceneInfoNative(
             float spread[3] = {
                 ex[n - 1] - ex[0], ey[n - 1] - ey[0], ez[n - 1] - ez[0],
             };
-            rp("[aabb] far slots=%u, e=rawCenter-8: median=(%.1f, %.1f, %.1f) "
-               "spread=(%.1f, %.1f, %.1f)",
+            rp("[aabb] legacy median (fallback, biased by partial sections): "
+               "far=%u median=(%.1f, %.1f, %.1f) spread=(%.1f, %.1f, %.1f)",
                (unsigned)farCount, Rx, Ry, Rz, spread[0], spread[1], spread[2]);
             for (NSUInteger i = 0; i < n; i++) {
                 SceneSlot *s = far[i];
@@ -1007,8 +1063,6 @@ Java_net_prisma_sceneingest_Native_sceneInfoNative(
                 float dy = ey[i] - (float)s.oy;
                 float dz = ez[i] - (float)s.oz;
                 float ddx = ex[i] - Rx, ddy = ey[i] - Ry, ddz = ez[i] - Rz;
-                // chunk-local vertices move their e with the slot's origin;
-                // world-absolute keep e at the origin value itself.
                 BOOL constish = spread[0] <= 24 && spread[1] <= 24 && spread[2] <= 24;
                 if (fabsf(dx) <= 16 && fabsf(dy) <= 16 && fabsf(dz) <= 16) {
                     absVotes++;
@@ -1017,15 +1071,10 @@ Java_net_prisma_sceneingest_Native_sceneInfoNative(
                     fam2Votes++;
                 }
             }
-            free(ex); free(ey); free(ez);
-        } else {
-            free(ex); free(ey); free(ez);
         }
-    }
-
-    // Store the measured offset for MEASURED mode (fall back to all ready
-    // slots when far evidence is thin; R=0 when there is nothing at all).
-    if (farCount < 4 && g_slots != nil) {
+        free(ex); free(ey); free(ez);
+    } else if (g_slots != nil) {
+        // ---- Far evidence thin: all-ready-slots median (lowest confidence). ----
         NSMutableArray<SceneSlot *> *all = [NSMutableArray array];
         for (SceneSlot *s in g_slots) {
             if (s.ready && s.rawValid) { [all addObject:s]; }
@@ -1046,22 +1095,18 @@ Java_net_prisma_sceneingest_Native_sceneInfoNative(
                 qsort(ey, n, sizeof(float), cmpf);
                 qsort(ez, n, sizeof(float), cmpf);
                 Rx = ex[n / 2]; Ry = ey[n / 2]; Rz = ez[n / 2];
-                free(ex); free(ey); free(ez);
                 rp("[aabb] far-slot evidence thin — R estimated from all %u "
                    "ready slots (low confidence)", (unsigned)n);
-            } else {
-                free(ex); free(ey); free(ez);
             }
+            free(ex); free(ey); free(ez);
         }
     }
     g_offsetR[0] = Rx; g_offsetR[1] = Ry; g_offsetR[2] = Rz;
 
-    // Grid AABB + global raw AABB + representative per-slot lines.
+    // ---- Grid span + representative per-slot lines. ----
     if (g_slots != nil) {
         int32_t gmin[3] = {INT32_MAX, INT32_MAX, INT32_MAX};
         int32_t gmax[3] = {INT32_MIN, INT32_MIN, INT32_MIN};
-        float wmin[3] = {FLT_MAX, FLT_MAX, FLT_MAX};
-        float wmax[3] = {-FLT_MAX, -FLT_MAX, -FLT_MAX};
         NSUInteger printed = 0;
         for (SceneSlot *s in g_slots) {
             if (!s.ready) { continue; }
@@ -1071,14 +1116,6 @@ Java_net_prisma_sceneingest_Native_sceneInfoNative(
             if (s.ox + 16 > gmax[0]) { gmax[0] = s.ox + 16; }
             if (s.oy + 16 > gmax[1]) { gmax[1] = s.oy + 16; }
             if (s.oz + 16 > gmax[2]) { gmax[2] = s.oz + 16; }
-            if (s.rawValid) {
-                if (s.rawMinX < wmin[0]) { wmin[0] = s.rawMinX; }
-                if (s.rawMinY < wmin[1]) { wmin[1] = s.rawMinY; }
-                if (s.rawMinZ < wmin[2]) { wmin[2] = s.rawMinZ; }
-                if (s.rawMaxX > wmax[0]) { wmax[0] = s.rawMaxX; }
-                if (s.rawMaxY > wmax[1]) { wmax[1] = s.rawMaxY; }
-                if (s.rawMaxZ > wmax[2]) { wmax[2] = s.rawMaxZ; }
-            }
             if (printed < 5 || s == camSlot) {
                 rp("[aabb] slot origin=(%d,%d,%d) raw=[%.1f..%.1f, %.1f..%.1f, "
                    "%.1f..%.1f]%s",
@@ -1098,7 +1135,11 @@ Java_net_prisma_sceneingest_Native_sceneInfoNative(
         }
     }
 
-    if (farCount >= 4) {
+    // ---- Verdict. ----
+    if (sectionLocal) {
+        rp("[aabb] verdict: SECTION-LOCAL (R=0 exactly; v0.4 median bias "
+           "eliminated) — MEASURED placement = translate(2*origin)");
+    } else if (farCount >= 4) {
         if (absVotes > fam2Votes * 3) {
             rp("[aabb] verdict: extracted vertices look WORLD-ABSOLUTE "
                "(e follows origin; ABS votes=%u, local-family=%u)",
