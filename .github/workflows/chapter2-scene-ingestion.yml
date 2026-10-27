@@ -39,9 +39,9 @@ jobs:
           set -ex
           chmod +x chapter2/scene-ingestion/build.sh
           bash chapter2/scene-ingestion/build.sh
-          JAR="chapter2/scene-ingestion/scene-ingestion-0.3.0.jar"
+          JAR="chapter2/scene-ingestion/scene-ingestion-0.4.0.jar"
           test -f "$JAR"
-          cp "$JAR" ./scene-ingestion-0.3.0.jar
+          cp "$JAR" ./scene-ingestion-0.4.0.jar
 
       - name: Verify native surface
         run: |
@@ -54,6 +54,14 @@ jobs:
             && echo "JNI_EXPORT_OK(rebuildSingleNative)"
           nm -gU "$DYLIB" | grep -q "Java_net_prisma_sceneingest_Native_castRayNative" \
             && echo "JNI_EXPORT_OK(castRayNative)"
+          nm -gU "$DYLIB" | grep -q "Java_net_prisma_sceneingest_Native_sentinelProbeNative" \
+            && echo "JNI_EXPORT_OK(sentinelProbeNative)"
+          nm -gU "$DYLIB" | grep -q "Java_net_prisma_sceneingest_Native_sceneInfoNative" \
+            && echo "JNI_EXPORT_OK(sceneInfoNative)"
+          nm -gU "$DYLIB" | grep -q "Java_net_prisma_sceneingest_Native_setPlacementModeNative" \
+            && echo "JNI_EXPORT_OK(setPlacementModeNative)"
+          nm -gU "$DYLIB" | grep -q "Java_net_prisma_sceneingest_Native_instanceOriginNative" \
+            && echo "JNI_EXPORT_OK(instanceOriginNative)"
           METALRT="$(xcrun -sdk iphoneos metal -print-target-name 2>/dev/null || true)"
           echo "metal toolchain: ok (${METALRT:-n/a})"
 
@@ -62,7 +70,7 @@ jobs:
         with:
           name: scene-ingestion-jar
           path: |
-            scene-ingestion-0.3.0.jar
+            scene-ingestion-0.4.0.jar
             chapter2/scene-ingestion/build/native/libradiance_scene.dylib
             chapter2/scene-ingestion/build/native/scene_trace.metallib
           if-no-files-found: error
@@ -70,24 +78,26 @@ jobs:
       - name: Publish prerelease (idempotent)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: scene-ingestion-v0.3
+          TAG: scene-ingestion-v0.4
         run: |
           set -x
           NOTES_FILE=release-notes.md
           cat > "$NOTES_FILE" <<'EOF'
-          # scene-ingestion v0.3 — 第二章 2.1 阶段探针（v0.2 三缺陷修复）
+          # scene-ingestion v0.4 — 第二章 2.1 阶段探针（矩阵回归修复 + 诊断矩阵）
 
-          **v0.3 变更**（v0.2 真机实测回收后定位）：
-          1. **TLAS 实例矩阵布局修复（关键）**：`transformationMatrix` 是 `matrix_float3x4 = simd_float3x4`（Apple 文档：3 列 × 4 行，columns 为三个 simd_float4，Metal 实例矩阵默认 ColumnMajor）。单位阵+平移的正确布局是 `[1,0,0,tx, 0,1,0,ty, 0,0,1,tz]`（平移在 flat[3]/[7]/[11]）。v0.2 误按“4行×3列行主序”写在 flat[9..11]，Metal 会解码出剪切型垃圾矩阵——真机 ray 将全 miss。2.0 探针用单位变换故从未暴露。
-          2. **S6 相机读取修复**：v0.2 的 NPE 根因 = Vec3d x/y/z（field_1352/1351/1350）被 cameraPos() 运行时使用却不在 S3 审计列表，`res()` 静默返回 null。v0.3 入审计（S3 将新增 3 行 PASS）且 `res()` 对未知符号显式报错；另新增摄取期相机位置缓存（每轮刷新，退出世界后 S6 仍可用缓存位置发射 ray）。
-          3. **积压排空**：v0.2 首轮扫描把全部 data 引用快照后，cap 截流的区块被标为“干净”永不摄取（真机 30/600）。v0.3 从未摄取（generation==0）槽位永远视为脏，每轮限额 8→16，600 槽位全量排空约 19s；收口条件 = 积压排空/静置 6s/35s 强制三选一 + 15s 最短窗口。
+          **v0.4 变更**（v0.3 真机实测回收后定位）：
+
+          1. **TLAS 实例矩阵编码修复（关键——v0.3 的"修复"方向反了）**：`transformationMatrix` 的类型是 `MTLPackedFloat4x3`，Apple 文档明确定义为"**4x4 矩阵的前三行，列主序**"（columns 为 4 个 packed float3，底行隐含 [0,0,0,1]）。**平移在第 4 列 = flat[9..11]**；单位阵+平移的正确编码是 `[1,0,0, 0,1,0, 0,0,1, tx,ty,tz]`（即 2.0 探针单位变换 / v0.2 平移的同款布局）。v0.3 把平移写到 flat[3]/[7]/[11]，在真布局下解码为剪切型垃圾矩阵（col1=(tx,0,1)、col2=(0,ty,0)）——这就是 v0.3 真机六向全 miss 的根因（摄取本体 4.6× 规模复验全绿，几何健康）。
+          2. **顶点空间审计（raw-AABB）**：设计 §4 假设提取顶点为世界绝对坐标并 recentring；但 MC 1.18+ 的区块网格顶点在烘焙时就是 **section 局部坐标**（渲染侧才 translate(sectionOrigin−camera)）——若如此，recentring+translate(origin) 会把几何塌缩到世界原点。v0.4 在 rebuild 时逐槽记录原始顶点 AABB，S6 审计 e=rawCenter−8 的分布：随 origin 变化→世界绝对；恒定常数 R→区块局部(+R)。
+          3. **哨兵求交（隔离验证）**：零 MC 数据的单三角 BLAS + 双实例 TLAS（单位变换 + 平移 K=(4096,0,4096)）+ 两阳一阴三条 ray——单独验证实例机制与矩阵平移编码，与场景数据解耦。
+          4. **双假设锦标赛 + 自动选优**：布局模式 ABS（t=origin）vs MEASURED（t=2·origin−R，R 来自 AABB 实测），各 6 向 ray 实测命中数，胜者自动应用并进入 14 ray 终验（6 轴向 + 8 对角，含命中区块 section 归因）——**无论顶点空间是哪种，一次真机运行即可闭环 2.1**。
 
           **用途**：把真实 MC 世界的区块网格摄入 Metal 加速结构（每区块 BLAS + 实例 TLAS 动态重建），并以世界空间 ray 求交验证全链路。
 
           ## 安装
-          1. 下载 `scene-ingestion-0.3.0.jar`，放入 mods/ 目录（**替换** v0.2，勿共存；与 metal-rt-probe 建议也不要共存）。
+          1. 下载 `scene-ingestion-0.4.0.jar`，放入 mods/ 目录（**替换** v0.3，勿共存；与 metal-rt-probe 建议也不要共存）。
           2. 渲染器保持 **zink** 档。
-          3. 启动游戏并**进入一个存档世界**（本探针在进世界后才开始摄取），在世界内停留约 30–40 秒（v0.3 全量排空 600 区块约 19s + 验证窗口）。
+          3. 启动游戏并**进入一个存档世界**（本探针在进世界后才开始摄取），在世界内停留约 30–40 秒（全量排空约 19s + 验证窗口）。
           4. 报告完成后（游戏内 log 出现 `[scene] shutdown`）即可退出世界；S6 使用缓存相机位置，退出后完成也不受影响。
 
           ## 产出
@@ -97,16 +107,18 @@ jobs:
           ## 判定表
           | 判定 | 含义 |
           |---|---|
-          | SCENE_INGEST_OK | ready BLAS ≥ 1 且三角形 > 0 且 6 向 ray 至少一命中 |
+          | SCENE_INGEST_OK | 终验电池（14 ray）至少一命中；胜出布局模式会在判定行给出（ABS=顶点世界绝对 / MEASURED=顶点区块局部） |
           | SCENE_EMPTY | 摄取窗口内无就绪 BLAS（未进世界/区块 mesh 始终为空） |
           | REFLECT_FAIL | S3 反射符号解析失败（报告逐符号定位——MC 版本不符的指纹） |
           | NATIVE_FAIL | 原生段 FATAL/异常 |
-          | NATIVE_MISMATCH | BLAS 就绪且相机可读但 ray 全 miss（相机悬空或残留疑点，需回报） |
+          | SENTINEL_FAIL | 哨兵求交失败：隔离 TLAS 的单位/平移实例验证未通过——实例机制或矩阵编码问题，与场景数据无关 |
+          | EXTRACTION_GARBAGE | 顶点提取存在异常数据（NaN/巨跨度）且锦标赛全 miss——顶点格式/stride 嫌疑 |
+          | NATIVE_MISMATCH | 哨兵通过 + AABB 健康 + 双假设锦标赛均 0 命中——顶点空间非两种假设之一，或更深的摆放问题 |
           | CAMERA_FAIL | 相机不可读且无缓存（几何已摄取但未发射 ray；需回报） |
           | LOAD_FAIL / EXTRACT_FAIL | 投送通道受阻（同 2.0） |
 
           ## 报告段
-          S0 环境 → S1 解包 → S2 装载 → **S3 反射符号审计**（轮询路线防错段，逐项 PASS/FAIL）→ S4/S5 网格发现与摄取（每次 rebuild 的 origin/layer/verts/耗时行）→ S6 场景求交（相机 6 向 ray 命中距离）→ 判定。
+          S0 环境 → S1 解包 → S2 装载 → S3 反射符号审计 → S4/S5 网格发现与摄取 → S6 诊断矩阵（**[aabb] 审计行 / [sentinel] 哨兵行 / 锦标赛 [ABS]/[MEASURED] ray 行 / 终验 14 ray 行**）→ 判定。
 
           ## 归因开关
           `-Dsceneingest.disabled=true`（或 `SCENEINGEST_DISABLED=1`）：零原生调用，闪退 A/B 对照。
@@ -114,14 +126,14 @@ jobs:
           ## 说明
           - 读取路径为全反射（intermediary 符号，yarn 1.21.4+build.8 离线校验）+ 500ms 轮询，零 mixin/refmap/Loom 依赖；
           - 自建 MTLDevice/queue，与 zink/MoltenVK 渲染主链零共享；
-          - 顶点在 BLAS 内存 chunk-local 坐标（recentring），TLAS instance transform = translate(origin)。
+          - 顶点 BLAS 内存 recentred 坐标；TLAS 实例平移在两种布局模式间由锦标赛自动选优（胜出模式即 2.2 引擎的顶点空间答案）。
           EOF
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" scene-ingestion-0.3.0.jar --clobber
+            gh release upload "$TAG" scene-ingestion-0.4.0.jar --clobber
           else
-            gh release create "$TAG" scene-ingestion-0.3.0.jar \
+            gh release create "$TAG" scene-ingestion-0.4.0.jar \
               --prerelease --target main \
-              --title "scene-ingestion v0.3 — MC world chunks into Metal BLAS/TLAS (TLAS layout + S6 + drain fixes)" \
+              --title "scene-ingestion v0.4 — instance matrix regression fixed (doc-confirmed) + vertex-space diagnostic matrix" \
               --notes-file "$NOTES_FILE"
           fi
 
@@ -130,9 +142,9 @@ jobs:
         run: |
           {
             echo "## Chapter 2 — scene-ingestion build (macos-26)"
-            echo "- Native dylib: iphoneos arm64, 3 key JNI exports verified"
+            echo "- Native dylib: iphoneos arm64, 8 key JNI exports verified"
             echo "- metallib: scene_trace kernel (metal3 std cascade)"
-            echo "- Artifact: scene-ingestion-0.3.0.jar (dylib + metallib + msl embedded)"
-            echo "- Release: scene-ingestion-v0.3 (prerelease, idempotent upload)"
-            echo "- v0.3 fixes: TLAS instance matrix layout (simd column-major, translation at flat[3]/[7]/[11]); Vec3d fields audited + res() loud; never-ingested backlog drain (8->16 per poll)"
+            echo "- Artifact: scene-ingestion-0.4.0.jar (dylib + metallib + msl embedded)"
+            echo "- Release: scene-ingestion-v0.4 (prerelease, idempotent upload)"
+            echo "- v0.4: instance matrix encoding fixed (MTLPackedFloat4x3, translation at flat[9..11] — doc-confirmed; v0.3 regression); raw-AABB vertex-space audit; isolated sentinel TLAS; two-hypothesis placement tournament with auto-selection"
           } >> "$GITHUB_STEP_SUMMARY"

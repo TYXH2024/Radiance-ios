@@ -1,0 +1,333 @@
+==============================================================
+场景摄取探针 (scene-ingestion 0.3.0) —— Radiance 移植第二章 2.1
+时间: Tue Oct 27 17:31:42 CST 2026
+报告文件: /var/mobile/Containers/Data/Application/132BB6A9-CD8E-40EA-8202-AA41493AF270/Documents/instances/default/versions/fabric-loader-0.20.1-1.21.4/game/scene_ingestion_report.txt
+==============================================================
+
+[INFO ] 触发方式: CLIENT_STARTED
+
+---- S0 环境快照 ----
+[INFO ] java.version  = 21.0.8-internal
+[INFO ] java.vm.name  = OpenJDK 64-Bit Server VM
+[INFO ] os.name       = Mac OS X / aarch64
+[INFO ] user.dir      = /var/mobile/Containers/Data/Application/132BB6A9-CD8E-40EA-8202-AA41493AF270/Documents/instances/default/versions/fabric-loader-0.20.1-1.21.4/game
+[INFO ] AMETHYST_RENDERER = libOSMesa.8.dylib
+[INFO ] GALLIUM_DRIVER     = null
+[INFO ] pojav.lwjgl.version = 333
+[INFO ] org.lwjgl.opengl.libname = libOSMesa.8.dylib
+[INFO ] org.lwjgl.vulkan.libname = MoltenVK
+
+---- S1 解包原生资产（JAR -> game 目录） ----
+[PASS ] 解包完成: /var/mobile/Containers/Data/Application/132BB6A9-CD8E-40EA-8202-AA41493AF270/Documents/instances/default/versions/fabric-loader-0.20.1-1.21.4/game/sceneingest/libradiance_scene.dylib (93936 B)
+[INFO ] metallib: /var/mobile/Containers/Data/Application/132BB6A9-CD8E-40EA-8202-AA41493AF270/Documents/instances/default/versions/fabric-loader-0.20.1-1.21.4/game/sceneingest/scene_trace.metallib (5560 B)
+
+---- S2 System.load 装载 dylib（投送通道验证） ----
+[PASS ] dylib 装载成功（与 2.0 相同的受信装载链）
+
+---- S3 反射符号审计（intermediary 符号表逐项解析） ----
+[PASS ] class net.minecraft.class_310
+[PASS ] class net.minecraft.class_761
+[PASS ] class net.minecraft.class_769
+[PASS ] class net.minecraft.class_846
+[PASS ] class net.minecraft.class_846$class_851
+[PASS ] class net.minecraft.class_2382
+[PASS ] class net.minecraft.class_2338
+[PASS ] class net.minecraft.class_4076
+[PASS ] class net.minecraft.class_6850
+[PASS ] class net.minecraft.class_853
+[PASS ] class net.minecraft.class_9810
+[PASS ] class net.minecraft.class_9810$class_9811
+[PASS ] class net.minecraft.class_9801
+[PASS ] class net.minecraft.class_9801$class_4574
+[PASS ] class net.minecraft.class_293
+[PASS ] class net.minecraft.class_8251
+[PASS ] class net.minecraft.class_750
+[PASS ] class net.minecraft.class_4184
+[PASS ] class net.minecraft.class_243
+[PASS ] class net.minecraft.class_757
+[PASS ] class net.minecraft.class_638
+[PASS ] class net.minecraft.class_1937
+[PASS ] field net.minecraft.class_310#field_1687
+[PASS ] field net.minecraft.class_310#field_1773
+[PASS ] field net.minecraft.class_638#field_17780
+[PASS ] field net.minecraft.class_761#field_4112
+[PASS ] field net.minecraft.class_761#field_45614
+[PASS ] field net.minecraft.class_769#field_4150
+[PASS ] field net.minecraft.class_769#field_4148
+[PASS ] field net.minecraft.class_769#field_4149
+[PASS ] field net.minecraft.class_769#field_4147
+[PASS ] field net.minecraft.class_846#field_52171
+[PASS ] field net.minecraft.class_846$class_851#field_29641
+[PASS ] field net.minecraft.class_846$class_851#field_4467
+[PASS ] field net.minecraft.class_846$class_851#field_4459
+[PASS ] field net.minecraft.class_9810$class_9811#field_52168
+[PASS ] field net.minecraft.class_8251#field_43360
+[PASS ] field net.minecraft.class_757#field_18765
+[PASS ] field net.minecraft.class_243#field_1352
+[PASS ] field net.minecraft.class_243#field_1351
+[PASS ] field net.minecraft.class_243#field_1350
+[PASS ] method net.minecraft.class_310#method_1551
+[PASS ] method net.minecraft.class_846$class_851#method_3670
+[PASS ] method net.minecraft.class_846$class_851#method_62975
+[PASS ] method net.minecraft.class_2382#method_10263
+[PASS ] method net.minecraft.class_2382#method_10264
+[PASS ] method net.minecraft.class_2382#method_10260
+[PASS ] method net.minecraft.class_4076#method_18682
+[PASS ] method net.minecraft.class_6850#method_39969
+[PASS ] method net.minecraft.class_9810#method_60904
+[PASS ] method net.minecraft.class_9810$class_9811#method_60905
+[PASS ] method net.minecraft.class_9801#method_60818
+[PASS ] method net.minecraft.class_9801#method_60822
+[PASS ] method net.minecraft.class_9801$class_4574#comp_749
+[PASS ] method net.minecraft.class_9801$class_4574#comp_750
+[PASS ] method net.minecraft.class_9801$class_4574#comp_752
+[PASS ] method net.minecraft.class_293#method_1362
+[PASS ] method net.minecraft.class_4184#method_19326
+[PASS ] ctor net.minecraft.class_750()
+[PASS ] ctor net.minecraft.class_6850()
+[PASS ] 符号表全量解析通过（60 项）
+
+---- S4/S5 网格发现与摄取（轮询 500ms，等待进入世界） ----
+[INFO ] 等待进入世界（mc.world == null）…
+[PASS ] 已进入世界，开始网格发现
+[scene] device=Apple M3 GPU raytracing=YES
+[scene] slot grid initialized: 600 chunks
+[scene] ray_query pipeline ready (threadsPerThreadgroup=1024)
+[PASS ] 网格初始化: 600 槽位 (sizeX=5 sizeY=24 sizeZ=5)
+[rebuild] index=0 origin=(0,-64,0) layers=1 verts=1024 tris=512 (blas 9.56 ms, total builds=1)
+[INFO ] rebuild #1: index=0 origin=(0,-64,0) layers=1 verts=1024 (18.6 ms)
+[rebuild] index=1 origin=(16,-64,0) layers=1 verts=1024 tris=512 (blas 1.44 ms, total builds=2)
+[INFO ] rebuild #2: index=1 origin=(16,-64,0) layers=1 verts=1024 (4.1 ms)
+[rebuild] index=2 origin=(32,-64,0) layers=1 verts=1024 tris=512 (blas 0.76 ms, total builds=3)
+[INFO ] rebuild #3: index=2 origin=(32,-64,0) layers=1 verts=1024 (2.4 ms)
+[rebuild] index=3 origin=(48,-64,0) layers=1 verts=1024 tris=512 (blas 0.90 ms, total builds=4)
+[INFO ] rebuild #4: index=3 origin=(48,-64,0) layers=1 verts=1024 (2.5 ms)
+[rebuild] index=4 origin=(-16,-64,0) layers=1 verts=1024 tris=512 (blas 0.79 ms, total builds=5)
+[INFO ] rebuild #5: index=4 origin=(-16,-64,0) layers=1 verts=1024 (2.4 ms)
+[rebuild] index=6 origin=(16,-48,0) layers=1 verts=68 tris=34 (blas 0.64 ms, total builds=6)
+[INFO ] rebuild #6: index=6 origin=(16,-48,0) layers=1 verts=68 (1.8 ms)
+[rebuild] index=13 origin=(48,-32,0) layers=1 verts=8 tris=4 (blas 0.50 ms, total builds=7)
+[INFO ] rebuild #7: index=13 origin=(48,-32,0) layers=1 verts=8 (1.6 ms)
+[rebuild] index=18 origin=(48,-16,0) layers=2 verts=3768 tris=1884 (blas 3.29 ms, total builds=8)
+[INFO ] rebuild #8: index=18 origin=(48,-16,0) layers=2 verts=3768 (7.6 ms)
+[rebuild] index=20 origin=(0,0,0) layers=2 verts=2412 tris=1206 (blas 1.77 ms, total builds=9)
+[INFO ] rebuild #9: index=20 origin=(0,0,0) layers=2 verts=2412 (6.3 ms)
+[rebuild] index=21 origin=(16,0,0) layers=3 verts=4008 tris=2004 (blas 1.33 ms, total builds=10)
+[INFO ] rebuild #10: index=21 origin=(16,0,0) layers=3 verts=4008 (4.6 ms)
+[rebuild] index=22 origin=(32,0,0) layers=1 verts=780 tris=390 (blas 0.74 ms, total builds=11)
+[INFO ] rebuild #11: index=22 origin=(32,0,0) layers=1 verts=780 (2.3 ms)
+[rebuild] index=23 origin=(48,0,0) layers=1 verts=1496 tris=748 (blas 1.52 ms, total builds=12)
+[INFO ] rebuild #12: index=23 origin=(48,0,0) layers=1 verts=1496 (3.2 ms)
+[rebuild] index=25 origin=(0,16,0) layers=1 verts=112 tris=56 (blas 0.62 ms, total builds=13)
+[INFO ] rebuild #13: index=25 origin=(0,16,0) layers=1 verts=112 (1.9 ms)
+[rebuild] index=26 origin=(16,16,0) layers=2 verts=912 tris=456 (blas 0.86 ms, total builds=14)
+[INFO ] rebuild #14: index=26 origin=(16,16,0) layers=2 verts=912 (2.4 ms)
+[rebuild] index=27 origin=(32,16,0) layers=2 verts=652 tris=326 (blas 0.83 ms, total builds=15)
+[INFO ] rebuild #15: index=27 origin=(32,16,0) layers=2 verts=652 (2.3 ms)
+[rebuild] index=28 origin=(48,16,0) layers=1 verts=276 tris=138 (blas 0.69 ms, total builds=16)
+[INFO ] rebuild #16: index=28 origin=(48,16,0) layers=1 verts=276 (2.2 ms)
+[tlas] rebuilt in 2.41 ms (instances=16, as=3728 B, total=1 builds)
+[rebuild] index=30 origin=(0,32,0) layers=2 verts=956 tris=478 (blas 1.04 ms, total builds=17)
+[INFO ] rebuild #17: index=30 origin=(0,32,0) layers=2 verts=956 (5.2 ms)
+[rebuild] index=34 origin=(-16,32,0) layers=2 verts=3368 tris=1684 (blas 1.71 ms, total builds=18)
+[INFO ] rebuild #18: index=34 origin=(-16,32,0) layers=2 verts=3368 (8.3 ms)
+[rebuild] index=35 origin=(0,48,0) layers=4 verts=4400 tris=2200 (blas 16.16 ms, total builds=19)
+[INFO ] rebuild #19: index=35 origin=(0,48,0) layers=4 verts=4400 (19.1 ms)
+[rebuild] index=36 origin=(16,48,0) layers=3 verts=696 tris=348 (blas 0.76 ms, total builds=20)
+[INFO ] rebuild #20: index=36 origin=(16,48,0) layers=3 verts=696 (2.2 ms)
+[rebuild] index=39 origin=(-16,48,0) layers=2 verts=2216 tris=1108 (blas 0.95 ms, total builds=21)
+[rebuild] index=40 origin=(0,64,0) layers=2 verts=476 tris=238 (blas 0.75 ms, total builds=22)
+[rebuild] index=41 origin=(16,64,0) layers=2 verts=2428 tris=1214 (blas 0.90 ms, total builds=23)
+[rebuild] index=46 origin=(16,80,0) layers=3 verts=2344 tris=1172 (blas 1.08 ms, total builds=24)
+[rebuild] index=51 origin=(16,96,0) layers=3 verts=3088 tris=1544 (blas 1.13 ms, total builds=25)
+[rebuild] index=52 origin=(32,96,0) layers=3 verts=11076 tris=5538 (blas 3.57 ms, total builds=26)
+[rebuild] index=53 origin=(48,96,0) layers=3 verts=7680 tris=3840 (blas 3.65 ms, total builds=27)
+[rebuild] index=57 origin=(32,112,0) layers=1 verts=2520 tris=1260 (blas 0.91 ms, total builds=28)
+[rebuild] index=58 origin=(48,112,0) layers=1 verts=3404 tris=1702 (blas 0.99 ms, total builds=29)
+[rebuild] index=120 origin=(0,-64,16) layers=1 verts=1024 tris=512 (blas 0.67 ms, total builds=30)
+[rebuild] index=121 origin=(16,-64,16) layers=1 verts=1024 tris=512 (blas 1.35 ms, total builds=31)
+[rebuild] index=122 origin=(32,-64,16) layers=1 verts=1024 tris=512 (blas 0.62 ms, total builds=32)
+[rebuild] index=123 origin=(48,-64,16) layers=1 verts=1024 tris=512 (blas 0.75 ms, total builds=33)
+[rebuild] index=124 origin=(-16,-64,16) layers=1 verts=1024 tris=512 (blas 0.81 ms, total builds=34)
+[rebuild] index=125 origin=(0,-48,16) layers=1 verts=60 tris=30 (blas 0.75 ms, total builds=35)
+[rebuild] index=126 origin=(16,-48,16) layers=1 verts=672 tris=336 (blas 0.91 ms, total builds=36)
+[rebuild] index=127 origin=(32,-48,16) layers=1 verts=4 tris=2 (blas 0.38 ms, total builds=37)
+[rebuild] index=131 origin=(16,-32,16) layers=1 verts=80 tris=40 (blas 0.85 ms, total builds=38)
+[rebuild] index=132 origin=(32,-32,16) layers=1 verts=784 tris=392 (blas 0.83 ms, total builds=39)
+[rebuild] index=133 origin=(48,-32,16) layers=1 verts=884 tris=442 (blas 1.38 ms, total builds=40)
+[rebuild] index=135 origin=(0,-16,16) layers=1 verts=12 tris=6 (blas 0.63 ms, total builds=41)
+[rebuild] index=137 origin=(32,-16,16) layers=1 verts=596 tris=298 (blas 1.50 ms, total builds=42)
+[rebuild] index=138 origin=(48,-16,16) layers=1 verts=2968 tris=1484 (blas 0.88 ms, total builds=43)
+[rebuild] index=139 origin=(-16,-16,16) layers=1 verts=456 tris=228 (blas 0.95 ms, total builds=44)
+[rebuild] index=140 origin=(0,0,16) layers=3 verts=1336 tris=668 (blas 1.45 ms, total builds=45)
+[rebuild] index=141 origin=(16,0,16) layers=1 verts=16 tris=8 (blas 0.46 ms, total builds=46)
+[rebuild] index=142 origin=(32,0,16) layers=2 verts=452 tris=226 (blas 0.80 ms, total builds=47)
+[rebuild] index=143 origin=(48,0,16) layers=1 verts=1468 tris=734 (blas 0.98 ms, total builds=48)
+[retired] releasing 2 deferred objects
+[tlas] rebuilt in 0.56 ms (instances=48, as=10640 B, total=2 builds)
+[rebuild] index=144 origin=(-16,0,16) layers=3 verts=2564 tris=1282 (blas 1.12 ms, total builds=49)
+[rebuild] index=145 origin=(0,16,16) layers=1 verts=8 tris=4 (blas 0.57 ms, total builds=50)
+[INFO ] rebuild #50: index=145 origin=(0,16,16) layers=1 verts=8 (1.9 ms)
+[rebuild] index=150 origin=(0,32,16) layers=2 verts=3260 tris=1630 (blas 1.10 ms, total builds=51)
+[rebuild] index=151 origin=(16,32,16) layers=1 verts=268 tris=134 (blas 0.72 ms, total builds=52)
+[rebuild] index=154 origin=(-16,32,16) layers=2 verts=3316 tris=1658 (blas 1.40 ms, total builds=53)
+[rebuild] index=155 origin=(0,48,16) layers=3 verts=3168 tris=1584 (blas 0.94 ms, total builds=54)
+[rebuild] index=156 origin=(16,48,16) layers=3 verts=2612 tris=1306 (blas 1.01 ms, total builds=55)
+[rebuild] index=159 origin=(-16,48,16) layers=3 verts=4116 tris=2058 (blas 3.74 ms, total builds=56)
+[rebuild] index=161 origin=(16,64,16) layers=3 verts=2844 tris=1422 (blas 0.91 ms, total builds=57)
+[rebuild] index=162 origin=(32,64,16) layers=3 verts=920 tris=460 (blas 0.82 ms, total builds=58)
+[rebuild] index=164 origin=(-16,64,16) layers=2 verts=1460 tris=730 (blas 0.89 ms, total builds=59)
+[rebuild] index=166 origin=(16,80,16) layers=2 verts=1380 tris=690 (blas 0.88 ms, total builds=60)
+[rebuild] index=167 origin=(32,80,16) layers=2 verts=2788 tris=1394 (blas 1.20 ms, total builds=61)
+[rebuild] index=168 origin=(48,80,16) layers=1 verts=48 tris=24 (blas 0.57 ms, total builds=62)
+[rebuild] index=172 origin=(32,96,16) layers=3 verts=5356 tris=2678 (blas 3.49 ms, total builds=63)
+[rebuild] index=173 origin=(48,96,16) layers=3 verts=11464 tris=5732 (blas 3.63 ms, total builds=64)
+[rebuild] index=177 origin=(32,112,16) layers=1 verts=116 tris=58 (blas 0.82 ms, total builds=65)
+[rebuild] index=240 origin=(0,-64,32) layers=1 verts=2268 tris=1134 (blas 1.93 ms, total builds=66)
+[rebuild] index=241 origin=(16,-64,32) layers=1 verts=1024 tris=512 (blas 0.64 ms, total builds=67)
+[rebuild] index=242 origin=(32,-64,32) layers=1 verts=1024 tris=512 (blas 0.77 ms, total builds=68)
+[rebuild] index=243 origin=(48,-64,32) layers=1 verts=1024 tris=512 (blas 1.22 ms, total builds=69)
+[rebuild] index=244 origin=(-16,-64,32) layers=1 verts=1028 tris=514 (blas 0.68 ms, total builds=70)
+[rebuild] index=252 origin=(32,-32,32) layers=2 verts=236 tris=118 (blas 1.94 ms, total builds=71)
+[rebuild] index=253 origin=(48,-32,32) layers=1 verts=104 tris=52 (blas 0.71 ms, total builds=72)
+[rebuild] index=257 origin=(32,-16,32) layers=1 verts=196 tris=98 (blas 0.79 ms, total builds=73)
+[rebuild] index=258 origin=(48,-16,32) layers=1 verts=240 tris=120 (blas 1.16 ms, total builds=74)
+[rebuild] index=261 origin=(16,0,32) layers=2 verts=2144 tris=1072 (blas 0.90 ms, total builds=75)
+[rebuild] index=262 origin=(32,0,32) layers=3 verts=3368 tris=1684 (blas 1.13 ms, total builds=76)
+[rebuild] index=263 origin=(48,0,32) layers=1 verts=1040 tris=520 (blas 2.01 ms, total builds=77)
+[rebuild] index=265 origin=(0,16,32) layers=2 verts=168 tris=84 (blas 0.82 ms, total builds=78)
+[rebuild] index=270 origin=(0,32,32) layers=3 verts=2200 tris=1100 (blas 1.05 ms, total builds=79)
+[rebuild] index=271 origin=(16,32,32) layers=1 verts=2004 tris=1002 (blas 0.90 ms, total builds=80)
+[retired] releasing 2 deferred objects
+[tlas] rebuilt in 0.75 ms (instances=80, as=17552 B, total=3 builds)
+[rebuild] index=53 origin=(48,96,0) layers=3 verts=7680 tris=3840 (blas 4.78 ms, total builds=81)
+[rebuild] index=57 origin=(32,112,0) layers=1 verts=2520 tris=1260 (blas 0.94 ms, total builds=82)
+[rebuild] index=58 origin=(48,112,0) layers=1 verts=3404 tris=1702 (blas 1.17 ms, total builds=83)
+[rebuild] index=274 origin=(-16,32,32) layers=2 verts=256 tris=128 (blas 0.87 ms, total builds=84)
+[rebuild] index=275 origin=(0,48,32) layers=2 verts=2832 tris=1416 (blas 2.37 ms, total builds=85)
+[rebuild] index=276 origin=(16,48,32) layers=3 verts=3528 tris=1764 (blas 1.16 ms, total builds=86)
+[rebuild] index=277 origin=(32,48,32) layers=4 verts=368 tris=184 (blas 1.53 ms, total builds=87)
+[rebuild] index=279 origin=(-16,48,32) layers=4 verts=3576 tris=1788 (blas 1.66 ms, total builds=88)
+[rebuild] index=282 origin=(32,64,32) layers=3 verts=2820 tris=1410 (blas 1.07 ms, total builds=89)
+[rebuild] index=283 origin=(48,64,32) layers=2 verts=296 tris=148 (blas 0.93 ms, total builds=90)
+[rebuild] index=284 origin=(-16,64,32) layers=2 verts=4896 tris=2448 (blas 3.33 ms, total builds=91)
+[rebuild] index=287 origin=(32,80,32) layers=3 verts=3156 tris=1578 (blas 1.01 ms, total builds=92)
+[rebuild] index=288 origin=(48,80,32) layers=3 verts=3000 tris=1500 (blas 0.92 ms, total builds=93)
+[rebuild] index=292 origin=(32,96,32) layers=1 verts=348 tris=174 (blas 0.63 ms, total builds=94)
+[rebuild] index=293 origin=(48,96,32) layers=3 verts=7396 tris=3698 (blas 3.65 ms, total builds=95)
+[rebuild] index=360 origin=(0,-64,-32) layers=1 verts=1024 tris=512 (blas 0.69 ms, total builds=96)
+[rebuild] index=162 origin=(32,64,16) layers=3 verts=920 tris=460 (blas 0.73 ms, total builds=97)
+[rebuild] index=167 origin=(32,80,16) layers=2 verts=2788 tris=1394 (blas 1.04 ms, total builds=98)
+[rebuild] index=168 origin=(48,80,16) layers=1 verts=48 tris=24 (blas 0.69 ms, total builds=99)
+[rebuild] index=172 origin=(32,96,16) layers=3 verts=5356 tris=2678 (blas 3.86 ms, total builds=100)
+[INFO ] rebuild #100: index=172 origin=(32,96,16) layers=3 verts=5356 (4.9 ms)
+[rebuild] index=173 origin=(48,96,16) layers=3 verts=11464 tris=5732 (blas 5.06 ms, total builds=101)
+[rebuild] index=177 origin=(32,112,16) layers=1 verts=116 tris=58 (blas 1.01 ms, total builds=102)
+[rebuild] index=293 origin=(48,96,32) layers=3 verts=7396 tris=3698 (blas 3.31 ms, total builds=103)
+[rebuild] index=361 origin=(16,-64,-32) layers=1 verts=1024 tris=512 (blas 1.17 ms, total builds=104)
+[rebuild] index=362 origin=(32,-64,-32) layers=1 verts=1024 tris=512 (blas 0.76 ms, total builds=105)
+[rebuild] index=363 origin=(48,-64,-32) layers=1 verts=1024 tris=512 (blas 0.79 ms, total builds=106)
+[rebuild] index=364 origin=(-16,-64,-32) layers=1 verts=1024 tris=512 (blas 0.74 ms, total builds=107)
+[rebuild] index=377 origin=(32,-16,-32) layers=2 verts=720 tris=360 (blas 0.90 ms, total builds=108)
+[rebuild] index=378 origin=(48,-16,-32) layers=2 verts=996 tris=498 (blas 0.77 ms, total builds=109)
+[rebuild] index=383 origin=(48,0,-32) layers=1 verts=808 tris=404 (blas 0.85 ms, total builds=110)
+[rebuild] index=395 origin=(0,48,-32) layers=1 verts=28 tris=14 (blas 1.17 ms, total builds=111)
+[rebuild] index=396 origin=(16,48,-32) layers=2 verts=880 tris=440 (blas 0.81 ms, total builds=112)
+[retired] releasing 12 deferred objects
+[tlas] rebuilt in 0.88 ms (instances=102, as=22320 B, total=4 builds)
+[rebuild] index=156 origin=(16,48,16) layers=3 verts=2612 tris=1306 (blas 1.11 ms, total builds=113)
+[rebuild] index=161 origin=(16,64,16) layers=3 verts=2844 tris=1422 (blas 1.14 ms, total builds=114)
+[rebuild] index=276 origin=(16,48,32) layers=3 verts=3528 tris=1764 (blas 2.27 ms, total builds=115)
+[rebuild] index=277 origin=(32,48,32) layers=4 verts=368 tris=184 (blas 0.88 ms, total builds=116)
+[rebuild] index=282 origin=(32,64,32) layers=3 verts=2820 tris=1410 (blas 1.07 ms, total builds=117)
+[rebuild] index=283 origin=(48,64,32) layers=2 verts=296 tris=148 (blas 0.81 ms, total builds=118)
+[rebuild] index=287 origin=(32,80,32) layers=3 verts=3156 tris=1578 (blas 1.34 ms, total builds=119)
+[rebuild] index=288 origin=(48,80,32) layers=3 verts=3000 tris=1500 (blas 1.00 ms, total builds=120)
+[rebuild] index=292 origin=(32,96,32) layers=1 verts=348 tris=174 (blas 0.79 ms, total builds=121)
+[rebuild] index=397 origin=(32,48,-32) layers=3 verts=5068 tris=2534 (blas 3.25 ms, total builds=122)
+[rebuild] index=398 origin=(48,48,-32) layers=2 verts=3096 tris=1548 (blas 1.08 ms, total builds=123)
+[rebuild] index=399 origin=(-16,48,-32) layers=4 verts=5176 tris=2588 (blas 2.95 ms, total builds=124)
+[rebuild] index=400 origin=(0,64,-32) layers=2 verts=340 tris=170 (blas 1.52 ms, total builds=125)
+[rebuild] index=401 origin=(16,64,-32) layers=1 verts=568 tris=284 (blas 0.70 ms, total builds=126)
+[rebuild] index=402 origin=(32,64,-32) layers=2 verts=2252 tris=1126 (blas 0.87 ms, total builds=127)
+[rebuild] index=403 origin=(48,64,-32) layers=1 verts=2760 tris=1380 (blas 0.99 ms, total builds=128)
+[rebuild] index=155 origin=(0,48,16) layers=3 verts=3168 tris=1584 (blas 1.03 ms, total builds=129)
+[rebuild] index=275 origin=(0,48,32) layers=2 verts=2832 tris=1416 (blas 1.00 ms, total builds=130)
+[rebuild] index=279 origin=(-16,48,32) layers=4 verts=3576 tris=1788 (blas 1.05 ms, total builds=131)
+[rebuild] index=284 origin=(-16,64,32) layers=2 verts=4896 tris=2448 (blas 3.10 ms, total builds=132)
+[rebuild] index=404 origin=(-16,64,-32) layers=2 verts=4128 tris=2064 (blas 2.54 ms, total builds=133)
+[rebuild] index=405 origin=(0,80,-32) layers=3 verts=3696 tris=1848 (blas 1.22 ms, total builds=134)
+[rebuild] index=406 origin=(16,80,-32) layers=2 verts=1408 tris=704 (blas 1.04 ms, total builds=135)
+[rebuild] index=407 origin=(32,80,-32) layers=1 verts=192 tris=96 (blas 0.65 ms, total builds=136)
+[rebuild] index=409 origin=(-16,80,-32) layers=2 verts=1852 tris=926 (blas 0.81 ms, total builds=137)
+[rebuild] index=410 origin=(0,96,-32) layers=3 verts=4536 tris=2268 (blas 2.63 ms, total builds=138)
+[rebuild] index=411 origin=(16,96,-32) layers=3 verts=9788 tris=4894 (blas 4.24 ms, total builds=139)
+[rebuild] index=412 origin=(32,96,-32) layers=3 verts=2532 tris=1266 (blas 0.87 ms, total builds=140)
+[rebuild] index=413 origin=(48,96,-32) layers=3 verts=1548 tris=774 (blas 1.16 ms, total builds=141)
+[rebuild] index=414 origin=(-16,96,-32) layers=3 verts=152 tris=76 (blas 0.86 ms, total builds=142)
+[rebuild] index=415 origin=(0,112,-32) layers=1 verts=852 tris=426 (blas 0.65 ms, total builds=143)
+[rebuild] index=416 origin=(16,112,-32) layers=1 verts=2576 tris=1288 (blas 0.94 ms, total builds=144)
+[retired] releasing 15 deferred objects
+[tlas] rebuilt in 0.64 ms (instances=121, as=28512 B, total=5 builds)
+[rebuild] index=417 origin=(32,112,-32) layers=2 verts=7996 tris=3998 (blas 3.89 ms, total builds=145)
+[rebuild] index=418 origin=(48,112,-32) layers=1 verts=9784 tris=4892 (blas 3.99 ms, total builds=146)
+[rebuild] index=480 origin=(0,-64,-16) layers=1 verts=1024 tris=512 (blas 0.67 ms, total builds=147)
+[rebuild] index=481 origin=(16,-64,-16) layers=1 verts=1024 tris=512 (blas 0.64 ms, total builds=148)
+[rebuild] index=482 origin=(32,-64,-16) layers=1 verts=1024 tris=512 (blas 0.76 ms, total builds=149)
+[rebuild] index=483 origin=(48,-64,-16) layers=1 verts=1024 tris=512 (blas 0.76 ms, total builds=150)
+[INFO ] rebuild #150: index=483 origin=(48,-64,-16) layers=1 verts=1024 (1.7 ms)
+[rebuild] index=484 origin=(-16,-64,-16) layers=1 verts=1024 tris=512 (blas 0.75 ms, total builds=151)
+[rebuild] index=497 origin=(32,-16,-16) layers=1 verts=52 tris=26 (blas 0.77 ms, total builds=152)
+[rebuild] index=498 origin=(48,-16,-16) layers=1 verts=2252 tris=1126 (blas 1.01 ms, total builds=153)
+[rebuild] index=501 origin=(16,0,-16) layers=1 verts=64 tris=32 (blas 0.64 ms, total builds=154)
+[rebuild] index=502 origin=(32,0,-16) layers=1 verts=1204 tris=602 (blas 1.31 ms, total builds=155)
+[rebuild] index=503 origin=(48,0,-16) layers=2 verts=1972 tris=986 (blas 0.81 ms, total builds=156)
+[rebuild] index=505 origin=(0,16,-16) layers=2 verts=296 tris=148 (blas 1.09 ms, total builds=157)
+[rebuild] index=506 origin=(16,16,-16) layers=2 verts=1608 tris=804 (blas 0.85 ms, total builds=158)
+[rebuild] index=507 origin=(32,16,-16) layers=2 verts=556 tris=278 (blas 0.74 ms, total builds=159)
+[rebuild] index=508 origin=(48,16,-16) layers=1 verts=1344 tris=672 (blas 0.95 ms, total builds=160)
+[rebuild] index=510 origin=(0,32,-16) layers=2 verts=844 tris=422 (blas 0.95 ms, total builds=161)
+[rebuild] index=511 origin=(16,32,-16) layers=2 verts=468 tris=234 (blas 0.83 ms, total builds=162)
+[rebuild] index=514 origin=(-16,32,-16) layers=2 verts=2140 tris=1070 (blas 1.62 ms, total builds=163)
+[rebuild] index=515 origin=(0,48,-16) layers=4 verts=4876 tris=2438 (blas 3.19 ms, total builds=164)
+[rebuild] index=516 origin=(16,48,-16) layers=3 verts=2996 tris=1498 (blas 1.11 ms, total builds=165)
+[rebuild] index=517 origin=(32,48,-16) layers=3 verts=884 tris=442 (blas 0.81 ms, total builds=166)
+[rebuild] index=519 origin=(-16,48,-16) layers=4 verts=6472 tris=3236 (blas 2.96 ms, total builds=167)
+[rebuild] index=520 origin=(0,64,-16) layers=2 verts=3488 tris=1744 (blas 2.10 ms, total builds=168)
+[rebuild] index=521 origin=(16,64,-16) layers=2 verts=1288 tris=644 (blas 0.94 ms, total builds=169)
+[rebuild] index=522 origin=(32,64,-16) layers=1 verts=472 tris=236 (blas 0.89 ms, total builds=170)
+[rebuild] index=524 origin=(-16,64,-16) layers=3 verts=2072 tris=1036 (blas 1.06 ms, total builds=171)
+[rebuild] index=525 origin=(0,80,-16) layers=3 verts=4156 tris=2078 (blas 2.98 ms, total builds=172)
+[rebuild] index=526 origin=(16,80,-16) layers=2 verts=1948 tris=974 (blas 1.07 ms, total builds=173)
+[rebuild] index=527 origin=(32,80,-16) layers=1 verts=68 tris=34 (blas 0.53 ms, total builds=174)
+[rebuild] index=531 origin=(16,96,-16) layers=3 verts=7100 tris=3550 (blas 3.77 ms, total builds=175)
+[rebuild] index=532 origin=(32,96,-16) layers=3 verts=10632 tris=5316 (blas 3.87 ms, total builds=176)
+[retired] releasing 2 deferred objects
+[tlas] rebuilt in 1.03 ms (instances=153, as=35424 B, total=6 builds)
+[rebuild] index=533 origin=(48,96,-16) layers=3 verts=2668 tris=1334 (blas 2.12 ms, total builds=177)
+[rebuild] index=536 origin=(16,112,-16) layers=1 verts=828 tris=414 (blas 0.88 ms, total builds=178)
+[rebuild] index=537 origin=(32,112,-16) layers=1 verts=5728 tris=2864 (blas 3.40 ms, total builds=179)
+[rebuild] index=538 origin=(48,112,-16) layers=1 verts=10100 tris=5050 (blas 5.28 ms, total builds=180)
+[retired] releasing 2 deferred objects
+[tlas] rebuilt in 0.72 ms (instances=157, as=36256 B, total=7 builds)
+[PASS ] 摄取窗口完成（180 次重建 / 600 非空区块 / 积压 0 / 19.5s）
+
+---- S5 统计汇总 ----
+[INFO ] Java 侧: polls=37 rebuilds=180 invalidations=444 relocations=0 非空区块=600
+[INFO ] Native 侧: readyBLAS=157 BLAS构建=180 TLAS重建=7
+[INFO ] 几何: 三角形=168974 顶点=337948 顶点缓冲=5280.4 KB 索引缓冲=1980.2 KB TLAS=35.4 KB
+
+---- S6 场景求交验证（相机位置 6 向 ray，maxDist 512） ----
+[PASS ] 相机位置: (26.08, 92.62, 7.56)
+[INFO ] ray +X: miss（512 格内无几何）
+[INFO ] ray -X: miss（512 格内无几何）
+[INFO ] ray +Y(上): miss（512 格内无几何）
+[INFO ] ray -Y(下): miss（512 格内无几何）
+[INFO ] ray +Z: miss（512 格内无几何）
+[INFO ] ray -Z: miss（512 格内无几何）
+
+==============================================================
+最终判定: NATIVE_MISMATCH
+BLAS 就绪且三角形非零，但 6 向 ray 全 miss。v0.3 已修复 TLAS 实例矩阵布局（simd_float3x4 列主序，平移在 flat[3]/[7]/[11]）——若此判定复现，需回报排查（相机悬空/虚空世界亦可能）。ready BLAS=157，三角形=168974。
+==============================================================
+[scene] shutdown — all GPU resources released

@@ -12,9 +12,35 @@
 //                          precision discipline, design §4) → expand QUADS to
 //                          uint32 indices → triangle BLAS → slot ready
 //    frameTickNative     → throttled TLAS rebuild over all ready slots
-//                          (instance transform = translate(origin))
+//                          (instance transform = translate(t), see below)
 //    castRayNative       → single world-space ray via scene_trace_kernel
 //    invalidate/relocate/isChunkReady/sceneStats/shutdown
+//
+//  v0.4 additions (diagnostic matrix):
+//    sceneInfoNative         → raw-AABB audit over all rebuilt slots: measures
+//                              whether extracted vertices are world-absolute
+//                              or chunk-local(+constant R), rp()s the evidence,
+//                              stores the measured offset for MEASURED mode
+//    sentinelProbeNative     → isolated 2-instance TLAS (identity + translate)
+//                              + 3 rays: validates instance machinery + the
+//                              matrix encoding independent of MC data
+//    setPlacementModeNative  → mode 0 (ABS: t=origin) / 1 (MEASURED:
+//                              t=2*origin-R, R from the AABB audit)
+//    instanceOriginNative    → origin of the slot behind a TLAS instance index
+//
+//  Instance matrix layout — v0.4 doc-confirmed fix (v0.3 regression):
+//    transformationMatrix is MTLPackedFloat4x3. Apple documentation defines it
+//    as "a structure that contains the top three rows of a 4x4 matrix ... in
+//    column-major order" with columns (MTLPackedFloat3 x4) and the implied
+//    bottom row [0,0,0,1]. Memory = four packed float3 columns; the rotation
+//    basis is columns 0-2 and **column 3 (flat[9..11]) is the translation**.
+//    Identity+translate(t) = [1,0,0, 0,1,0, 0,0,1, tx,ty,tz] — the encoding the
+//    2.0 probe used for its identity transform (and v0.2 used for translate).
+//    v0.3 moved the translation to flat[3]/[7]/[11] ("simd_float3x4, 3 columns
+//    of simd_float4") which under the real layout decodes as shear garbage
+//    (col1=(tx,0,1), col2=(0,ty,0)) — every ray misses. Confirmed against the
+//    v0.3 field report (six-way all-miss with healthy ingestion stats) and the
+//    2.0 field report (identity transform verified on device).
 //
 //  Generation protocol (inherited from upstream ChunkProxy): every slot write
 //  carries a Java-side monotonically increasing generation; stale writes are
@@ -39,6 +65,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
+#include <float.h>
 #include <stdarg.h>
 #include <mach/mach_time.h>
 
@@ -74,6 +101,11 @@ static double clockms(void) {
 @property (nonatomic) uint32_t vertexCount;
 @property (nonatomic) uint32_t indexCount;
 @property (nonatomic) BOOL ready;
+// v0.4: raw (pre-recentre) AABB of the extracted vertices — the evidence
+// source for the vertex-space audit (world-absolute vs chunk-local).
+@property (nonatomic) float rawMinX, rawMinY, rawMinZ;
+@property (nonatomic) float rawMaxX, rawMaxY, rawMaxZ;
+@property (nonatomic) BOOL rawValid;
 @end
 
 @implementation SceneSlot
@@ -88,6 +120,18 @@ static id<MTLBuffer> g_instanceBuffer = nil;
 static BOOL g_tlasDirty = NO;
 static id<MTLLibrary> g_library = nil;
 static id<MTLComputePipelineState> g_pipeline = nil;
+
+// v0.4: placement mode + measured vertex-space offset.
+//   mode 0 (ABS):     t = origin            (raw vertices are world-absolute)
+//   mode 1 (MEASURED): t = 2*origin - R      (raw = world - origin + R, i.e.
+//                     chunk-local with constant extra shift R; R=0 = pure
+//                     section-local). R measured by sceneInfoNative.
+static int g_placementMode = 0;
+static float g_offsetR[3] = {0.0f, 0.0f, 0.0f};
+
+// v0.4: per-instance slot origins of the live TLAS (hit attribution).
+static int32_t (*g_instOrigins)[3] = NULL;
+static uint32_t g_instOriginCount = 0;
 
 // stats: [0]=readyBLAS [1]=totalTris [2]=totalVerts [3]=tlasBuilds
 //        [4]=blasBuilds [5]=vertexBytes [6]=indexBytes [7]=tlasBytes
@@ -156,6 +200,17 @@ static BOOL build_blas(SceneSlot *slot) {
     return YES;
 }
 
+// v0.4: doc-confirmed MTLPackedFloat4x3 encoding — identity + translate.
+// Four packed float3 columns: rotation basis in columns 0-2, translation in
+// column 3 (flat[9..11]). See the file header for the full attribution.
+static void encode_instance_matrix(void *dst, float tx, float ty, float tz) {
+    float *m = (float *)dst;
+    m[0] = 1; m[1] = 0; m[2] = 0;      // column 0
+    m[3] = 0; m[4] = 1; m[5] = 0;      // column 1
+    m[6] = 0; m[7] = 0; m[8] = 1;      // column 2
+    m[9] = tx; m[10] = ty; m[11] = tz; // column 3 = translation
+}
+
 // Rebuild TLAS over all ready slots. Flushes the retired list afterwards.
 static void rebuild_tlas(void) {
     if (!g_tlasDirty) { return; }
@@ -171,19 +226,13 @@ static void rebuild_tlas(void) {
         return;
     }
 
-    // Instance descriptors: transform = translate(origin).
-    // v0.3 布局修正（v0.2 定时炸弹，被 S6 相机 NPE 掩盖）：
-    //   transformationMatrix 是 matrix_float3x4 = simd_float3x4 —— Apple 文档
-    //   定义为“3 列 × 4 行”，columns 为三个 simd_float4；Metal 实例矩阵默认
-    //   MTLMatrixLayoutColumnMajor。12 个 float 的内存语义（行向量约定
-    //   p' = [x y z 1]·M(4x3)）：
-    //     col0 = (r00, r10, r20, tx)  → flat[0..3]
-    //     col1 = (r01, r11, r21, ty)  → flat[4..7]
-    //     col2 = (r02, r12, r22, tz)  → flat[8..11]
-    //   即单位阵+平移 = [1,0,0,tx, 0,1,0,ty, 0,0,1,tz]（平移在 flat[3]/[7]/[11]，
-    //   各列的 .w）。v0.2 误按“4 行×3 列行主序”写（平移在 flat[9..11]），Metal
-    //   解码出剪切型垃圾矩阵（p'y=x 等）——真机 ray 会全 miss。2.0 探针用单位
-    //   变换故从未暴露。
+    // Instance descriptors: transform = translate(t).
+    //   mode 0 (ABS):      t = origin
+    //   mode 1 (MEASURED): t = 2*origin - R  (R = g_offsetR, measured from the
+    //                       raw-AABB audit; correct whenever the extracted
+    //                       vertices are chunk-local with constant shift R:
+    //                       raw = world - origin + R, BLAS = raw - origin,
+    //                       world = BLAS + t = raw - origin + 2*origin - R)
     const uint32_t n = (uint32_t)ready.count;
     size_t instBytes = n * sizeof(MTLAccelerationStructureInstanceDescriptor);
     MTLAccelerationStructureInstanceDescriptor *instances =
@@ -191,16 +240,26 @@ static void rebuild_tlas(void) {
     if (instances == NULL) { return; }
     NSMutableArray<id<MTLAccelerationStructure>> *blasRefs =
         [NSMutableArray arrayWithCapacity:n];
+    int32_t (*newOrigins)[3] =
+        (int32_t (*)[3])calloc((size_t)n, sizeof(int32_t[3]));
+    if (newOrigins == NULL) {
+        free(instances);
+        return;
+    }
     for (uint32_t i = 0; i < n; i++) {
         SceneSlot *s = ready[i];
-        float *m = (float *)&instances[i].transformationMatrix;
-        m[0] = 1; m[1] = 0; m[2] = 0; m[3] = (float)s.ox;   // col0 = (r00,r10,r20,tx)
-        m[4] = 0; m[5] = 1; m[6] = 0; m[7] = (float)s.oy;   // col1 = (r01,r11,r21,ty)
-        m[8] = 0; m[9] = 0; m[10] = 1; m[11] = (float)s.oz; // col2 = (r02,r12,r22,tz)
+        float tx = (float)s.ox, ty = (float)s.oy, tz = (float)s.oz;
+        if (g_placementMode == 1) {
+            tx = 2.0f * (float)s.ox - g_offsetR[0];
+            ty = 2.0f * (float)s.oy - g_offsetR[1];
+            tz = 2.0f * (float)s.oz - g_offsetR[2];
+        }
+        encode_instance_matrix(&instances[i].transformationMatrix, tx, ty, tz);
         instances[i].options = MTLAccelerationStructureInstanceOptionNone;
         instances[i].mask = 0xFFFFFFFFu;
         instances[i].intersectionFunctionTableOffset = 0;
         instances[i].accelerationStructureIndex = i;
+        newOrigins[i][0] = s.ox; newOrigins[i][1] = s.oy; newOrigins[i][2] = s.oz;
         [blasRefs addObject:s.blas];
     }
 
@@ -208,7 +267,7 @@ static void rebuild_tlas(void) {
         [g_device newBufferWithBytes:instances length:instBytes
                               options:MTLResourceStorageModeShared];
     free(instances);
-    if (instanceBuffer == nil) { return; }
+    if (instanceBuffer == nil) { free(newOrigins); return; }
 
     MTLInstanceAccelerationStructureDescriptor *tlasDescriptor =
         [MTLInstanceAccelerationStructureDescriptor descriptor];
@@ -228,6 +287,7 @@ static void rebuild_tlas(void) {
                               options:MTLResourceStorageModeShared];
     if (tlas == nil || scratch == nil) {
         rp("FATAL: TLAS allocation failed");
+        free(newOrigins);
         return;
     }
 
@@ -245,6 +305,7 @@ static void rebuild_tlas(void) {
     if (cmd.error != nil) {
         rp("FATAL: TLAS build failed (%u instances): %s",
            n, cmd.error.localizedDescription.UTF8String);
+        free(newOrigins);
         return;
     }
 
@@ -252,15 +313,19 @@ static void rebuild_tlas(void) {
     if (g_instanceBuffer != nil) { [g_retired addObject:g_instanceBuffer]; g_stats[8]++; }
     g_tlas = tlas;
     g_instanceBuffer = instanceBuffer;
+    if (g_instOrigins != NULL) { free(g_instOrigins); }
+    g_instOrigins = newOrigins;
+    g_instOriginCount = n;
     g_stats[3]++;
     g_stats[7] = sizes.accelerationStructureSize;
     g_tlasDirty = NO;
 
     // Ready only after the new TLAS completed — safe to drop retired objects.
     flush_retired();
-    rp("[tlas] rebuilt in %.2f ms (instances=%u, as=%llu B, total=%llu builds)",
+    rp("[tlas] rebuilt in %.2f ms (instances=%u, as=%llu B, total=%llu builds, mode=%s)",
        ms, n, (unsigned long long)sizes.accelerationStructureSize,
-       (unsigned long long)g_stats[3]);
+       (unsigned long long)g_stats[3],
+       g_placementMode == 0 ? "ABS" : "MEASURED");
 }
 
 // ------------------------- JNI -------------------------
@@ -415,6 +480,11 @@ Java_net_prisma_sceneingest_Native_rebuildSingleNative(
         return;
     }
 
+    // v0.4: raw (pre-recentre) AABB accumulators — the vertex-space evidence.
+    float rmin[3] = {FLT_MAX, FLT_MAX, FLT_MAX};
+    float rmax[3] = {-FLT_MAX, -FLT_MAX, -FLT_MAX};
+    BOOL rawBad = NO;
+
     uint64_t vBase = 0;
     for (jint i = 0; i < layerCount; i++) {
         jobject bb = (*env)->GetObjectArrayElement(env, vertices, (jsize)i);
@@ -442,8 +512,19 @@ Java_net_prisma_sceneingest_Native_rebuildSingleNative(
             return;
         }
         // Copy + recentre (world-absolute → chunk-local; float3 @ offset 0).
+        // v0.4: accumulate the RAW coordinates first (vertex-space audit).
         for (uint32_t v = 0; v < vc; v++) {
             const float *p = (const float *)(src + (size_t)v * stride);
+            if (isfinite(p[0]) && isfinite(p[1]) && isfinite(p[2])) {
+                if (p[0] < rmin[0]) { rmin[0] = p[0]; }
+                if (p[1] < rmin[1]) { rmin[1] = p[1]; }
+                if (p[2] < rmin[2]) { rmin[2] = p[2]; }
+                if (p[0] > rmax[0]) { rmax[0] = p[0]; }
+                if (p[1] > rmax[1]) { rmax[1] = p[1]; }
+                if (p[2] > rmax[2]) { rmax[2] = p[2]; }
+            } else {
+                rawBad = YES;
+            }
             verts[vBase + v] = simd_make_float3(
                 p[0] - (float)ox, p[1] - (float)oy, p[2] - (float)oz);
         }
@@ -476,6 +557,10 @@ Java_net_prisma_sceneingest_Native_rebuildSingleNative(
     slot.indexBuffer = indexBuffer;
     slot.vertexCount = (uint32_t)totalVerts;
     slot.indexCount = (uint32_t)totalIndices;
+    // v0.4: stash the raw AABB (survives until the next rebuild of this slot).
+    slot.rawValid = !rawBad;
+    slot.rawMinX = rmin[0]; slot.rawMinY = rmin[1]; slot.rawMinZ = rmin[2];
+    slot.rawMaxX = rmax[0]; slot.rawMaxY = rmax[1]; slot.rawMaxZ = rmax[2];
 
     if (vertexBuffer == nil || indexBuffer == nil || !build_blas(slot)) {
         slot.ready = NO;
@@ -564,27 +649,13 @@ Java_net_prisma_sceneingest_Native_sceneStatsNative(JNIEnv *env, jclass cls) {
     return arr;
 }
 
-JNIEXPORT jfloatArray JNICALL
-Java_net_prisma_sceneingest_Native_castRayNative(
-        JNIEnv *env, jclass cls, jfloat ox, jfloat oy, jfloat oz,
-        jfloat dx, jfloat dy, jfloat dz, jfloat maxDist) {
-    (void)cls;
-    jfloat out[3] = {0.0f, -1.0f, -1.0f}; // hitFlag, distance, instanceIndex
-    jfloatArray result = (*env)->NewFloatArray(env, 3);
-
-    if (g_device == nil || g_pipeline == nil || g_tlas == nil) {
-        if (result != NULL) { (*env)->SetFloatArrayRegion(env, result, 0, 3, out); }
-        return result;
-    }
-
-    // Normalize direction.
-    float len = sqrtf(dx * dx + dy * dy + dz * dz);
-    if (len < 1e-8f) {
-        if (result != NULL) { (*env)->SetFloatArrayRegion(env, result, 0, 3, out); }
-        return result;
-    }
-    dx /= len; dy /= len; dz /= len;
-
+// v0.4: shared single-ray tracer (used by castRayNative against the live
+// TLAS and by sentinelProbeNative against its isolated TLAS). Direction is
+// normalized by the caller. Returns YES on a clean dispatch (hitFlag/dist/
+// instIdx filled from the GPU result), NO on dispatch failure.
+static BOOL trace_ray(id<MTLAccelerationStructure> tlas,
+                       simd_float3 origin, simd_float3 dir, float maxDist,
+                       /*out*/ uint32_t *hitFlag, float *dist, uint32_t *instIdx) {
     typedef struct {
         simd_float3 origin;
         simd_float3 direction;
@@ -599,11 +670,10 @@ Java_net_prisma_sceneingest_Native_castRayNative(
     } SceneHit;
 
     SceneRay ray;
-    ray.origin = simd_make_float3(ox, oy, oz);
-    ray.direction = simd_make_float3(dx, dy, dz);
+    ray.origin = origin;
+    ray.direction = dir;
     ray.maxDistance = maxDist;
     ray.pad = 0;
-    SceneHit hit = { -1.0f, 0xFFFFFFFFu, 0, 0 };
 
     id<MTLBuffer> rayBuffer =
         [g_device newBufferWithBytes:&ray length:sizeof(SceneRay)
@@ -611,31 +681,479 @@ Java_net_prisma_sceneingest_Native_castRayNative(
     id<MTLBuffer> hitBuffer =
         [g_device newBufferWithLength:sizeof(SceneHit)
                               options:MTLResourceStorageModeShared];
-    if (rayBuffer == nil || hitBuffer == nil) {
-        if (result != NULL) { (*env)->SetFloatArrayRegion(env, result, 0, 3, out); }
-        return result;
-    }
+    if (rayBuffer == nil || hitBuffer == nil) { return NO; }
 
     id<MTLCommandBuffer> cmd = [g_queue commandBuffer];
     id<MTLComputeCommandEncoder> enc = [cmd computeCommandEncoder];
     [enc setComputePipelineState:g_pipeline];
     [enc setBuffer:rayBuffer offset:0 atIndex:0];
     [enc setBuffer:hitBuffer offset:0 atIndex:1];
-    [enc setAccelerationStructure:g_tlas atBufferIndex:2];
+    [enc setAccelerationStructure:tlas atBufferIndex:2];
     [enc dispatchThreadgroups:MTLSizeMake(1, 1, 1)
          threadsPerThreadgroup:MTLSizeMake(1, 1, 1)];
     [enc endEncoding];
     [cmd commit];
     [cmd waitUntilCompleted];
     if (cmd.error != nil) {
-        rp("FATAL: castRay dispatch failed: %s", cmd.error.localizedDescription.UTF8String);
-    } else {
-        const SceneHit *h = (const SceneHit *)hitBuffer.contents;
-        out[0] = h->hit ? 1.0f : 0.0f;
-        out[1] = h->distance;
-        out[2] = (jfloat)h->instanceIndex;
+        rp("FATAL: trace dispatch failed: %s", cmd.error.localizedDescription.UTF8String);
+        return NO;
+    }
+    const SceneHit *h = (const SceneHit *)hitBuffer.contents;
+    *hitFlag = h->hit ? 1u : 0u;
+    *dist = h->distance;
+    *instIdx = h->instanceIndex;
+    return YES;
+}
+
+// v0.4: qsort comparator for float arrays (raw-AABB audit).
+static int cmpf(const void *a, const void *b) {
+    float fa = *(const float *)a, fb = *(const float *)b;
+    return (fa > fb) - (fa < fb);
+}
+
+// v0.4: normalize a direction vector in place; returns NO for degenerate input.
+static BOOL normalize_dir(float *dx, float *dy, float *dz) {
+    float len = sqrtf(*dx * *dx + *dy * *dy + *dz * *dz);
+    if (len < 1e-8f) { return NO; }
+    *dx /= len; *dy /= len; *dz /= len;
+    return YES;
+}
+
+JNIEXPORT jfloatArray JNICALL
+Java_net_prisma_sceneingest_Native_castRayNative(
+        JNIEnv *env, jclass cls, jfloat ox, jfloat oy, jfloat oz,
+        jfloat dx, jfloat dy, jfloat dz, jfloat maxDist) {
+    (void)cls;
+    jfloat out[3] = {0.0f, -1.0f, -1.0f}; // hitFlag, distance, instanceIndex
+    jfloatArray result = (*env)->NewFloatArray(env, 3);
+
+    if (g_device == nil || g_pipeline == nil || g_tlas == nil) {
+        if (result != NULL) { (*env)->SetFloatArrayRegion(env, result, 0, 3, out); }
+        return result;
+    }
+
+    if (!normalize_dir(&dx, &dy, &dz)) {
+        if (result != NULL) { (*env)->SetFloatArrayRegion(env, result, 0, 3, out); }
+        return result;
+    }
+
+    uint32_t hitFlag = 0; float dist = -1.0f; uint32_t instIdx = 0xFFFFFFFFu;
+    if (trace_ray(g_tlas, simd_make_float3(ox, oy, oz),
+                  simd_make_float3(dx, dy, dz), maxDist,
+                  &hitFlag, &dist, &instIdx)) {
+        out[0] = hitFlag ? 1.0f : 0.0f;
+        out[1] = dist;
+        out[2] = (jfloat)instIdx;
     }
     if (result != NULL) { (*env)->SetFloatArrayRegion(env, result, 0, 3, out); }
+    return result;
+}
+
+// -------------------------------------------------------------------
+// v0.4 diagnostic matrix
+// -------------------------------------------------------------------
+
+// S6.1 sentinel: isolated TLAS with one triangle BLAS instanced twice —
+// identity transform and translate(K) with the doc-confirmed encoding — plus
+// three rays (two positive, one negative control). Validates the instance
+// machinery and the matrix translation encoding with zero MC data involved.
+//
+// Geometry: local triangle (0,0,0)-(1024,0,0)-(0,0,1024), plane y=0 covering
+// x,z >= 0, x+z <= 1024. Instances: #0 identity (world 0..1024 area),
+// #1 translate K=(4096,0,4096) (world 4096..5120 area).
+// Rays:  (256,64,256)   -Y -> expect HIT @ ~64 on instance 0
+//        (4352,64,4352) -Y -> expect HIT @ ~64 on instance 1
+//        (256,64,256)   +Y -> expect MISS (negative control)
+// Returns bits: b0 identity hit ok, b1 translated hit ok, b2 control miss ok.
+JNIEXPORT jint JNICALL
+Java_net_prisma_sceneingest_Native_sentinelProbeNative(JNIEnv *env, jclass cls) {
+    (void)env; (void)cls;
+    jint bits = 0;
+    if (g_device == nil || g_queue == nil) {
+        rp("[sentinel] FATAL: device/queue not initialized");
+        return 0;
+    }
+    if (g_pipeline == nil) {
+        rp("[sentinel] FATAL: ray pipeline not loaded — cannot trace");
+        return 0;
+    }
+
+    // -- sentinel triangle BLAS --
+    static const float kVerts[3][3] = {
+        {0.0f, 0.0f, 0.0f}, {1024.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1024.0f},
+    };
+    static const uint32_t kIdx[3] = {0, 1, 2};
+    id<MTLBuffer> vb = [g_device newBufferWithBytes:kVerts length:sizeof(kVerts)
+                                            options:MTLResourceStorageModeShared];
+    id<MTLBuffer> ib = [g_device newBufferWithBytes:kIdx length:sizeof(kIdx)
+                                            options:MTLResourceStorageModeShared];
+    if (vb == nil || ib == nil) {
+        rp("[sentinel] FATAL: buffer allocation failed");
+        return 0;
+    }
+    MTLAccelerationStructureTriangleGeometryDescriptor *geo =
+        [MTLAccelerationStructureTriangleGeometryDescriptor descriptor];
+    geo.vertexBuffer = vb;
+    geo.vertexBufferOffset = 0;
+    geo.vertexStride = sizeof(simd_float3);
+    geo.vertexFormat = MTLAttributeFormatFloat3;
+    geo.indexBuffer = ib;
+    geo.indexBufferOffset = 0;
+    geo.indexType = MTLIndexTypeUInt32;
+    geo.triangleCount = 1;
+
+    MTLPrimitiveAccelerationStructureDescriptor *blasDesc =
+        [MTLPrimitiveAccelerationStructureDescriptor descriptor];
+    blasDesc.geometryDescriptors = @[ geo ];
+
+    MTLAccelerationStructureSizes bSizes =
+        [g_device accelerationStructureSizesWithDescriptor:blasDesc];
+    id<MTLAccelerationStructure> blas =
+        [g_device newAccelerationStructureWithSize:bSizes.accelerationStructureSize];
+    id<MTLBuffer> bScratch =
+        [g_device newBufferWithLength:bSizes.buildScratchBufferSize
+                              options:MTLResourceStorageModeShared];
+    if (blas == nil || bScratch == nil) {
+        rp("[sentinel] FATAL: BLAS allocation failed");
+        return 0;
+    }
+    {
+        id<MTLCommandBuffer> cmd = [g_queue commandBuffer];
+        id<MTLAccelerationStructureCommandEncoder> enc =
+            [cmd accelerationStructureCommandEncoder];
+        [enc buildAccelerationStructure:blas descriptor:blasDesc
+                            scratchBuffer:bScratch scratchBufferOffset:0];
+        [enc endEncoding];
+        [cmd commit];
+        [cmd waitUntilCompleted];
+        if (cmd.error != nil) {
+            rp("[sentinel] FATAL: BLAS build failed: %s",
+               cmd.error.localizedDescription.UTF8String);
+            return 0;
+        }
+    }
+
+    // -- two-instance TLAS: identity + translate(K) --
+    MTLAccelerationStructureInstanceDescriptor inst[2];
+    memset(inst, 0, sizeof(inst));
+    encode_instance_matrix(&inst[0].transformationMatrix, 0, 0, 0);
+    encode_instance_matrix(&inst[1].transformationMatrix, 4096, 0, 4096);
+    for (int i = 0; i < 2; i++) {
+        inst[i].options = MTLAccelerationStructureInstanceOptionNone;
+        inst[i].mask = 0xFFFFFFFFu;
+        inst[i].intersectionFunctionTableOffset = 0;
+        inst[i].accelerationStructureIndex = 0; // both point at the sentinel BLAS
+    }
+    id<MTLBuffer> instBuf = [g_device newBufferWithBytes:inst length:sizeof(inst)
+                                                 options:MTLResourceStorageModeShared];
+    if (instBuf == nil) {
+        rp("[sentinel] FATAL: instance buffer allocation failed");
+        return 0;
+    }
+    MTLInstanceAccelerationStructureDescriptor *tlasDesc =
+        [MTLInstanceAccelerationStructureDescriptor descriptor];
+    tlasDesc.instanceCount = 2;
+    tlasDesc.instanceDescriptorBuffer = instBuf;
+    tlasDesc.instanceDescriptorBufferOffset = 0;
+    tlasDesc.instanceDescriptorStride = sizeof(MTLAccelerationStructureInstanceDescriptor);
+    tlasDesc.instancedAccelerationStructures = @[ blas ];
+
+    MTLAccelerationStructureSizes tSizes =
+        [g_device accelerationStructureSizesWithDescriptor:tlasDesc];
+    id<MTLAccelerationStructure> tlas =
+        [g_device newAccelerationStructureWithSize:tSizes.accelerationStructureSize];
+    id<MTLBuffer> tScratch =
+        [g_device newBufferWithLength:tSizes.buildScratchBufferSize
+                              options:MTLResourceStorageModeShared];
+    if (tlas == nil || tScratch == nil) {
+        rp("[sentinel] FATAL: TLAS allocation failed");
+        return 0;
+    }
+    {
+        id<MTLCommandBuffer> cmd = [g_queue commandBuffer];
+        id<MTLAccelerationStructureCommandEncoder> enc =
+            [cmd accelerationStructureCommandEncoder];
+        [enc buildAccelerationStructure:tlas descriptor:tlasDesc
+                            scratchBuffer:tScratch scratchBufferOffset:0];
+        [enc endEncoding];
+        [cmd commit];
+        [cmd waitUntilCompleted];
+        if (cmd.error != nil) {
+            rp("[sentinel] FATAL: TLAS build failed: %s",
+               cmd.error.localizedDescription.UTF8String);
+            return 0;
+        }
+    }
+
+    // -- three rays --
+    uint32_t hit = 0; float dist = -1.0f; uint32_t instIdx = 0xFFFFFFFFu;
+
+    BOOL ok0 = trace_ray(tlas, simd_make_float3(256, 64, 256),
+                          simd_make_float3(0, -1, 0), 512, &hit, &dist, &instIdx);
+    BOOL idOk = ok0 && hit == 1 && fabsf(dist - 64.0f) < 1.0f && instIdx == 0;
+    rp("[sentinel] identity instance: ray (256,64,256)-Y -> %s "
+       "(dist=%.2f instance=%u, expect HIT dist~64 instance=0)",
+       (ok0 && hit == 1) ? "HIT" : "MISS",
+       ok0 ? dist : -1.0f, ok0 ? instIdx : 0xFFFFFFFFu);
+    if (idOk) { bits |= 1; }
+
+    uint32_t hit1 = 0; float dist1 = -1.0f; uint32_t instIdx1 = 0xFFFFFFFFu;
+    BOOL ok1 = trace_ray(tlas, simd_make_float3(4352, 64, 4352),
+                          simd_make_float3(0, -1, 0), 512, &hit1, &dist1, &instIdx1);
+    BOOL trOk = ok1 && hit1 == 1 && fabsf(dist1 - 64.0f) < 1.0f && instIdx1 == 1;
+    rp("[sentinel] translated instance K=(4096,0,4096): ray (4352,64,4352)-Y -> %s "
+       "(dist=%.2f instance=%u, expect HIT dist~64 instance=1)",
+       (ok1 && hit1 == 1) ? "HIT" : "MISS",
+       ok1 ? dist1 : -1.0f, ok1 ? instIdx1 : 0xFFFFFFFFu);
+    if (trOk) { bits |= 2; }
+
+    uint32_t hitC = 1; float distC = -1.0f; uint32_t instIdxC = 0xFFFFFFFFu;
+    BOOL okC = trace_ray(tlas, simd_make_float3(256, 64, 256),
+                          simd_make_float3(0, 1, 0), 512, &hitC, &distC, &instIdxC);
+    BOOL ctrlOk = okC && hitC == 0;
+    rp("[sentinel] negative control: ray (256,64,256)+Y -> %s (expect MISS)",
+       (okC && hitC == 1) ? "HIT" : "MISS");
+    if (ctrlOk) { bits |= 4; }
+
+    rp("[sentinel] verdict: identity=%s translated=%s control=%s",
+       (bits & 1) ? "OK" : "FAIL", (bits & 2) ? "OK" : "FAIL",
+       (bits & 4) ? "OK" : "FAIL");
+    return bits;
+}
+
+// S6.0/S6.2 raw-AABB audit: measures the vertex space of the extracted
+// geometry. For each ready slot with a valid raw AABB, computes
+// e = rawCenter - 8 (per axis):
+//   world-absolute vertices: e_i ~= origin_i        (varies per slot)
+//   chunk-local(+R):         e_i ~= R (constant)    (R=0 = section-local)
+// Far slots (|origin| >= 64 on any axis) carry the discriminating votes.
+// rp()s the evidence lines, stores the measured R for MEASURED mode, and
+// returns {Rx, Ry, Rz, farCount, absVotes, fam2Votes, garbage, readyCount}
+// (floats; counts as truncated floats).
+JNIEXPORT jfloatArray JNICALL
+Java_net_prisma_sceneingest_Native_sceneInfoNative(
+        JNIEnv *env, jclass cls, jfloat camX, jfloat camY, jfloat camZ) {
+    (void)cls;
+    jfloat out[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+    jfloatArray result = (*env)->NewFloatArray(env, 8);
+
+    uint32_t readyCount = 0, rawValid = 0, garbage = 0;
+    if (g_slots != nil) {
+        for (SceneSlot *s in g_slots) {
+            if (!s.ready) { continue; }
+            readyCount++;
+            if (!s.rawValid) { garbage++; continue; }
+            float spanX = s.rawMaxX - s.rawMinX;
+            float spanY = s.rawMaxY - s.rawMinY;
+            float spanZ = s.rawMaxZ - s.rawMinZ;
+            if (spanX > 512 || spanY > 512 || spanZ > 512
+                    || fabsf(s.rawMinX) > 1e7f || fabsf(s.rawMinY) > 1e7f
+                    || fabsf(s.rawMinZ) > 1e7f) {
+                garbage++;
+                continue;
+            }
+            rawValid++;
+        }
+    }
+
+    // Collect far slots for the vote; also remember the camera's own slot.
+    NSUInteger farCount = 0;
+    NSMutableArray<SceneSlot *> *far = [NSMutableArray array];
+    SceneSlot *camSlot = nil;
+    if (g_slots != nil) {
+        for (SceneSlot *s in g_slots) {
+            if (!s.ready || !s.rawValid) { continue; }
+            if (camSlot == nil
+                    && camX >= (float)s.ox && camX < (float)s.ox + 16.0f
+                    && camY >= (float)s.oy && camY < (float)s.oy + 16.0f
+                    && camZ >= (float)s.oz && camZ < (float)s.oz + 16.0f) {
+                camSlot = s;
+            }
+            if (abs(s.ox) >= 64 || abs(s.oy) >= 64 || abs(s.oz) >= 64) {
+                [far addObject:s];
+            }
+        }
+        farCount = far.count;
+    }
+
+    // e_i per far slot (per axis) + median R + spread.
+    float Rx = 0, Ry = 0, Rz = 0;
+    uint32_t absVotes = 0, fam2Votes = 0;
+    if (farCount >= 4) {
+        NSUInteger n = farCount;
+        float *ex = (float *)malloc(n * sizeof(float));
+        float *ey = (float *)malloc(n * sizeof(float));
+        float *ez = (float *)malloc(n * sizeof(float));
+        if (ex != NULL && ey != NULL && ez != NULL) {
+            for (NSUInteger i = 0; i < n; i++) {
+                SceneSlot *s = far[i];
+                ex[i] = (s.rawMinX + s.rawMaxX) * 0.5f - 8.0f;
+                ey[i] = (s.rawMinY + s.rawMaxY) * 0.5f - 8.0f;
+                ez[i] = (s.rawMinZ + s.rawMaxZ) * 0.5f - 8.0f;
+            }
+            qsort(ex, n, sizeof(float), cmpf);
+            qsort(ey, n, sizeof(float), cmpf);
+            qsort(ez, n, sizeof(float), cmpf);
+            Rx = ex[n / 2]; Ry = ey[n / 2]; Rz = ez[n / 2];
+            float spread[3] = {
+                ex[n - 1] - ex[0], ey[n - 1] - ey[0], ez[n - 1] - ez[0],
+            };
+            rp("[aabb] far slots=%u, e=rawCenter-8: median=(%.1f, %.1f, %.1f) "
+               "spread=(%.1f, %.1f, %.1f)",
+               (unsigned)farCount, Rx, Ry, Rz, spread[0], spread[1], spread[2]);
+            for (NSUInteger i = 0; i < n; i++) {
+                SceneSlot *s = far[i];
+                float dx = ex[i] - (float)s.ox;
+                float dy = ey[i] - (float)s.oy;
+                float dz = ez[i] - (float)s.oz;
+                float ddx = ex[i] - Rx, ddy = ey[i] - Ry, ddz = ez[i] - Rz;
+                // chunk-local vertices move their e with the slot's origin;
+                // world-absolute keep e at the origin value itself.
+                BOOL constish = spread[0] <= 24 && spread[1] <= 24 && spread[2] <= 24;
+                if (fabsf(dx) <= 16 && fabsf(dy) <= 16 && fabsf(dz) <= 16) {
+                    absVotes++;
+                } else if (constish && fabsf(ddx) <= 16 && fabsf(ddy) <= 16
+                           && fabsf(ddz) <= 16) {
+                    fam2Votes++;
+                }
+            }
+            free(ex); free(ey); free(ez);
+        } else {
+            free(ex); free(ey); free(ez);
+        }
+    }
+
+    // Store the measured offset for MEASURED mode (fall back to all ready
+    // slots when far evidence is thin; R=0 when there is nothing at all).
+    if (farCount < 4 && g_slots != nil) {
+        NSMutableArray<SceneSlot *> *all = [NSMutableArray array];
+        for (SceneSlot *s in g_slots) {
+            if (s.ready && s.rawValid) { [all addObject:s]; }
+        }
+        if (all.count >= 4) {
+            NSUInteger n = all.count;
+            float *ex = (float *)malloc(n * sizeof(float));
+            float *ey = (float *)malloc(n * sizeof(float));
+            float *ez = (float *)malloc(n * sizeof(float));
+            if (ex != NULL && ey != NULL && ez != NULL) {
+                for (NSUInteger i = 0; i < n; i++) {
+                    SceneSlot *s = all[i];
+                    ex[i] = (s.rawMinX + s.rawMaxX) * 0.5f - 8.0f;
+                    ey[i] = (s.rawMinY + s.rawMaxY) * 0.5f - 8.0f;
+                    ez[i] = (s.rawMinZ + s.rawMaxZ) * 0.5f - 8.0f;
+                }
+                qsort(ex, n, sizeof(float), cmpf);
+                qsort(ey, n, sizeof(float), cmpf);
+                qsort(ez, n, sizeof(float), cmpf);
+                Rx = ex[n / 2]; Ry = ey[n / 2]; Rz = ez[n / 2];
+                free(ex); free(ey); free(ez);
+                rp("[aabb] far-slot evidence thin — R estimated from all %u "
+                   "ready slots (low confidence)", (unsigned)n);
+            } else {
+                free(ex); free(ey); free(ez);
+            }
+        }
+    }
+    g_offsetR[0] = Rx; g_offsetR[1] = Ry; g_offsetR[2] = Rz;
+
+    // Grid AABB + global raw AABB + representative per-slot lines.
+    if (g_slots != nil) {
+        int32_t gmin[3] = {INT32_MAX, INT32_MAX, INT32_MAX};
+        int32_t gmax[3] = {INT32_MIN, INT32_MIN, INT32_MIN};
+        float wmin[3] = {FLT_MAX, FLT_MAX, FLT_MAX};
+        float wmax[3] = {-FLT_MAX, -FLT_MAX, -FLT_MAX};
+        NSUInteger printed = 0;
+        for (SceneSlot *s in g_slots) {
+            if (!s.ready) { continue; }
+            if (s.ox < gmin[0]) { gmin[0] = s.ox; }
+            if (s.oy < gmin[1]) { gmin[1] = s.oy; }
+            if (s.oz < gmin[2]) { gmin[2] = s.oz; }
+            if (s.ox + 16 > gmax[0]) { gmax[0] = s.ox + 16; }
+            if (s.oy + 16 > gmax[1]) { gmax[1] = s.oy + 16; }
+            if (s.oz + 16 > gmax[2]) { gmax[2] = s.oz + 16; }
+            if (s.rawValid) {
+                if (s.rawMinX < wmin[0]) { wmin[0] = s.rawMinX; }
+                if (s.rawMinY < wmin[1]) { wmin[1] = s.rawMinY; }
+                if (s.rawMinZ < wmin[2]) { wmin[2] = s.rawMinZ; }
+                if (s.rawMaxX > wmax[0]) { wmax[0] = s.rawMaxX; }
+                if (s.rawMaxY > wmax[1]) { wmax[1] = s.rawMaxY; }
+                if (s.rawMaxZ > wmax[2]) { wmax[2] = s.rawMaxZ; }
+            }
+            if (printed < 5 || s == camSlot) {
+                rp("[aabb] slot origin=(%d,%d,%d) raw=[%.1f..%.1f, %.1f..%.1f, "
+                   "%.1f..%.1f]%s",
+                   s.ox, s.oy, s.oz, s.rawMinX, s.rawMaxX, s.rawMinY, s.rawMaxY,
+                   s.rawMinZ, s.rawMaxZ,
+                   s == camSlot ? "  <- camera section" : "");
+                printed++;
+            }
+        }
+        if (readyCount > 0) {
+            rp("[aabb] grid span (origin+16): x[%d..%d] y[%d..%d] z[%d..%d]",
+               gmin[0], gmax[0], gmin[1], gmax[1], gmin[2], gmax[2]);
+            rp("[aabb] global raw AABB: [%.1f..%.1f, %.1f..%.1f, %.1f..%.1f] "
+               "(ready=%u rawValid=%u garbage=%u)",
+               wmin[0], wmax[0], wmin[1], wmax[1], wmin[2], wmax[2],
+               (unsigned)readyCount, (unsigned)rawValid, (unsigned)garbage);
+        }
+    }
+
+    if (farCount >= 4) {
+        if (absVotes > fam2Votes * 3) {
+            rp("[aabb] verdict: extracted vertices look WORLD-ABSOLUTE "
+               "(e follows origin; ABS votes=%u, local-family=%u)",
+               (unsigned)absVotes, (unsigned)fam2Votes);
+        } else if (fam2Votes > absVotes * 3) {
+            rp("[aabb] verdict: extracted vertices look CHUNK-LOCAL "
+               "(constant e; local-family votes=%u, ABS=%u; R=(%.1f, %.1f, %.1f))",
+               (unsigned)fam2Votes, (unsigned)absVotes, Rx, Ry, Rz);
+        } else {
+            rp("[aabb] verdict: INCONCLUSIVE (ABS votes=%u, local-family=%u) "
+               "— tournament will decide empirically",
+               (unsigned)absVotes, (unsigned)fam2Votes);
+        }
+    } else {
+        rp("[aabb] verdict: insufficient far-slot evidence (far=%u) "
+           "— tournament will decide empirically", (unsigned)farCount);
+    }
+
+    out[0] = Rx; out[1] = Ry; out[2] = Rz;
+    out[3] = (jfloat)farCount;
+    out[4] = (jfloat)absVotes;
+    out[5] = (jfloat)fam2Votes;
+    out[6] = (jfloat)garbage;
+    out[7] = (jfloat)readyCount;
+    if (result != NULL) { (*env)->SetFloatArrayRegion(env, result, 0, 8, out); }
+    return result;
+}
+
+// S6.3: placement mode switch (0 = ABS t=origin, 1 = MEASURED t=2*origin-R).
+// Marks the TLAS dirty so the next frameTickNative rebuilds with the new
+// encoding.
+JNIEXPORT void JNICALL
+Java_net_prisma_sceneingest_Native_setPlacementModeNative(JNIEnv *env, jclass cls, jint mode) {
+    (void)env; (void)cls;
+    if (mode != 0 && mode != 1) { return; }
+    if (g_placementMode == mode) { return; }
+    g_placementMode = (int)mode;
+    g_tlasDirty = YES;
+    rp("[scene] placement mode -> %s",
+       mode == 0 ? "ABS (t=origin)" : "MEASURED (t=2*origin-R)");
+}
+
+// S6.4: origin of the slot behind a TLAS instance index (hit attribution).
+JNIEXPORT jintArray JNICALL
+Java_net_prisma_sceneingest_Native_instanceOriginNative(JNIEnv *env, jclass cls, jint instanceIndex) {
+    (void)cls;
+    jint out[3] = {0, 0, 0};
+    jintArray result = (*env)->NewIntArray(env, 3);
+    if (g_instOrigins != NULL && instanceIndex >= 0
+            && (uint32_t)instanceIndex < g_instOriginCount) {
+        out[0] = g_instOrigins[instanceIndex][0];
+        out[1] = g_instOrigins[instanceIndex][1];
+        out[2] = g_instOrigins[instanceIndex][2];
+    }
+    if (result != NULL) { (*env)->SetIntArrayRegion(env, result, 0, 3, out); }
     return result;
 }
 
@@ -651,6 +1169,13 @@ Java_net_prisma_sceneingest_Native_shutdownNative(JNIEnv *env, jclass cls) {
     g_pipeline = nil;
     g_library = nil;
     g_tlasDirty = NO;
+    if (g_instOrigins != NULL) {
+        free(g_instOrigins);
+        g_instOrigins = NULL;
+        g_instOriginCount = 0;
+    }
+    g_placementMode = 0;
+    g_offsetR[0] = 0; g_offsetR[1] = 0; g_offsetR[2] = 0;
     if (g_retired != nil) {
         [g_retired removeAllObjects];
         g_stats[8] = 0;

@@ -64,6 +64,36 @@ final class Native {
     static native float[] castRayNative(float ox, float oy, float oz,
             float dx, float dy, float dz, float maxDist);
 
+    // ---- v0.4 诊断矩阵（docs/chapter2-scene-ingestion-field/ 的 v0.3 判读）----
+
+    /**
+     * S6.1 哨兵求交：隔离的单三角 BLAS + 双实例 TLAS（单位变换 + 平移变换），
+     * 三条 ray（两阳一阴）。零 MC 数据参与 —— 单独验证实例机制与矩阵平移编码。
+     * 返回位码：b0 单位实例命中 / b1 平移实例命中 / b2 阴性对照正确 miss。
+     */
+    static native int sentinelProbeNative();
+
+    /**
+     * S6.0/S6.2 场景信息与 raw-AABB 审计：逐槽回显提取顶点的原始包围盒，
+     * 测定顶点空间（世界绝对 vs 区块局部+常数偏移 R），并缓存 R 供
+     * MEASURED 模式使用。返回 [Rx, Ry, Rz, farCount, absVotes,
+     * fam2Votes, garbage, readyCount]。
+     */
+    static native float[] sceneInfoNative(float camX, float camY, float camZ);
+
+    /**
+     * S6.3 布局模式切换：0 = ABS（t=origin，顶点世界绝对假设）；
+     * 1 = MEASURED（t=2*origin-R，顶点区块局部假设，R 来自 AABB 审计）。
+     * 切换后 TLAS 置脏，下一次 frameTickNative 以新编码重建。
+     */
+    static native void setPlacementModeNative(int mode);
+
+    /**
+     * S6.4 命中归因：TLAS 实例索引 → 对应槽位的 section origin。
+     * 返回 [ox, oy, oz]（越界返回 0,0,0）。
+     */
+    static native int[] instanceOriginNative(int instanceIndex);
+
     /** 全资源释放（退役列表延迟释放后 shutdown）。 */
     static native void shutdownNative();
 }

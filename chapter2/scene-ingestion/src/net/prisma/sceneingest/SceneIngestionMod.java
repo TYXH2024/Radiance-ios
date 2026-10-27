@@ -39,7 +39,7 @@ public final class SceneIngestionMod {
             return;
         }
         ProbeReport r = new ProbeReport("scene_ingestion_report.txt");
-        r.header("场景摄取探针 (scene-ingestion 0.3.0)");
+        r.header("场景摄取探针 (scene-ingestion 0.4.0)");
         r.info("触发方式: " + triggerSource);
 
         if (isDisabled()) {
@@ -140,7 +140,7 @@ public final class SceneIngestionMod {
                 totalTris, totalVerts, vertexBytes / 1024.0, indexBytes / 1024.0,
                 tlasBytes / 1024.0));
 
-        r.stage("S6 场景求交验证（相机位置 6 向 ray，maxDist 512）");
+        r.stage("S6 场景求交验证（v0.4 诊断矩阵：回显/哨兵/AABB 审计/双假设锦标赛/选优终验）");
         float[] cam = null;
         try {
             cam = cameraPos();
@@ -156,27 +156,108 @@ public final class SceneIngestionMod {
                         cam[0], cam[1], cam[2]));
             }
         }
-        int hits = 0;
+
         boolean cameraOk = cam != null;
-        if (cameraOk && tlasBuilds > 0) {
+        boolean sentinelOk = false;
+        boolean extractionGarbage = false;
+        int aabbAbs = 0;
+        int aabbFam2 = 0;
+        int hitsAbs = -1;
+        int hitsMeasured = -1;
+        int winner = -1;
+        int hits = 0;
+
+        if (cameraOk && tlasBuilds > 0 && readyBlas > 0) {
             r.pass(String.format("相机位置: (%.2f, %.2f, %.2f)", cam[0], cam[1], cam[2]));
-            float[][] dirs = {
-                {1, 0, 0}, {-1, 0, 0}, {0, 1, 0}, {0, -1, 0}, {0, 0, 1}, {0, 0, -1},
-            };
-            String[] names = {"+X", "-X", "+Y(上)", "-Y(下)", "+Z", "-Z"};
-            for (int i = 0; i < dirs.length; i++) {
-                try {
-                    float[] res = Native.castRayNative(
-                            cam[0], cam[1], cam[2], dirs[i][0], dirs[i][1], dirs[i][2], 512f);
-                    if (res != null && res[0] > 0.5f) {
-                        hits++;
-                        r.pass(String.format("ray %s: HIT distance=%.2f (instance=%d)",
-                                names[i], res[1], (int) res[2]));
+
+            // ---- S6.0/S6.2 场景信息与 raw-AABB 审计 ----
+            // 测定提取顶点的空间（世界绝对 vs 区块局部+R）；native 侧已逐槽
+            // rp() 回显证据行（[aabb] 前缀）并缓存实测 R。
+            try {
+                float[] info = Native.sceneInfoNative(cam[0], cam[1], cam[2]);
+                if (info != null && info.length >= 8) {
+                    aabbAbs = (int) info[4];
+                    aabbFam2 = (int) info[5];
+                    int garbage = (int) info[6];
+                    extractionGarbage = garbage > 0;
+                    r.info(String.format(
+                            "AABB 审计汇总: ABS票=%d 局部族票=%d 垃圾槽位=%d "
+                                    + "实测 R=(%.1f, %.1f, %.1f)",
+                            aabbAbs, aabbFam2, garbage, info[0], info[1], info[2]));
+                    if (garbage == 0) {
+                        r.pass("顶点提取数据健康（无 NaN/巨跨度/越界坐标）");
                     } else {
-                        r.info("ray " + names[i] + ": miss（512 格内无几何）");
+                        r.fail(garbage + " 个槽位的提取顶点呈异常值 —— 顶点格式/stride 嫌疑");
                     }
+                }
+            } catch (Throwable t) {
+                r.fail("sceneInfoNative 异常: " + t);
+            }
+
+            // ---- S6.1 哨兵求交（隔离 TLAS：单位实例 + 平移实例 + 阴性对照）----
+            // v0.3 的矩阵“修复”方向反了（正确布局平移在 flat[9..11]，
+            // Apple 文档 MTLPackedFloat4x3 = 4x4 前三行列主序）；哨兵以零 MC
+            // 数据单独验证 v0.4 修复后的矩阵平移编码。
+            try {
+                int bits = Native.sentinelProbeNative();
+                sentinelOk = (bits & 7) == 7;
+                if (sentinelOk) {
+                    r.pass("哨兵求交 PASS：TLAS 实例机制 + v0.4 矩阵平移编码真机验证成立");
+                } else {
+                    r.fail("哨兵求交 FAIL（位码=" + bits + "，b0=单位实例 b1=平移实例 "
+                            + "b2=阴性对照）—— 实例机制或矩阵编码仍异常，与场景数据无关");
+                }
+            } catch (Throwable t) {
+                r.fail("sentinelProbeNative 异常: " + t);
+            }
+
+            // ---- S6.3 双假设锦标赛（6 向 ray × 2 种实例布局模式）----
+            // 模式 ABS：t=origin（顶点为世界绝对坐标的假设，v0.1–v0.3 设计假设）
+            // 模式 MEASURED：t=2*origin-R（顶点为区块局部+常数偏移 R 的假设，
+            // MC 1.18+ 渲染侧 translate(sectionOrigin−camera) 的已知行为）。
+            try {
+                Native.setPlacementModeNative(0);
+                Native.frameTickNative();
+                hitsAbs = castBattery(r, cam, AXIS_DIRS, AXIS_NAMES, "ABS", false);
+                r.info(String.format("锦标赛 ABS（t=origin，世界绝对假设）: %d/6 命中", hitsAbs));
+            } catch (Throwable t) {
+                r.fail("锦标赛 ABS 异常: " + t);
+            }
+            try {
+                Native.setPlacementModeNative(1);
+                Native.frameTickNative();
+                hitsMeasured = castBattery(r, cam, AXIS_DIRS, AXIS_NAMES, "MEASURED", false);
+                r.info(String.format("锦标赛 MEASURED（t=2·origin−R，区块局部假设）: %d/6 命中",
+                        hitsMeasured));
+            } catch (Throwable t) {
+                r.fail("锦标赛 MEASURED 异常: " + t);
+            }
+
+            // 选优：命中多者胜；平局（含双 0）按 AABB 审计倾向。
+            if (hitsAbs >= 0 || hitsMeasured >= 0) {
+                if (hitsAbs > hitsMeasured) {
+                    winner = 0;
+                } else if (hitsMeasured > hitsAbs) {
+                    winner = 1;
+                } else {
+                    winner = (aabbAbs >= aabbFam2) ? 0 : 1;
+                }
+                r.pass(String.format(
+                        "选优: winner=%s（锦标赛 ABS %d : MEASURED %d；AABB 审计 ABS %d : 局部 %d）",
+                        winner == 0 ? "ABS" : "MEASURED", hitsAbs, hitsMeasured,
+                        aabbAbs, aabbFam2));
+            }
+
+            // ---- S6.4 选优终验（14 ray 全向电池 + 命中区块归因）----
+            if (winner >= 0) {
+                try {
+                    Native.setPlacementModeNative(winner);
+                    Native.frameTickNative();
+                    hits = castBattery(r, cam, FULL_DIRS, FULL_NAMES, "", true);
+                    r.info(String.format("终验电池: %d/%d 命中（6 轴向 + 8 对角，maxDist 512）",
+                            hits, FULL_DIRS.length));
                 } catch (Throwable t) {
-                    r.fail("castRay " + names[i] + " 异常: " + t);
+                    r.fail("终验电池异常: " + t);
                 }
             }
         } else if (!cameraOk) {
@@ -194,21 +275,35 @@ public final class SceneIngestionMod {
                     + "ready BLAS=" + readyBlas + "，三角形=" + totalTris
                     + "。本次未发射任何 ray（与 NATIVE_MISMATCH 的全 miss 不同）。"
                     + "请回报。";
-        } else if (readyBlas >= 1 && totalTris > 0 && hits >= 1) {
-            verdict = "SCENE_INGEST_OK";
-            message = "真实世界几何已进入 Metal 加速结构且可求交：ready BLAS=" + readyBlas
-                    + "，三角形=" + totalTris + "，命中 ray " + hits + "/6。"
-                    + "2.1 场景摄取成立 —— 2.2 路径追踪引擎绿灯。";
-        } else if (readyBlas >= 1 && totalTris > 0) {
-            verdict = "NATIVE_MISMATCH";
-            message = "BLAS 就绪且三角形非零，但 6 向 ray 全 miss。v0.3 已修复"
-                    + " TLAS 实例矩阵布局（simd_float3x4 列主序，平移在 flat[3]/[7]/[11]）"
-                    + "——若此判定复现，需回报排查（相机悬空/虚空世界亦可能）。"
-                    + "ready BLAS=" + readyBlas + "，三角形=" + totalTris + "。";
-        } else {
+        } else if (readyBlas < 1 || totalTris <= 0) {
             verdict = "SCENE_EMPTY";
             message = "摄取窗口内无就绪 BLAS（未进入世界，或区块 mesh 始终为空）。"
                     + "请进入存档后重试并等待 30 秒。";
+        } else if (hits >= 1) {
+            verdict = "SCENE_INGEST_OK";
+            message = "真实世界几何已进入 Metal 加速结构且世界空间求交成立：ready BLAS="
+                    + readyBlas + "，三角形=" + totalTris + "，终验命中 " + hits + "/"
+                    + FULL_DIRS.length + "，胜出布局=" + (winner == 0
+                            ? "ABS（t=origin，顶点为世界绝对坐标）"
+                            : "MEASURED（t=2·origin−R，顶点为区块局部坐标，R 见 [aabb] 行）")
+                    + (sentinelOk ? "；哨兵求交 PASS。" : "；⚠哨兵未过但真实求交命中——异常状态，请回报。")
+                    + (extractionGarbage ? "；注意：存在异常 AABB 槽位（详见 [aabb] 行）。" : "")
+                    + "2.1 场景摄取成立 —— 2.2 路径追踪引擎绿灯。";
+        } else if (!sentinelOk) {
+            verdict = "SENTINEL_FAIL";
+            message = "哨兵求交失败（隔离 TLAS 的单位/平移实例验证未通过）——"
+                    + "实例机制或矩阵编码问题，与场景数据无关。"
+                    + "请附整份报告回报（[sentinel] 行）。";
+        } else if (extractionGarbage) {
+            verdict = "EXTRACTION_GARBAGE";
+            message = "顶点提取存在异常数据（NaN/巨跨度/越界坐标）且双假设锦标赛均未命中 ——"
+                    + "顶点格式偏移/stride 嫌疑（详见 [aabb] 行）。请附整份报告回报。";
+        } else {
+            verdict = "NATIVE_MISMATCH";
+            message = "哨兵通过 + AABB 健康 + 双假设锦标赛均 0 命中（ABS " + hitsAbs
+                    + " : MEASURED " + hitsMeasured + "）——顶点空间既非世界绝对也非"
+                    + "区块局部(±R)，或存在更深的实例摆放问题。请附整份报告回报"
+                    + "（[aabb]/[sentinel]/锦标赛行均已在场）。";
         }
         r.finish(verdict, message);
 
@@ -217,6 +312,56 @@ public final class SceneIngestionMod {
             Native.shutdownNative();
         } catch (Throwable ignored) {
         }
+    }
+
+    // ---- v0.4 诊断矩阵的 ray 电池 ----
+    private static final float[][] AXIS_DIRS = {
+        {1, 0, 0}, {-1, 0, 0}, {0, 1, 0}, {0, -1, 0}, {0, 0, 1}, {0, 0, -1},
+    };
+    private static final String[] AXIS_NAMES = {"+X", "-X", "+Y(上)", "-Y(下)", "+Z", "-Z"};
+    private static final float[][] FULL_DIRS = {
+        {1, 0, 0}, {-1, 0, 0}, {0, 1, 0}, {0, -1, 0}, {0, 0, 1}, {0, 0, -1},
+        {1, 1, 1}, {1, 1, -1}, {1, -1, 1}, {1, -1, -1},
+        {-1, 1, 1}, {-1, 1, -1}, {-1, -1, 1}, {-1, -1, -1},
+    };
+    private static final String[] FULL_NAMES = {
+        "+X", "-X", "+Y(上)", "-Y(下)", "+Z", "-Z",
+        "对角+++", "对角++-", "对角+-+", "对角+--",
+        "对角-++", "对角-+-", "对角--+", "对角---",
+    };
+
+    /**
+     * 发射一组 ray（native 侧归一化方向）；tag 非空时附加在每行尾部用于
+     * 锦标赛区分；attribute=true 时对命中微 instance 归因到 section origin。
+     */
+    private static int castBattery(ProbeReport r, float[] cam, float[][] dirs,
+            String[] names, String tag, boolean attribute) {
+        int hits = 0;
+        for (int i = 0; i < dirs.length; i++) {
+            String label = tag.isEmpty() ? names[i] : names[i] + " [" + tag + "]";
+            try {
+                float[] res = Native.castRayNative(cam[0], cam[1], cam[2],
+                        dirs[i][0], dirs[i][1], dirs[i][2], 512f);
+                if (res != null && res[0] > 0.5f) {
+                    hits++;
+                    String attr = "";
+                    if (attribute) {
+                        int[] org = Native.instanceOriginNative((int) res[2]);
+                        if (org != null) {
+                            attr = String.format(" → 命中区块 section=(%d,%d,%d)",
+                                    org[0], org[1], org[2]);
+                        }
+                    }
+                    r.pass(String.format("ray %s: HIT distance=%.2f (instance=%d)%s",
+                            label, res[1], (int) res[2], attr));
+                } else {
+                    r.info("ray " + label + ": miss（512 格内无几何）");
+                }
+            } catch (Throwable t) {
+                r.fail("castRay " + label + " 异常: " + t);
+            }
+        }
+        return hits;
     }
 
     private static float[] cameraPos() throws Exception {
