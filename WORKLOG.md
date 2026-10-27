@@ -257,3 +257,20 @@ Stage Summary:
 - 交付通道修复：绿勾 = 运行页 Artifacts 区可直接下载 pathtrace-jar（zip 含 jar/dylib/metallib）；jar 亦在 https://github.com/TYXH2024/Radiance-ios/releases/tag/pathtrace-v0.1
 - 事故链定谳：取消运行 → 草稿不可见 + 漏 artifact 步骤 → 运行页无成品；两者均已处置
 - 待办：①新运行过绿 + Artifacts 区确认 ②用户下载 pathtrace-0.1.0.jar 真机首跑 → 回收报告 + 首帧 PNG
+
+## 2026-10-28（十三）· pathtrace v0.1 真机回收判读：PLACEMENT_FAIL 双重根因追踪（静态比对穷尽=数学等价）→ v0.2 判别仪器版
+
+Task: 回收 v0.1 真机报告（六向全 miss + S7 被闸）→ 严谨归因 → v0.2
+
+Work Log:
+- 真机报告存证 docs/chapter2-pathtrace-field/M3-v0.1.0-report.txt + README 判读：S0-S5 全绿（66 符号/600 槽位/顶点格式取证 stride=32 colorOff=12）、哨兵 3/3 PASS、36 重建/69014 三角/TLAS×6，但 S6 六向全 miss（脚下地板=无）→ PLACEMENT_FAIL
+- 归因①（定案）：摄取覆盖塔缩 36/157——y 带直方图铁证（v0.5 覆盖 y=-64..112 全 12 层，v0.1 仅 y=48..112 顶 5 层）；机制=首轮 poll 在世界加载未完成时低 y 层槽位被试成空 → invalidate 置 generation → neverIngested 视为已试 → 永不再试（2.1 时序运气好）
+- 归因②（静态穷尽）：摆放全 miss 无法用代码差异解释——逐函数 diff（提取 Java+native/build_blas/encode_instance_matrix/trace_ray/scene_trace_kernel MSL 逐行/S6 电池/JNI 签名对位/结构体布局/build.sh 编译参数）全部等价；摆放代数恒等（local+t=origin ≡ local−origin+2·origin）；相机区块 verts=2344 与 2.1 一致且在最终 TLAS（36 实例对账零净失效）；哨兵同 encode 矩阵真机命中 → 按"零粉饰"纪律不盲改，装判别仪器
+- v0.2 实现：①SceneSlot 恢复 raw-AABB 记录（2.1 v0.5 仪器，fork 曾丢失）②新 native sceneAuditNative：raw 审计 + 相机区块顶点回读 + live 实例矩阵回读（flat[9..11]）+ 隔离单实例 TLAS 对照电池（ISO vs LIVE 并排同组 ray——ISO 命中+LIVE miss ⇒ live TLAS 组装缺陷；ISO 也 miss ⇒ BLAS 内容缺陷）③新 native renderIsolatedNative：隔离渲染诊断通道（相机区块单实例 TLAS + 同管线同 shading 池；成图=渲染链全链健康=第一帧光）④渲染核心重构 pt_render_core 共享（live/iso 同一代码路径）⑤SceneProxy 空试重试（每 4 poll 一次、上限 6 次——覆盖修复）⑥判定新增 ISO_RENDER_OK；S6.5 审计段；PLACEMENT_FAIL 消息指向 [audit] 行
+- ecj 冒烟 smoke_pathtrace_v02.sh：10 类零错误；JNI 符号自检 14 入口；ObjC 括号/结构平衡自检通过；g_tlas 空守卫补齐
+- 版本链 bump 0.2.0（build.sh/fabric.mod.json/报告头）；workflow → pathtrace-v0.2（+2 JNI 验证步骤）；README 判定表更新；field README 判读存档
+
+Stage Summary:
+- v0.2 = 仪器版：一次真机运行必出定谳证据（四台仪器互相交叉判别），同时携带覆盖修复
+- 隔离渲染通道若成图 → 渲染链全链健康 + 用户看到第一帧光（相机区块真实路径追踪画面）
+- 待办：CI 过绿 + Release pathtrace-v0.2 → 真机复跑 → 按 [audit] 行定谳 → v0.3 定点修复

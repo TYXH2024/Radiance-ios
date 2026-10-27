@@ -46,7 +46,7 @@ public final class PathtraceMod {
             return;
         }
         ProbeReport r = new ProbeReport("pathtrace_report.txt");
-        r.header("路径追踪探针 (pathtrace 0.1.0)");
+        r.header("路径追踪探针 (pathtrace 0.2.0)");
         r.info("触发方式: " + triggerSource);
 
         if (isDisabled()) {
@@ -249,11 +249,36 @@ public final class PathtraceMod {
         }
 
         // =================================================================
+        // S6.5 判别审计（v0.2 新增：PLACEMENT_FAIL 根因分离仪器）
+        // =================================================================
+        int[] audit = null;
+        if (cameraOk && tlasBuilds > 0 && readyBlas > 0) {
+            r.stage("S6.5 判别审计（raw AABB / 顶点回读 / 矩阵回读 / 隔离 TLAS 对照电池）");
+            try {
+                audit = Native.sceneAuditNative(pose[0], pose[1], pose[2]);
+                if (audit != null && audit.length >= 8) {
+                    String rawV = audit[0] == 1 ? "SECTION-LOCAL（2.1 契约成立）"
+                            : audit[0] == 2 ? "非 section-local（顶点空间异常）"
+                            : audit[0] == 3 ? "GARBAGE（提取字节坏）" : "无有效槽位";
+                    r.info(String.format(
+                            "审计汇总: raw=%s 相机槽位=%d live矩阵=%s "
+                                    + "ISO命中=%d/6(格线%d) LIVE命中=%d/6",
+                            rawV, audit[1],
+                            audit[2] == 1 ? "正确" : "异常（非 translate(origin)！）",
+                            audit[3], audit[4], audit[6]));
+                }
+            } catch (Throwable t) {
+                r.fail("sceneAuditNative 异常", t);
+            }
+        }
+
+        // =================================================================
         // S7 离屏路径追踪渲染
         // =================================================================
         r.stage("S7 离屏路径追踪渲染（相机 ray → TLAS → albedo → 太阳直射+阴影 → "
                 + "弹射 → 累积 → tonemap → PNG）");
         int[] image = null;
+        boolean isoRender = false;
         if (placementOk) {
             // 中心 ray 交叉验证：单 ray 仪器（scene_trace_kernel）与渲染 kernel
             // 使用同一 TLAS——中心像素内容应与此预测一致（证据行，不参与判定）。
@@ -286,8 +311,24 @@ public final class PathtraceMod {
             } catch (Throwable t) {
                 r.fail("renderPathtraceNative 异常", t);
             }
+        } else if (cameraOk && tlasBuilds > 0 && readyBlas > 0) {
+            // v0.2 诊断渲染通道：live 摆放未过——用隔离单实例 TLAS（相机区块
+            // BLAS + translate(origin)，同一管线/同一 shading 池）渲染同一帧。
+            // 成图 ⇒ 渲染链全链健康，缺陷精确定位到 multi-instance TLAS 组装。
+            r.info("摆放抽查未通过——启动隔离渲染诊断通道（相机区块单实例 TLAS，"
+                    + "同一 BLAS/管线/池；或即第一帧光，或坐实 BLAS 内容缺陷）");
+            try {
+                image = Native.renderIsolatedNative(pose[0], pose[1], pose[2],
+                        pose[3], pose[4], RENDER_W, RENDER_H, RENDER_SPP, RENDER_BOUNCES);
+                isoRender = image != null;
+                if (image == null) {
+                    r.fail("隔离渲染派发失败（native null；详见 [render-iso]/[render] 行）");
+                }
+            } catch (Throwable t) {
+                r.fail("renderIsolatedNative 异常", t);
+            }
         } else if (cameraOk) {
-            r.info("摆放抽查未通过/未执行——渲染跳过（先修摆放，再谈图像）");
+            r.info("场景空——渲染跳过");
         }
 
         // ---- PNG 落盘 + 图像统计自证 ----
@@ -298,7 +339,8 @@ public final class PathtraceMod {
                 PngWriter.write(pngPath, RENDER_W, RENDER_H, image);
                 r.pass("PNG 落盘: " + pngPath + " (" + Files.size(pngPath) + " B, "
                         + RENDER_W + "x" + RENDER_H + ", spp=" + RENDER_SPP
-                        + ", bounces=" + RENDER_BOUNCES + ")");
+                        + ", bounces=" + RENDER_BOUNCES + ")"
+                        + (isoRender ? "——隔离诊断帧（相机区块，非全场景）" : ""));
                 imageOk = analyzeImage(r, image, RENDER_W, RENDER_H);
             } catch (Throwable t) {
                 r.fail("PNG 写盘/统计异常", t);
@@ -321,11 +363,20 @@ public final class PathtraceMod {
             verdict = "SENTINEL_FAIL";
             message = "哨兵求交失败（位码=" + sentinelBits + "）——实例机制或矩阵编码回归，"
                     + "与 2.1 v0.5 真机结论冲突。请附整份报告回报（[sentinel] 行）。";
+        } else if (!placementOk && isoRender && imageOk) {
+            verdict = "ISO_RENDER_OK";
+            message = "渲染链全链健康（隔离单实例 TLAS 出图 + 图像统计自证）——"
+                    + "live 摆放未过但缺陷已精确隔离：结合 [audit] 行判读"
+                    + "（ISO命中=" + (audit != null ? audit[3] : -1) + "/6 vs LIVE命中="
+                    + (audit != null ? audit[6] : -1) + "/6）。若 ISO 命中而 LIVE 全"
+                    + " miss ⇒ multi-instance TLAS 组装缺陷（2.3 修复目标即此）；"
+                    + "若 ISO 也 miss ⇒ 相机 BLAS 内容缺陷（看 raw AABB 与顶点回读行）。"
+                    + "pathtrace_frame.png 为相机区块的真实路径追踪画面（隔离通道）。";
         } else if (!placementOk) {
             verdict = "PLACEMENT_FAIL";
-            message = "摆放抽查未达标（脚下地板缺失或整数格线不足 2）——2.2 简化契约"
-                    + "（免 recentring + t=origin）与已验证布局不等价的嫌疑。"
-                    + "请附整份报告回报（ray 行）。";
+            message = "摆放抽查未达标（脚下地板缺失或整数格线不足 2）。"
+                    + "v0.2 判别仪器已运行：看 [audit] 行（raw AABB 判定 / 顶点回读 / "
+                    + "矩阵回读 / ISO-LIVE 对照电池）定位根因后回报。";
         } else if (image == null) {
             verdict = "RENDER_FAIL";
             message = "摆放与哨兵均通过，但路径追踪派发失败（native null / 异常；"

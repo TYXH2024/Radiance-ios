@@ -1,7 +1,8 @@
 # pathtrace — 第二章 2.2 阶段交付物（Metal 直连 · 路径追踪引擎首帧）
 
 > 设计文档：`docs/chapter2-pathtrace-design.md`
-> 前置：2.1 `scene-ingestion` v0.5 真机判定 SCENE_INGEST_OK（哨兵 3/3、SECTION-LOCAL R=(0,0,0) 精确、命中面整数格线自证）——摄取契约已盖章。
+> 前置：2.1 `scene-ingestion` v0.5 真机判定 SCENE_INGEST_OK——摄取契约已盖章。
+> **v0.1 真机回收（2026-10-28 01:08）：判 PLACEMENT_FAIL**（六向全 miss、哨兵 3/3、相机区块已摄取且 verts=2344 与 2.1 一致）——离线逐函数比对确认 fork 与 2.1 数学等价，v0.2 按零粉饰纪律装判别仪器（不盲改）。现场记录：`docs/chapter2-pathtrace-field/`
 
 ## 取成品（两个通道，内容相同）
 
@@ -32,14 +33,27 @@
 | 判定 | 语义 |
 |---|---|
 | `PATHTRACE_OK` | 摄取健康 + 摆放等价 + 渲染成功 + 图像非退化（含统计自证） |
+| `ISO_RENDER_OK` | **v0.2 新增**：live 摆放未过但隔离渲染通道（相机区块单实例 TLAS）出图——渲染链全链健康，缺陷隔离到 multi-instance TLAS 组装；看 [audit] 行判读 ISO/LIVE 对照 |
 | `CAMERA_FAIL` | 相机姿态读取失败（S6 前置） |
 | `SCENE_EMPTY` | 摄取后无就绪 BLAS |
 | `SENTINEL_FAIL` | 哨兵求交失败（实例机制/矩阵编码异常，与场景数据无关） |
-| `PLACEMENT_FAIL` | 整数格线抽查失败（摆放系统偏移） |
+| `PLACEMENT_FAIL` | 整数格线抽查失败（v0.2 起 [audit] 行已判别根因方向） |
 | `RENDER_FAIL` | 离屏渲染派发/回读失败 |
 | `IMAGE_DEGENERATE` | 渲染成功但图像统计退化（全黑/全白/无方差） |
 
 归因开关：`-Dpathtrace.disabled=true` 或 `PATHTRACE_DISABLED=1` → 只写环境快照、零原生调用（闪退 A/B 对照用）。
+
+## v0.2 判别仪器（S6.5，PLACEMENT_FAIL 根因分离）
+
+| 仪器 | 判什么 |
+|---|---|
+| raw-AABB 审计 | 提取顶点是否仍为 section-local（v0.1 fork 丢了 2.1 的这台仪器） |
+| 相机区块顶点回读 | BLAS 里到底是什么字节（眼见为实） |
+| live 实例矩阵回读 | flat[9..11] 是否 = translate(origin) |
+| 隔离 TLAS 对照电池 | 同一 BLAS 同一 trace_ray，ISO vs LIVE 并排打同一组 ray：ISO 命中+LIVE miss ⇒ live TLAS 组装缺陷；ISO 也 miss ⇒ BLAS 内容缺陷 |
+| 隔离渲染通道 | live 未过时用相机区块单实例 TLAS 渲染同一帧——成图即渲染链健康（即第一帧光） |
+
+另含摄取覆盖修复：v0.1 真机实测 36/157 覆盖塔缩（低 y 层首轮空试后永不再试）；v0.2 空试槽位窗口内每 2s 重试（上限 6 次）。
 
 ## 架构
 

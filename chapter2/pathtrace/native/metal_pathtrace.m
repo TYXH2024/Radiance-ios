@@ -114,6 +114,12 @@ static double clockms(void) {
 @property (nonatomic) uint32_t indexCount;
 @property (nonatomic) BOOL ready;
 @property (nonatomic) BOOL hasColor;         // any layer carried COLOR
+// v0.2: raw (as-extracted, pre-everything) AABB per slot — the 2.1 v0.5
+// vertex-space audit instrument, restored after the v0.1 field run lost it
+// (six-way all-miss with sentinel PASS and byte-identical extraction code).
+@property (nonatomic) float rawMinX, rawMinY, rawMinZ;
+@property (nonatomic) float rawMaxX, rawMaxY, rawMaxZ;
+@property (nonatomic) BOOL rawValid;
 @end
 
 @implementation SceneSlot
@@ -608,6 +614,8 @@ Java_net_prisma_pathtrace_Native_rebuildSingleNative(
 
     uint64_t vBase = 0;
     BOOL anyColor = NO;
+    float rmin[3] = { +INFINITY, +INFINITY, +INFINITY };
+    float rmax[3] = { -INFINITY, -INFINITY, -INFINITY };
     for (jint i = 0; i < layerCount; i++) {
         jobject bb = (*env)->GetObjectArrayElement(env, vertices, (jsize)i);
         if (bb == NULL) {
@@ -647,6 +655,14 @@ Java_net_prisma_pathtrace_Native_rebuildSingleNative(
             const uint8_t *base = src + (size_t)v * stride;
             const float *p = (const float *)base;
             verts[vBase + v] = simd_make_float3(p[0], p[1], p[2]);
+            if (isfinite(p[0]) && isfinite(p[1]) && isfinite(p[2])) {
+                if (p[0] < rmin[0]) { rmin[0] = p[0]; }
+                if (p[1] < rmin[1]) { rmin[1] = p[1]; }
+                if (p[2] < rmin[2]) { rmin[2] = p[2]; }
+                if (p[0] > rmax[0]) { rmax[0] = p[0]; }
+                if (p[1] > rmax[1]) { rmax[1] = p[1]; }
+                if (p[2] > rmax[2]) { rmax[2] = p[2]; }
+            }
             uint8_t *c = colors + ((size_t)(vBase + v)) * 4;
             if (layerColor) {
                 c[0] = base[colorOff + 0];
@@ -693,6 +709,9 @@ Java_net_prisma_pathtrace_Native_rebuildSingleNative(
     slot.vertexCount = (uint32_t)totalVerts;
     slot.indexCount = (uint32_t)totalIndices;
     slot.hasColor = anyColor;
+    slot.rawMinX = rmin[0]; slot.rawMinY = rmin[1]; slot.rawMinZ = rmin[2];
+    slot.rawMaxX = rmax[0]; slot.rawMaxY = rmax[1]; slot.rawMaxZ = rmax[2];
+    slot.rawValid = (rmin[0] <= rmax[0]);
 
     if (vertexBuffer == nil || indexBuffer == nil || colorBuffer == nil
             || !build_blas(slot)) {
@@ -1074,6 +1093,264 @@ Java_net_prisma_pathtrace_Native_sentinelProbeNative(JNIEnv *env, jclass cls) {
        (bits & 4) ? "OK" : "FAIL");
     return bits;
 }
+// ===================================================================
+// v0.2 instruments — root-cause discrimination for the v0.1 field
+// failure (six-way all-miss with sentinel PASS and code statically
+// proven equivalent to the 2.1 v0.5 field-verified layout). Static
+// analysis is exhausted; these instruments split the failure domain
+// ON DEVICE in a single run:
+//   raw-AABB audit     → are the extracted vertices section-local?
+//   vertex readback    → what bytes are actually in the camera BLAS?
+//   matrix readback    → what translation is actually in the live TLAS?
+//   iso-TLAS battery   → single-instance TLAS from the camera BLAS:
+//                        iso-HIT + live-MISS  => live TLAS assembly bug
+//                        iso-MISS             => camera BLAS content bug
+// ===================================================================
+
+// Find the ready slot whose origin matches the camera's section
+// (floor(cam/16)*16); falls back to the nearest ready slot (logged).
+static SceneSlot *camera_section_slot(float cx, float cy, float cz) {
+    if (g_slots == nil) { return nil; }
+    const int32_t tx = (int32_t)floorf(cx / 16.0f) * 16;
+    const int32_t ty = (int32_t)floorf(cy / 16.0f) * 16;
+    const int32_t tz = (int32_t)floorf(cz / 16.0f) * 16;
+    SceneSlot *exact = nil, *nearest = nil;
+    double best = 1e30;
+    for (SceneSlot *s in g_slots) {
+        if (!s.ready || s.blas == nil) { continue; }
+        if (s.ox == tx && s.oy == ty && s.oz == tz) { exact = s; break; }
+        double d = (double)(s.ox - tx) * (s.ox - tx)
+                 + (double)(s.oy - ty) * (s.oy - ty)
+                 + (double)(s.oz - tz) * (s.oz - tz);
+        if (d < best) { best = d; nearest = s; }
+    }
+    if (exact != nil) { return exact; }
+    if (nearest != nil) {
+        rp("[audit] camera section (%d,%d,%d) not ready — nearest ready "
+           "origin=(%d,%d,%d) @ %.1f blocks",
+           tx, ty, tz, nearest.ox, nearest.oy, nearest.oz, sqrtf((float)best));
+    }
+    return nearest;
+}
+
+// Pool base (first triangle index in the shading pools) of a ready slot —
+// MUST mirror rebuild_tlas's ready-scan order exactly.
+static uint32_t slot_pool_base(SceneSlot *target) {
+    uint32_t base = 0;
+    for (SceneSlot *s in g_slots) {
+        if (!s.ready || s.blas == nil) { continue; }
+        if (s == target) { return base; }
+        base += s.indexCount / 3;
+    }
+    return 0;
+}
+
+// Single-instance TLAS from one slot's BLAS: transform = translate(origin).
+static id<MTLAccelerationStructure> build_iso_tlas(SceneSlot *s) {
+    MTLAccelerationStructureInstanceDescriptor inst;
+    memset(&inst, 0, sizeof(inst));
+    encode_instance_matrix(&inst.transformationMatrix,
+                           (float)s.ox, (float)s.oy, (float)s.oz);
+    inst.options = MTLAccelerationStructureInstanceOptionNone;
+    inst.mask = 0xFFFFFFFFu;
+    inst.intersectionFunctionTableOffset = 0;
+    inst.accelerationStructureIndex = 0;
+    id<MTLBuffer> instBuf =
+        [g_device newBufferWithBytes:&inst length:sizeof(inst)
+                              options:MTLResourceStorageModeShared];
+    if (instBuf == nil) { return nil; }
+    MTLInstanceAccelerationStructureDescriptor *d =
+        [MTLInstanceAccelerationStructureDescriptor descriptor];
+    d.instanceCount = 1;
+    d.instanceDescriptorBuffer = instBuf;
+    d.instanceDescriptorBufferOffset = 0;
+    d.instanceDescriptorStride = sizeof(MTLAccelerationStructureInstanceDescriptor);
+    d.instancedAccelerationStructures = @[ s.blas ];
+    MTLAccelerationStructureSizes sizes =
+        [g_device accelerationStructureSizesWithDescriptor:d];
+    id<MTLAccelerationStructure> tlas =
+        [g_device newAccelerationStructureWithSize:sizes.accelerationStructureSize];
+    id<MTLBuffer> scratch =
+        [g_device newBufferWithLength:sizes.buildScratchBufferSize
+                              options:MTLResourceStorageModeShared];
+    if (tlas == nil || scratch == nil) { return nil; }
+    id<MTLCommandBuffer> cmd = [g_queue commandBuffer];
+    id<MTLAccelerationStructureCommandEncoder> enc =
+        [cmd accelerationStructureCommandEncoder];
+    [enc buildAccelerationStructure:tlas descriptor:d
+                        scratchBuffer:scratch scratchBufferOffset:0];
+    [enc endEncoding];
+    [cmd commit];
+    [cmd waitUntilCompleted];
+    if (cmd.error != nil) {
+        rp("[audit] FATAL: iso TLAS build failed: %s",
+           cmd.error.localizedDescription.UTF8String);
+        return nil;
+    }
+    return tlas;
+}
+
+// S6.5 audit. Returns jint[8]:
+//   [0] rawVerdict  0=none 1=SECTION-LOCAL 2=WORLD-ABS 3=GARBAGE
+//   [1] cameraSlotFound   [2] liveInstanceMatrixOk
+//   [3] isoHits (0..6)    [4] isoGridHits    [5] isoDownHit
+//   [6] liveHits (0..6)   [7] liveDownHit
+JNIEXPORT jintArray JNICALL
+Java_net_prisma_pathtrace_Native_sceneAuditNative(
+        JNIEnv *env, jclass cls, jfloat cx, jfloat cy, jfloat cz) {
+    (void)cls;
+    jint out[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+
+    // ---- (a) raw-AABB audit (2.1 v0.5 instrument, restored) ----
+    {
+        float gmin[3] = { +INFINITY, +INFINITY, +INFINITY };
+        float gmax[3] = { -INFINITY, -INFINITY, -INFINITY };
+        uint32_t n = 0, garbage = 0;
+        int printed = 0;
+        for (SceneSlot *s in g_slots) {
+            if (!s.ready || !s.rawValid) { continue; }
+            n++;
+            float lo[3] = { s.rawMinX, s.rawMinY, s.rawMinZ };
+            float hi[3] = { s.rawMaxX, s.rawMaxY, s.rawMaxZ };
+            for (int k = 0; k < 3; k++) {
+                if (lo[k] < gmin[k]) { gmin[k] = lo[k]; }
+                if (hi[k] > gmax[k]) { gmax[k] = hi[k]; }
+            }
+            if (!isfinite(lo[0]) || !isfinite(hi[0]) || hi[0] - lo[0] > 1e4f
+                    || fabsf(lo[0]) > 1e5f || fabsf(hi[0]) > 1e5f) { garbage++; }
+            if (printed < 5) {
+                printed++;
+                rp("[audit] slot (%d,%d,%d) raw=[%.2f..%.2f, %.2f..%.2f, %.2f..%.2f]",
+                   s.ox, s.oy, s.oz, lo[0], hi[0], lo[1], hi[1], lo[2], hi[2]);
+            }
+        }
+        if (n == 0) {
+            rp("[audit] raw AABB: no valid slots");
+            out[0] = 0;
+        } else {
+            rp("[audit] global raw AABB over %u slots: [%.2f..%.2f, %.2f..%.2f, "
+               "%.2f..%.2f] (garbage=%u)", n,
+               gmin[0], gmax[0], gmin[1], gmax[1], gmin[2], gmax[2], garbage);
+            BOOL local = gmin[0] >= -1.0f && gmax[0] <= 17.0f
+                      && gmin[1] >= -1.0f && gmax[1] <= 17.0f
+                      && gmin[2] >= -1.0f && gmax[2] <= 17.0f;
+            if (garbage > 0) {
+                rp("[audit] raw verdict: GARBAGE (%u/%u slots)", garbage, n);
+                out[0] = 3;
+            } else if (local) {
+                rp("[audit] raw verdict: SECTION-LOCAL (within [-1..17]^3) — "
+                   "2.1 v0.5 契约成立");
+                out[0] = 1;
+            } else {
+                rp("[audit] raw verdict: NOT section-local — 顶点空间与 2.1 真机"
+                   "结论不一致（这就是全 miss 的直接原因）");
+                out[0] = 2;
+            }
+        }
+    }
+
+    // ---- (b)/(c)/(d) camera-section instruments ----
+    SceneSlot *cam = camera_section_slot(cx, cy, cz);
+    if (cam == nil) {
+        rp("[audit] no ready slot near camera — BLAS 层仪器无法执行");
+    } else {
+        out[1] = 1;
+        // (b) vertex readback from the camera BLAS buffer.
+        {
+            const simd_float3 *pos = (const simd_float3 *)cam.vertexBuffer.contents;
+            const uint32_t n = cam.vertexCount;
+            if (pos != NULL && n >= 3) {
+                rp("[audit] camera slot (%d,%d,%d) verts=%u readback: "
+                   "v0=(%.2f, %.2f, %.2f) v%d=(%.2f, %.2f, %.2f) "
+                   "v%u=(%.2f, %.2f, %.2f) — stride 16 B",
+                   cam.ox, cam.oy, cam.oz, n,
+                   pos[0].x, pos[0].y, pos[0].z,
+                   n / 2, pos[n / 2].x, pos[n / 2].y, pos[n / 2].z,
+                   n - 1, pos[n - 1].x, pos[n - 1].y, pos[n - 1].z);
+            }
+        }
+        // (c) live TLAS instance matrix readback for this slot's instance.
+        if (g_instOrigins != NULL && g_instanceBuffer != nil) {
+            int idx = -1;
+            for (uint32_t i = 0; i < g_instOriginCount; i++) {
+                if (g_instOrigins[i][0] == cam.ox && g_instOrigins[i][1] == cam.oy
+                        && g_instOrigins[i][2] == cam.oz) { idx = (int)i; break; }
+            }
+            if (idx < 0) {
+                rp("[audit] camera slot not found in live TLAS instances");
+            } else {
+                const MTLAccelerationStructureInstanceDescriptor *inst =
+                    (const MTLAccelerationStructureInstanceDescriptor *)
+                        g_instanceBuffer.contents;
+                const float *m = (const float *)&inst[idx].transformationMatrix;
+                rp("[audit] live TLAS instance #%d matrix: flat[9..11]=(%.1f, %.1f, "
+                   "%.1f) — expect (%d, %d, %d)",
+                   idx, m[9], m[10], m[11], cam.ox, cam.oy, cam.oz);
+                out[2] = (m[9] == (float)cam.ox && m[10] == (float)cam.oy
+                          && m[11] == (float)cam.oz) ? 1 : 0;
+            }
+        }
+        // (d) iso-TLAS battery vs live-TLAS battery, side by side.
+        id<MTLAccelerationStructure> iso = build_iso_tlas(cam);
+        const float dirs[6][3] = {
+            {1, 0, 0}, {-1, 0, 0}, {0, 1, 0}, {0, -1, 0}, {0, 0, 1}, {0, 0, -1},
+        };
+        const char *names[6] = {"+X", "-X", "+Y", "+Y(上)", "-Y(下)", "-Z"};
+        const char *nm2[6] = {"+X", "-X", "+Y", "+Y(up)", "-Y(down)", "-Z"};
+        for (int i = 0; i < 6; i++) {
+            // live
+            uint32_t lh = 0; float ld = -1.0f; uint32_t li = 0xFFFFFFFFu;
+            if (g_tlas != nil) {
+                trace_ray(g_tlas, simd_make_float3(cx, cy, cz),
+                          simd_make_float3(dirs[i][0], dirs[i][1], dirs[i][2]),
+                          512.0f, &lh, &ld, &li);
+            }
+            if (lh) { out[6]++; }
+            if (i == 3 && lh) { out[7] = 1; }
+            // iso
+            uint32_t ih = 0; float idist = -1.0f; uint32_t ii = 0xFFFFFFFFu;
+            if (iso != nil) {
+                trace_ray(iso, simd_make_float3(cx, cy, cz),
+                          simd_make_float3(dirs[i][0], dirs[i][1], dirs[i][2]),
+                          512.0f, &ih, &idist, &ii);
+            }
+            if (ih) {
+                out[3]++;
+                float px = cx + idist * dirs[i][0];
+                float py = cy + idist * dirs[i][1];
+                float pz = cz + idist * dirs[i][2];
+                int gx = fabsf(px - roundf(px)) < 0.02f;
+                int gy = fabsf(py - roundf(py)) < 0.02f;
+                int gz = fabsf(pz - roundf(pz)) < 0.02f;
+                if (gx || gy || gz) { out[4]++; }
+                if (i == 3) { out[5] = 1; }
+                rp("[audit] ISO %s: HIT dist=%.2f hitPoint=(%.2f, %.2f, %.2f)"
+                   "%s%s%s  |  LIVE %s: %s",
+                   nm2[i], idist, px, py, pz,
+                   gx ? " (grid-x)" : "", gy ? " (grid-y)" : "", gz ? " (grid-z)" : "",
+                   nm2[i], lh ? "HIT" : "MISS");
+            } else {
+                rp("[audit] ISO %s: MISS  |  LIVE %s: %s",
+                   nm2[i], nm2[i], lh ? "HIT" : "MISS");
+            }
+            (void)names;
+        }
+        if (iso != nil) {
+            rp("[audit] ISO summary: hits=%d/6 grid=%d/6 down=%d — "
+               "iso-HIT+live-MISS ⇒ live TLAS 组装缺陷；iso-MISS ⇒ 相机 BLAS "
+               "内容缺陷（结合 raw AABB 与 readback 判读）",
+               out[3], out[4], out[5]);
+            // ARC: iso (strong local) releases at scope exit.
+        } else {
+            rp("[audit] ISO TLAS build failed — BLAS 层判别缺失");
+        }
+    }
+
+    jintArray result = (*env)->NewIntArray(env, 8);
+    if (result != NULL) { (*env)->SetIntArrayRegion(env, result, 0, 8, out); }
+    return result;
+}
+
 // S6.4: origin of the slot behind a TLAS instance index (hit attribution).
 JNIEXPORT jintArray JNICALL
 Java_net_prisma_pathtrace_Native_instanceOriginNative(JNIEnv *env, jclass cls, jint instanceIndex) {
@@ -1108,25 +1385,16 @@ Java_net_prisma_pathtrace_Native_instanceOriginNative(JNIEnv *env, jclass cls, j
 //   screen-right = normalize(forward x worldUp)   [verified: facing south
 //   the right hand points west (-X)]; screen-up = right x forward.
 //   70 deg vertical FOV (MC default at slider 70).
-JNIEXPORT jintArray JNICALL
-Java_net_prisma_pathtrace_Native_renderPathtraceNative(
-        JNIEnv *env, jclass cls,
-        jfloat camX, jfloat camY, jfloat camZ, jfloat yawDeg, jfloat pitchDeg,
-        jint width, jint height, jint spp, jint bounces) {
-    (void)cls;
-    if (g_device == nil || g_ptPipeline == nil || g_tlas == nil
-            || g_triColorPool == nil || g_triNormalPool == nil
-            || g_instTriBase == nil) {
-        rp("[render] reject: pipeline/TLAS/shading pools not ready");
-        return NULL;
-    }
-    if (width <= 0 || height <= 0 || width > 4096 || height > 4096
-            || spp <= 0 || spp > 1024 || bounces < 0 || bounces > 8) {
-        rp("[render] reject: bad parameters %dx%d spp=%d bounces=%d",
-           width, height, spp, bounces);
-        return NULL;
-    }
-
+// Shared render core: identical dispatch for the live TLAS (S7) and the
+// v0.2 diagnostic isolated single-instance TLAS (renderIsolatedNative).
+static jintArray pt_render_core(JNIEnv *env,
+                                id<MTLAccelerationStructure> tlas,
+                                id<MTLBuffer> baseTable,
+                                uint32_t instCount,
+                                jfloat camX, jfloat camY, jfloat camZ,
+                                jfloat yawDeg, jfloat pitchDeg,
+                                jint width, jint height, jint spp, jint bounces,
+                                const char *tag) {
     // ---- camera basis ----
     float pitch = pitchDeg;
     if (pitch > 89.5f) { pitch = 89.5f; }     // degenerate cross product guard
@@ -1163,7 +1431,7 @@ Java_net_prisma_pathtrace_Native_renderPathtraceNative(
     u.tanHalfX = tanHalfX; u.tanHalfY = tanHalfY;
     u.width = (uint32_t)width; u.height = (uint32_t)height;
     u.spp = (uint32_t)spp; u.maxBounces = (uint32_t)bounces;
-    u.instCount = g_instOriginCount;
+    u.instCount = instCount;
 
     id<MTLBuffer> ub =
         [g_device newBufferWithBytes:&u length:sizeof(u)
@@ -1185,10 +1453,10 @@ Java_net_prisma_pathtrace_Native_renderPathtraceNative(
     [enc setComputePipelineState:g_ptPipeline];
     [enc setBuffer:ub offset:0 atIndex:0];
     [enc setBuffer:imageBuf offset:0 atIndex:1];
-    [enc setAccelerationStructure:g_tlas atBufferIndex:2];
+    [enc setAccelerationStructure:tlas atBufferIndex:2];
     [enc setBuffer:g_triColorPool offset:0 atIndex:3];
     [enc setBuffer:g_triNormalPool offset:0 atIndex:4];
-    [enc setBuffer:g_instTriBase offset:0 atIndex:5];
+    [enc setBuffer:baseTable offset:0 atIndex:5];
     [enc setBuffer:rayBuf offset:0 atIndex:6];
     // Padded grid + kernel bounds guard (dispatchThreadgroups is universally
     // supported; dispatchThreads would need a capability check).
@@ -1209,9 +1477,9 @@ Java_net_prisma_pathtrace_Native_renderPathtraceNative(
     }
     const uint32_t rays = *(const uint32_t *)rayBuf.contents;
     g_ptRays = rays;
-    rp("[render] pathtrace: %dx%d spp=%d bounces=%d -> %.1f ms, queries=%llu "
+    rp("[render] %s: %dx%d spp=%d bounces=%d -> %.1f ms, queries=%llu "
        "(%.2f Mray/s measured)",
-       width, height, spp, bounces, ms,
+       tag, width, height, spp, bounces, ms,
        (unsigned long long)rays, ms > 0.0 ? rays / (ms * 1000.0) : 0.0);
 
     // ---- readback -> jint ARGB ----
@@ -1230,6 +1498,71 @@ Java_net_prisma_pathtrace_Native_renderPathtraceNative(
     (*env)->SetIntArrayRegion(env, result, 0, n, tmp);
     free(tmp);
     return result;
+}
+
+JNIEXPORT jintArray JNICALL
+Java_net_prisma_pathtrace_Native_renderPathtraceNative(
+        JNIEnv *env, jclass cls,
+        jfloat camX, jfloat camY, jfloat camZ, jfloat yawDeg, jfloat pitchDeg,
+        jint width, jint height, jint spp, jint bounces) {
+    (void)cls;
+    if (g_device == nil || g_ptPipeline == nil || g_tlas == nil
+            || g_triColorPool == nil || g_triNormalPool == nil
+            || g_instTriBase == nil) {
+        rp("[render] reject: pipeline/TLAS/shading pools not ready");
+        return NULL;
+    }
+    if (width <= 0 || height <= 0 || width > 4096 || height > 4096
+            || spp <= 0 || spp > 1024 || bounces < 0 || bounces > 8) {
+        rp("[render] reject: bad parameters %dx%d spp=%d bounces=%d",
+           width, height, spp, bounces);
+        return NULL;
+    }
+    return pt_render_core(env, g_tlas, g_instTriBase, g_instOriginCount,
+                          camX, camY, camZ, yawDeg, pitchDeg,
+                          width, height, spp, bounces, "pathtrace");
+}
+
+// v0.2 diagnostic channel: render against an ISOLATED single-instance TLAS
+// built from the camera section's BLAS (same BLAS bytes, same pipeline, same
+// shading pools — only the TLAS assembly differs). Called when the live-TLAS
+// placement check fails: an image with correct world content here proves the
+// entire render chain and isolates the defect to multi-instance TLAS assembly.
+JNIEXPORT jintArray JNICALL
+Java_net_prisma_pathtrace_Native_renderIsolatedNative(
+        JNIEnv *env, jclass cls,
+        jfloat camX, jfloat camY, jfloat camZ, jfloat yawDeg, jfloat pitchDeg,
+        jint width, jint height, jint spp, jint bounces) {
+    (void)cls;
+    if (g_device == nil || g_ptPipeline == nil
+            || g_triColorPool == nil || g_triNormalPool == nil) {
+        rp("[render-iso] reject: pipeline/shading pools not ready");
+        return NULL;
+    }
+    if (width <= 0 || height <= 0 || width > 4096 || height > 4096
+            || spp <= 0 || spp > 1024 || bounces < 0 || bounces > 8) {
+        rp("[render-iso] reject: bad parameters");
+        return NULL;
+    }
+    SceneSlot *cam = camera_section_slot(camX, camY, camZ);
+    if (cam == nil || cam.blas == nil) {
+        rp("[render-iso] reject: no ready slot near camera");
+        return NULL;
+    }
+    id<MTLAccelerationStructure> iso = build_iso_tlas(cam);
+    if (iso == nil) { return NULL; }
+    const uint32_t base = slot_pool_base(cam);
+    uint32_t one[1] = { base };
+    id<MTLBuffer> baseTable =
+        [g_device newBufferWithBytes:one length:sizeof(one)
+                              options:MTLResourceStorageModeShared];
+    if (baseTable == nil) { return NULL; }
+    rp("[render-iso] isolated TLAS: slot (%d,%d,%d), tris=%u, poolBase=%u — "
+       "同一 BLAS/管线/池，仅 TLAS 组装不同（诊断通道）",
+       cam.ox, cam.oy, cam.oz, cam.indexCount / 3, base);
+    return pt_render_core(env, iso, baseTable, 1,
+                          camX, camY, camZ, yawDeg, pitchDeg,
+                          width, height, spp, bounces, "pathtrace-iso");
 }
 
 JNIEXPORT void JNICALL

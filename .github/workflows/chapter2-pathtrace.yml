@@ -43,16 +43,16 @@ jobs:
           set -ex
           chmod +x chapter2/pathtrace/build.sh
           bash chapter2/pathtrace/build.sh
-          JAR="chapter2/pathtrace/pathtrace-0.1.0.jar"
+          JAR="chapter2/pathtrace/pathtrace-0.2.0.jar"
           test -f "$JAR"
-          cp "$JAR" ./pathtrace-0.1.0.jar
+          cp "$JAR" ./pathtrace-0.2.0.jar
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: pathtrace-jar
           path: |
-            pathtrace-0.1.0.jar
+            pathtrace-0.2.0.jar
             chapter2/pathtrace/build/native/libradiance_pathtrace.dylib
             chapter2/pathtrace/build/native/pathtrace.metallib
           if-no-files-found: error
@@ -74,6 +74,10 @@ jobs:
             && echo "JNI_EXPORT_OK(sceneStatsNative)"
           nm -gU "$DYLIB" | grep -q "Java_net_prisma_pathtrace_Native_instanceOriginNative" \
             && echo "JNI_EXPORT_OK(instanceOriginNative)"
+          nm -gU "$DYLIB" | grep -q "Java_net_prisma_pathtrace_Native_sceneAuditNative" \
+            && echo "JNI_EXPORT_OK(sceneAuditNative)"
+          nm -gU "$DYLIB" | grep -q "Java_net_prisma_pathtrace_Native_renderIsolatedNative" \
+            && echo "JNI_EXPORT_OK(renderIsolatedNative)"
           nm -gU "$DYLIB" | grep -q "Java_net_prisma_pathtrace_Native_renderPathtraceNative" \
             && echo "JNI_EXPORT_OK(renderPathtraceNative)"
           nm -gU "$DYLIB" | grep -q "Java_net_prisma_pathtrace_Native_shutdownNative" \
@@ -88,46 +92,51 @@ jobs:
           file "$METALLIB"
           test -s "$METALLIB"
 
-      # 注意：中途被取消的运行可能遗留未发布的草稿 Release（gh release view
-      # 对草稿不可见）；下方 create 分支可自愈（2026-10-27 16:21 运行日志实证）。
-      # 运行页 artifact（上一步）不受此影响——绿勾必有成品。
-      - name: Release (pathtrace-v0.1, prerelease)
+      - name: Release (pathtrace-v0.2, prerelease)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -ex
-          TAG="pathtrace-v0.1"
-          TITLE="pathtrace v0.1 — 2.2 path tracing engine first frame (ingestion fork + vertex-color albedo + offscreen render + PNG)"
+          TAG="pathtrace-v0.2"
+          TITLE="pathtrace v0.2 — PLACEMENT_FAIL 判别仪器（raw AABB 审计/顶点回读/矩阵回读/隔离 TLAS 对照+隔离渲染通道）+ 摄取覆盖修复（空试重试）"
           NOTES_FILE=release-notes.md
           cat > "$NOTES_FILE" <<'EOF'
-          # pathtrace v0.1 — 第二章 2.2 第一版（path tracing 引擎首帧）
+          # pathtrace v0.2 — PLACEMENT_FAIL 根因判别版（仪器修复，非盲改）
 
-          **前置**: 2.1 scene-ingestion v0.5 真机判定 SCENE_INGEST_OK（哨兵 3/3、
-          SECTION-LOCAL R=0 精确、命中面整数格线自证）——2.2 契约已盖章。
+          **v0.1 真机回收判读**：判 PLACEMENT_FAIL（六向全 miss、S7 被闸）。
+          哨兵 3/3 PASS、相机区块 (16,80,0) 已摄取（verts=2344 与 2.1 v0.5
+          完全一致）——但全部 ray miss。离线比对结论：**2.2 fork 的提取/
+          BLAS/TLAS/矩阵/kernel 与 2.1 v0.5 真机验证实现数学等价**（逐函数
+          diff），静态分析无法再编缩差距——所以本版不盲改摆放代码，
+          而是把判别仪器装上（用户零粉饰纪律）。
 
-          **本版内容**:
-          - 摄取链 fork（2.1 已四连真机验证的骨架）+ 三处外科手术：
-            1. 顶点 COLOR 提取（VertexFormat.getOffset(COLOR) 动态解析，无硬编码
-               偏移；MC 把方块染色烘进顶点色——即 path tracer 的 albedo）
-            2. 摆放简化（顶点 section-local 原样入库 + TLAS instance =
-               translate(origin)，等价于 2.1 已验证的 recentring+translate(2*origin)）
-            3. TLAS 随建 shading pools（逐三角 3 色 + CPU 法线 + 实例基址表）
-          - pathtrace_kernel（MSL metal3 ray_query）：相机 ray → TLAS → 重心插值
-            albedo → 太阳直射 + 阴影 ray → cosine 加权漫反射弹射 → spp 累积 →
-            Reinhard + gamma → RGBA8；atomic 计数器回读（实测 Mray/s，非估算）
-          - S6 摆放抽查（哨兵 + 相机姿态 + 整数格线——零粉饰纪律沿用 2.1）
-          - S7 离屏渲染 480x270 / 24 spp / 2 bounces + 手写零依赖 PNG 编码器
-            （不依赖 java.desktop）落盘 pathtrace_frame.png + 图像统计自证
-          - 判定: PATHTRACE_OK / PLACEMENT_FAIL / RENDER_FAIL / IMAGE_DEGENERATE /
-            SENTINEL_FAIL / SCENE_EMPTY / CAMERA_FAIL（每档语义明确）
+          **v0.2 内容**：
+          - **S6.5 判别审计**（新 native 入口 sceneAuditNative）：
+            ① raw-AABB 审计（2.1 v0.5 仪器回归——v0.1 fork 丢了它，
+            导致六向全 miss 却无顶点空间证据）②相机区块 BLAS 顶点回读
+            （真实字节眼见为实）③live TLAS 实例矩阵回读（flat[9..11] vs
+            expect origin）④**隔离单实例 TLAS 对照电池**——同一 BLAS、
+            同一 trace_ray，与 live TLAS 并排打同一组 ray：
+            ISO 命中+LIVE miss ⇒ live TLAS 组装缺陷；ISO 也 miss ⇒
+            BLAS 内容缺陷。一次真机运行必出定谳证据。
+          - **隔离渲染诊断通道**（renderIsolatedNative）：live 摆放未过时，
+            用相机区块单实例 TLAS + 同一渲染管线/同一 shading 池渲染同一帧
+            ——若成图即渲染链全链健康（且这就是第一帧光：相机区块的真实
+            路径追踪画面）；新判定 ISO_RENDER_OK（语义：渲染链健康、
+            缺陷隔离到 multi-instance TLAS 组装）。
+          - **摄取覆盖修复**：v0.1 真机实测 36/157 覆盖塔缩（只扫到 y≥48
+            层；低 y 层首轮被试成空→invalidate→永不再试——世界加载时序
+            敏感缺陷，2.1 运气好）。空试槽位窗口内每 2s 可重试（上限 6 次）。
+          - 判定新增 ISO_RENDER_OK；PLACEMENT_FAIL 消息指向 [audit] 行。
 
-          **使用**: 替换 mods/ 内旧探针 JAR（同存档进世界 30-40s）→
-          `pathtrace_report.txt` + `pathtrace_frame.png`（均在 game 目录）回报。
+          **使用**：替换 mods/ 内旧 JAR → 进世界停留 30–40s（覆盖修复后
+          摄取更全，窗口或稍长）→ 回报 pathtrace_report.txt +
+          pathtrace_frame.png（若隔离通道成图）。
           EOF
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release upload "$TAG" ./pathtrace-0.1.0.jar --clobber --repo "$GITHUB_REPOSITORY"
+            gh release upload "$TAG" ./pathtrace-0.2.0.jar --clobber --repo "$GITHUB_REPOSITORY"
           else
-            gh release create "$TAG" ./pathtrace-0.1.0.jar \
+            gh release create "$TAG" ./pathtrace-0.2.0.jar \
                  --title "$TITLE" --notes-file "$NOTES_FILE" \
                  --prerelease --repo "$GITHUB_REPOSITORY"
           fi

@@ -74,6 +74,23 @@ final class Native {
     static native int[] instanceOriginNative(int instanceIndex);
 
     /**
+     * v0.2 S6.5 判别审计（v0.1 真机 PLACEMENT_FAIL 的根因分离仪器）：
+     * raw-AABB 审计 + 相机区块顶点回读 + live TLAS 实例矩阵回读 +
+     * 隔离单实例 TLAS 对照电池（与 live TLAS 并排打同一组 ray）。
+     * 返回 [rawVerdict(0/1/2/3), cameraSlotFound, liveInstanceMatrixOk,
+     *        isoHits, isoGridHits, isoDownHit, liveHits, liveDownHit]。
+     */
+    static native int[] sceneAuditNative(float camX, float camY, float camZ);
+
+    /**
+     * v0.2 诊断渲染通道：隔离单实例 TLAS（相机区块 BLAS + translate(origin)）
+     * + 同一渲染管线与 shading 池。live 摆放抽查失败时调用——若成图即证明
+     * 渲染链全链健康、缺陷定位到 multi-instance TLAS 组装。
+     */
+    static native int[] renderIsolatedNative(float camX, float camY, float camZ,
+            float yawDeg, float pitchDeg, int width, int height, int spp, int bounces);
+
+    /**
      * S7 离屏路径追踪渲染一帧。
      *
      * 相机约定（class_4184 访问器，mappings 已离线校验）：

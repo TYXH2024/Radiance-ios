@@ -1,0 +1,202 @@
+==============================================================
+路径追踪探针 (pathtrace 0.1.0) —— Radiance 移植第二章 2.2
+时间: Wed Oct 28 01:08:00 CST 2026
+报告文件: /var/mobile/Containers/Data/Application/132BB6A9-CD8E-40EA-8202-AA41493AF270/Documents/instances/default/versions/fabric-loader-0.20.1-1.21.4/game/pathtrace_report.txt
+==============================================================
+
+[INFO ] 触发方式: CLIENT_STARTED
+
+---- S0 环境快照 ----
+[INFO ] java.version  = 21.0.8-internal
+[INFO ] java.vm.name  = OpenJDK 64-Bit Server VM
+[INFO ] os.name       = Mac OS X / aarch64
+[INFO ] user.dir      = /var/mobile/Containers/Data/Application/132BB6A9-CD8E-40EA-8202-AA41493AF270/Documents/instances/default/versions/fabric-loader-0.20.1-1.21.4/game
+[INFO ] AMETHYST_RENDERER = libOSMesa.8.dylib
+[INFO ] GALLIUM_DRIVER     = null
+[INFO ] pojav.lwjgl.version = 333
+[INFO ] org.lwjgl.opengl.libname = libOSMesa.8.dylib
+[INFO ] org.lwjgl.vulkan.libname = MoltenVK
+
+---- S1 解包原生资产（JAR -> game 目录） ----
+[PASS ] 解包完成: /var/mobile/Containers/Data/Application/132BB6A9-CD8E-40EA-8202-AA41493AF270/Documents/instances/default/versions/fabric-loader-0.20.1-1.21.4/game/pathtrace/libradiance_pathtrace.dylib (111872 B)
+[INFO ] metallib: /var/mobile/Containers/Data/Application/132BB6A9-CD8E-40EA-8202-AA41493AF270/Documents/instances/default/versions/fabric-loader-0.20.1-1.21.4/game/pathtrace/pathtrace.metallib (15838 B)
+
+---- S2 System.load 装载 dylib（投送通道验证） ----
+[PASS ] dylib 装载成功（与 2.0/2.1 相同的受信装载链）
+
+---- S3 反射符号审计（intermediary 符号表逐项解析） ----
+[PASS ] class net.minecraft.class_310
+[PASS ] class net.minecraft.class_761
+[PASS ] class net.minecraft.class_769
+[PASS ] class net.minecraft.class_846
+[PASS ] class net.minecraft.class_846$class_851
+[PASS ] class net.minecraft.class_2382
+[PASS ] class net.minecraft.class_2338
+[PASS ] class net.minecraft.class_4076
+[PASS ] class net.minecraft.class_6850
+[PASS ] class net.minecraft.class_853
+[PASS ] class net.minecraft.class_9810
+[PASS ] class net.minecraft.class_9810$class_9811
+[PASS ] class net.minecraft.class_9801
+[PASS ] class net.minecraft.class_9801$class_4574
+[PASS ] class net.minecraft.class_293
+[PASS ] class net.minecraft.class_296
+[PASS ] class net.minecraft.class_8251
+[PASS ] class net.minecraft.class_750
+[PASS ] class net.minecraft.class_4184
+[PASS ] class net.minecraft.class_243
+[PASS ] class net.minecraft.class_757
+[PASS ] class net.minecraft.class_638
+[PASS ] class net.minecraft.class_1937
+[PASS ] field net.minecraft.class_310#field_1687
+[PASS ] field net.minecraft.class_310#field_1773
+[PASS ] field net.minecraft.class_638#field_17780
+[PASS ] field net.minecraft.class_761#field_4112
+[PASS ] field net.minecraft.class_761#field_45614
+[PASS ] field net.minecraft.class_769#field_4150
+[PASS ] field net.minecraft.class_769#field_4148
+[PASS ] field net.minecraft.class_769#field_4149
+[PASS ] field net.minecraft.class_769#field_4147
+[PASS ] field net.minecraft.class_846#field_52171
+[PASS ] field net.minecraft.class_846$class_851#field_29641
+[PASS ] field net.minecraft.class_846$class_851#field_4467
+[PASS ] field net.minecraft.class_846$class_851#field_4459
+[PASS ] field net.minecraft.class_9810$class_9811#field_52168
+[PASS ] field net.minecraft.class_8251#field_43360
+[PASS ] field net.minecraft.class_757#field_18765
+[PASS ] field net.minecraft.class_243#field_1352
+[PASS ] field net.minecraft.class_243#field_1351
+[PASS ] field net.minecraft.class_243#field_1350
+[PASS ] method net.minecraft.class_310#method_1551
+[PASS ] method net.minecraft.class_846$class_851#method_3670
+[PASS ] method net.minecraft.class_846$class_851#method_62975
+[PASS ] method net.minecraft.class_2382#method_10263
+[PASS ] method net.minecraft.class_2382#method_10264
+[PASS ] method net.minecraft.class_2382#method_10260
+[PASS ] method net.minecraft.class_4076#method_18682
+[PASS ] method net.minecraft.class_6850#method_39969
+[PASS ] method net.minecraft.class_9810#method_60904
+[PASS ] method net.minecraft.class_9810$class_9811#method_60905
+[PASS ] method net.minecraft.class_9801#method_60818
+[PASS ] method net.minecraft.class_9801#method_60822
+[PASS ] method net.minecraft.class_9801$class_4574#comp_749
+[PASS ] method net.minecraft.class_9801$class_4574#comp_750
+[PASS ] method net.minecraft.class_9801$class_4574#comp_752
+[PASS ] method net.minecraft.class_293#method_1362
+[PASS ] method net.minecraft.class_293#method_60835
+[PASS ] method net.minecraft.class_293#method_60836
+[PASS ] field net.minecraft.class_296#field_52108
+[PASS ] method net.minecraft.class_4184#method_19326
+[PASS ] method net.minecraft.class_4184#method_19330
+[PASS ] method net.minecraft.class_4184#method_19329
+[PASS ] ctor net.minecraft.class_750()
+[PASS ] ctor net.minecraft.class_6850()
+[PASS ] 符号表全量解析通过（66 项）
+
+---- S4/S5 网格发现与摄取（轮询 500ms，等待进入世界；顶点+COLOR 双提取） ----
+[INFO ] 等待进入世界（mc.world == null）…
+[PASS ] 已进入世界，开始网格发现
+[scene] device=Apple M3 GPU raytracing=YES
+[scene] slot grid initialized: 600 chunks
+[scene] ray_query pipeline ready (threadsPerThreadgroup=1024)
+[scene] pathtrace pipeline ready (threadsPerThreadgroup=1024)
+[PASS ] 网格初始化: 600 槽位 (sizeX=5 sizeY=24 sizeZ=5)
+[INFO ] 顶点格式取证: layer0(stride=32 colorOff=12)  layer1(stride=32 colorOff=12)  layer2(stride=32 colorOff=12)  layer3(stride=32 colorOff=12)（COLOR 元素偏移由 VertexFormat.getOffset(COLOR) 动态解析——2.2 albedo 提取通路）
+[rebuild] index=35 origin=(0,48,0) layers=4 verts=4400 tris=2200 color=yes (blas 16.41 ms, total builds=1)
+[INFO ] rebuild #1: index=35 origin=(0,48,0) layers=4 verts=4400 (42.0 ms)
+[rebuild] index=36 origin=(16,48,0) layers=3 verts=696 tris=348 color=yes (blas 1.23 ms, total builds=2)
+[INFO ] rebuild #2: index=36 origin=(16,48,0) layers=3 verts=696 (2.9 ms)
+[rebuild] index=39 origin=(-16,48,0) layers=2 verts=2216 tris=1108 color=yes (blas 1.08 ms, total builds=3)
+[INFO ] rebuild #3: index=39 origin=(-16,48,0) layers=2 verts=2216 (3.4 ms)
+[rebuild] index=40 origin=(0,64,0) layers=2 verts=476 tris=238 color=yes (blas 0.85 ms, total builds=4)
+[INFO ] rebuild #4: index=40 origin=(0,64,0) layers=2 verts=476 (1.5 ms)
+[rebuild] index=41 origin=(16,64,0) layers=2 verts=2428 tris=1214 color=yes (blas 1.16 ms, total builds=5)
+[INFO ] rebuild #5: index=41 origin=(16,64,0) layers=2 verts=2428 (2.8 ms)
+[rebuild] index=46 origin=(16,80,0) layers=3 verts=2344 tris=1172 color=yes (blas 1.54 ms, total builds=6)
+[INFO ] rebuild #6: index=46 origin=(16,80,0) layers=3 verts=2344 (2.9 ms)
+[rebuild] index=51 origin=(16,96,0) layers=3 verts=3088 tris=1544 color=yes (blas 1.11 ms, total builds=7)
+[INFO ] rebuild #7: index=51 origin=(16,96,0) layers=3 verts=3088 (2.0 ms)
+[rebuild] index=52 origin=(32,96,0) layers=3 verts=11076 tris=5538 color=yes (blas 4.15 ms, total builds=8)
+[INFO ] rebuild #8: index=52 origin=(32,96,0) layers=3 verts=11076 (7.3 ms)
+[rebuild] index=155 origin=(0,48,16) layers=3 verts=3168 tris=1584 color=yes (blas 0.90 ms, total builds=9)
+[INFO ] rebuild #9: index=155 origin=(0,48,16) layers=3 verts=3168 (3.3 ms)
+[rebuild] index=156 origin=(16,48,16) layers=3 verts=2612 tris=1306 color=yes (blas 1.06 ms, total builds=10)
+[INFO ] rebuild #10: index=156 origin=(16,48,16) layers=3 verts=2612 (3.5 ms)
+[rebuild] index=159 origin=(-16,48,16) layers=3 verts=4116 tris=2058 color=yes (blas 2.61 ms, total builds=11)
+[INFO ] rebuild #11: index=159 origin=(-16,48,16) layers=3 verts=4116 (5.4 ms)
+[rebuild] index=161 origin=(16,64,16) layers=3 verts=2844 tris=1422 color=yes (blas 1.06 ms, total builds=12)
+[INFO ] rebuild #12: index=161 origin=(16,64,16) layers=3 verts=2844 (2.5 ms)
+[rebuild] index=162 origin=(32,64,16) layers=3 verts=920 tris=460 color=yes (blas 0.82 ms, total builds=13)
+[INFO ] rebuild #13: index=162 origin=(32,64,16) layers=3 verts=920 (2.2 ms)
+[rebuild] index=164 origin=(-16,64,16) layers=2 verts=1460 tris=730 color=yes (blas 1.97 ms, total builds=14)
+[INFO ] rebuild #14: index=164 origin=(-16,64,16) layers=2 verts=1460 (2.6 ms)
+[rebuild] index=166 origin=(16,80,16) layers=2 verts=1380 tris=690 color=yes (blas 0.88 ms, total builds=15)
+[INFO ] rebuild #15: index=166 origin=(16,80,16) layers=2 verts=1380 (1.7 ms)
+[rebuild] index=167 origin=(32,80,16) layers=2 verts=2788 tris=1394 color=yes (blas 1.05 ms, total builds=16)
+[INFO ] rebuild #16: index=167 origin=(32,80,16) layers=2 verts=2788 (2.5 ms)
+[tlas] rebuilt in 0.84 ms (instances=16, as=3728 B, tris=23006, colorSlots=16, pools=276072+276072 B, total=1 builds)
+[rebuild] index=292 origin=(32,96,32) layers=1 verts=348 tris=174 color=yes (blas 0.70 ms, total builds=17)
+[INFO ] rebuild #17: index=292 origin=(32,96,32) layers=1 verts=348 (1.6 ms)
+[retired] releasing 5 deferred objects
+[tlas] rebuilt in 0.85 ms (instances=17, as=3936 B, tris=23180, colorSlots=17, pools=278160+278160 B, total=2 builds)
+[rebuild] index=414 origin=(-16,96,-32) layers=3 verts=152 tris=76 color=yes (blas 0.64 ms, total builds=18)
+[INFO ] rebuild #18: index=414 origin=(-16,96,-32) layers=3 verts=152 (1.5 ms)
+[rebuild] index=410 origin=(0,96,-32) layers=3 verts=4536 tris=2268 color=yes (blas 3.33 ms, total builds=19)
+[INFO ] rebuild #19: index=410 origin=(0,96,-32) layers=3 verts=4536 (4.9 ms)
+[rebuild] index=411 origin=(16,96,-32) layers=3 verts=9788 tris=4894 color=yes (blas 3.66 ms, total builds=20)
+[INFO ] rebuild #20: index=411 origin=(16,96,-32) layers=3 verts=9788 (5.7 ms)
+[retired] releasing 5 deferred objects
+[tlas] rebuilt in 0.78 ms (instances=20, as=4560 B, tris=30418, colorSlots=20, pools=365016+365016 B, total=3 builds)
+[rebuild] index=412 origin=(32,96,-32) layers=3 verts=2532 tris=1266 color=yes (blas 1.19 ms, total builds=21)
+[rebuild] index=415 origin=(0,112,-32) layers=1 verts=852 tris=426 color=yes (blas 1.23 ms, total builds=22)
+[rebuild] index=416 origin=(16,112,-32) layers=1 verts=2576 tris=1288 color=yes (blas 0.89 ms, total builds=23)
+[retired] releasing 5 deferred objects
+[tlas] rebuilt in 0.44 ms (instances=23, as=5248 B, tris=33398, colorSlots=23, pools=400776+400776 B, total=4 builds)
+[rebuild] index=413 origin=(48,96,-32) layers=3 verts=1548 tris=774 color=yes (blas 1.00 ms, total builds=24)
+[rebuild] index=417 origin=(32,112,-32) layers=2 verts=7996 tris=3998 color=yes (blas 3.67 ms, total builds=25)
+[rebuild] index=418 origin=(48,112,-32) layers=1 verts=9784 tris=4892 color=yes (blas 4.59 ms, total builds=26)
+[rebuild] index=533 origin=(48,96,-16) layers=3 verts=2668 tris=1334 color=yes (blas 1.03 ms, total builds=27)
+[rebuild] index=536 origin=(16,112,-16) layers=1 verts=828 tris=414 color=yes (blas 0.83 ms, total builds=28)
+[rebuild] index=537 origin=(32,112,-16) layers=1 verts=5728 tris=2864 color=yes (blas 3.63 ms, total builds=29)
+[rebuild] index=538 origin=(48,112,-16) layers=1 verts=10100 tris=5050 color=yes (blas 4.10 ms, total builds=30)
+[rebuild] index=53 origin=(48,96,0) layers=3 verts=7680 tris=3840 color=yes (blas 3.87 ms, total builds=31)
+[retired] releasing 5 deferred objects
+[tlas] rebuilt in 0.64 ms (instances=31, as=6976 B, tris=56564, colorSlots=31, pools=678768+678768 B, total=5 builds)
+[rebuild] index=57 origin=(32,112,0) layers=1 verts=2520 tris=1260 color=yes (blas 1.05 ms, total builds=32)
+[rebuild] index=58 origin=(48,112,0) layers=1 verts=3404 tris=1702 color=yes (blas 1.09 ms, total builds=33)
+[rebuild] index=173 origin=(48,96,16) layers=3 verts=11464 tris=5732 color=yes (blas 4.90 ms, total builds=34)
+[rebuild] index=177 origin=(32,112,16) layers=1 verts=116 tris=58 color=yes (blas 1.26 ms, total builds=35)
+[rebuild] index=293 origin=(48,96,32) layers=3 verts=7396 tris=3698 color=yes (blas 3.62 ms, total builds=36)
+[retired] releasing 5 deferred objects
+[tlas] rebuilt in 0.87 ms (instances=36, as=8016 B, tris=69014, colorSlots=36, pools=828168+828168 B, total=6 builds)
+[PASS ] 摄取窗口完成（36 次重建 / 600 非空区块 / 积压 0 / 19.4s）
+
+---- S5 统计汇总 ----
+[INFO ] Java 侧: polls=38 rebuilds=36 invalidations=612 relocations=0 非空区块=600
+[INFO ] Native 侧: readyBLAS=36 BLAS构建=36 TLAS重建=6（含 shading pools）
+[INFO ] 几何: 三角形=69014 顶点=138028 顶点缓冲=2156.7 KB 索引缓冲=808.8 KB TLAS=7.8 KB
+
+---- S6 场景摆放抽查（哨兵 + 相机姿态 + 整数格线） ----
+[PASS ] 相机姿态: pos=(26.50, 92.62, 7.53) yaw=374.8 pitch=-42.5
+[sentinel] vert readback: (0.0, 0.0, 0.0) (1024.0, 0.0, 0.0) (0.0, 0.0, 1024.0) — stride 16 B, buffer 48 B
+[sentinel] identity instance: ray (256,64,256)-Y -> HIT (dist=64.00 instance=0, expect HIT dist~64 instance=0)
+[sentinel] translated instance K=(4096,0,4096): ray (4352,64,4352)-Y -> HIT (dist=64.00 instance=1, expect HIT dist~64 instance=1)
+[sentinel] negative control: ray (256,64,256)+Y -> MISS (expect MISS)
+[sentinel] verdict: identity=OK translated=OK control=OK
+[PASS ] 哨兵求交 PASS（位码=7：单位实例/平移实例/阴性对照全部正确——矩阵平移编码 flat[9..11] 维持 2.1 v0.5 真机结论）
+[INFO ] ray +X: miss（512 格内无几何）
+[INFO ] ray -X: miss（512 格内无几何）
+[INFO ] ray +Y(上): miss（512 格内无几何）
+[INFO ] ray -Y(下): miss（512 格内无几何）
+[INFO ] ray +Z: miss（512 格内无几何）
+[INFO ] ray -Z: miss（512 格内无几何）
+[FAIL ] 摆放抽查未达标（命中=0 整数格线=0 脚下地板=无）——2.2 契约（t=origin + 免 recentring）在真机上不等价于 2.1 已验证布局的可能性存在；请附整份报告回报（v0.5 同场景：-Y 1.62 命中地板、8/9 整数格线）
+
+---- S7 离屏路径追踪渲染（相机 ray → TLAS → albedo → 太阳直射+阴影 → 弹射 → 累积 → tonemap → PNG） ----
+[INFO ] 摆放抽查未通过/未执行——渲染跳过（先修摆放，再谈图像）
+
+==============================================================
+最终判定: PLACEMENT_FAIL
+摆放抽查未达标（脚下地板缺失或整数格线不足 2）——2.2 简化契约（免 recentring + t=origin）与已验证布局不等价的嫌疑。请附整份报告回报（ray 行）。
+==============================================================
+[scene] shutdown — all GPU resources released (last frame: 0 queries)

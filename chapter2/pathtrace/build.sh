@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # pathtrace 完整构建（macOS + Xcode toolchain 上运行；CI 于 macos-26 runner 执行）
-# 产物: pathtrace-0.1.0.jar（内含 iphoneos arm64 dylib + metallib + MSL 源）
+# 产物: pathtrace-0.2.0.jar（内含 iphoneos arm64 dylib + metallib + MSL 源）
 # 依赖: Xcode (xcrun metal/metallib/iphoneos SDK), clang, JDK 8+(javac 或 ecj), zip
 # 用法: JAVA_HOME=<jdk21> ./build.sh
 set -euo pipefail
 cd "$(dirname "$0")"
 
 MOD_ID="pathtrace"
-VERSION="0.1.0"
+VERSION="0.2.0"
 JAR_NAME="pathtrace-${VERSION}.jar"
 
 # ------------------------------------------------------------------

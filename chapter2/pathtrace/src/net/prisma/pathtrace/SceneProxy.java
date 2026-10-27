@@ -68,6 +68,12 @@ final class SceneProxy {
         long lastSectionPos;
         long generation;
         boolean ready;
+        // v0.2 覆盖修复：v0.1 真机实测 36/157 覆盖塔缩的根因——首轮 poll 在
+        // 世界加载未完成时把低 y 层槽位试成空（region null / 空 buffers）→
+        // invalidate 把 generation 置位 → 永不再试。空试的槽位在窗口内
+        // 保持可重试（限次限频），直至出几何或窗口结束。
+        int emptyAttempts;
+        int lastEmptyPoll;
     }
 
     SceneProxy(ProbeReport r, String metallibPath) {
@@ -171,6 +177,12 @@ final class SceneProxy {
                 // 每轮 8 个 cap 截流后其余 592 个被标记为“干净”永不摄取
                 //（真机实测 30/600 的机制）。
                 boolean neverIngested = st.generation == 0;
+                // v0.2：空试重试（世界加载时序容错）。首次空试不致命——
+                // 区块源可能尚未就绪；窗口内每 4 poll（2s）重试一次，上限 6 次。
+                boolean retryEmpty = st.generation > 0 && !st.ready
+                        && st.emptyAttempts > 0 && st.emptyAttempts < 6
+                        && chunkData != null
+                        && (polls - st.lastEmptyPoll) >= 4;
                 st.lastDataRef = chunkData;
                 st.lastSectionPos = sectionPos;
 
@@ -183,7 +195,8 @@ final class SceneProxy {
                     relocations++;
                 }
 
-                boolean dirty = (dataChanged || moved || neverIngested) && chunkData != null;
+                boolean dirty = (dataChanged || moved || neverIngested || retryEmpty)
+                        && chunkData != null;
                 if (dirty) {
                     pendingDirty++;
                 }
@@ -282,7 +295,8 @@ final class SceneProxy {
             Object region = Mappings.call(regionBuilder, Mappings.C_REGION_BUILDER,
                     Mappings.M_RB_BUILD, world, sectionPosObj);
             if (region == null) {
-                // 区块源未加载 → 失效
+                // 区块源未加载 → 失效（v0.2：记空试，窗口内可重试）
+                noteEmptyAttempt(index);
                 invalidate(builtChunk, index);
                 return false;
             }
@@ -298,6 +312,8 @@ final class SceneProxy {
                     Mappings.F_RD_BUFFERS);
             if (!(buffersMap instanceof Map) || ((Map<?, ?>) buffersMap).isEmpty()) {
                 Mappings.call(renderData, Mappings.C_RENDER_DATA, Mappings.M_RD_CLOSE);
+                // v0.2：记空试（section 当前无可见几何或时序未就绪）——窗口内可重试
+                noteEmptyAttempt(index);
                 invalidate(builtChunk, index);
                 return false;
             }
@@ -380,6 +396,7 @@ final class SceneProxy {
                 if (st != null) {
                     st.generation = gen;
                     st.ready = true;
+                    st.emptyAttempts = 0;
                 }
                 double ms = (System.nanoTime() - t0) / 1e6;
                 if (rebuilds <= 20 || rebuilds % 50 == 0) {
@@ -396,6 +413,15 @@ final class SceneProxy {
             Throwable c = t.getCause() != null ? t.getCause() : t;
             r.fail(String.format("rebuild 异常 @ index=%d: %s", index, c));
             return false;
+        }
+    }
+
+    /** v0.2：记录一次空试（region 未就绪 / 无几何），供窗口内重试调度。 */
+    private void noteEmptyAttempt(int index) {
+        SlotState st = slots.get(index);
+        if (st != null) {
+            st.emptyAttempts++;
+            st.lastEmptyPoll = polls;
         }
     }
 
