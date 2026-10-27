@@ -112,3 +112,26 @@ Stage Summary:
 - 第二章路线定案：Metal 直连（不等驱动生态）；ICD 替换降级为 KosmicKrisp 跟踪项
 - metal-rt-probe 2.0 源码 + CI 产线入库，Release 由 CI 幂等发布
 - 用户下一步：从 Release 下载 metal-rt-probe-0.1.0.jar 放 mods/（zink 档）→ 回传 metal_rt_probe_report.txt（预期 METAL_RT_OK = 2.1 场景摄取绿灯）
+
+---
+
+## 2026-10-27（五）· metal-rt-probe 2.0 真机判定 METAL_RT_OK → 2.1 场景摄取启动
+
+Task: 回收用户 M3/zink 档真机报告 → metal-rt-probe 2.0 判读落档 → Release 更新 → 启动 2.1 场景摄取
+
+Work Log:
+- 用户回传全量报告（S0-S3 原文归档 docs/chapter2-metal-rt-probe-field/M3-zink-report.txt），判读 README 同目录落档
+- 判定 **METAL_RT_OK**：投送通道（S1 解包 89408B dylib + 5720B metallib / S2 System.load 走 hooked_dlopen 受信链）与进程内 Metal RT 全链路（S3）同时成立——等价第一章判定表"判 A"在 Metal 直连路线上达成
+- 硬件侧实锤：Apple M3 GPU / gpuFamily Apple9 / dedicatedIntersectionHW=YES（专用交集硬件在场）
+- 路线裁决 §4.3 风险项双双销项：风险 1（dylib 装载签名，ad-hoc 签名 + 受信 dlopen 链）PASS；风险 2（MSL 运行时编译 newLibraryWithSource，shaderpack 路线）PASS
+- 首个 iOS 真机硬件 RT 吞吐数据点：262144 rays / 49.10 ms = 5.34 Mrays/s（微型测试 kernel 下界基准，真实场景复杂度待 2.2/2.3 校准）
+- 正确性：hit 131072/131072 + masked-miss 131072/131072，距离/掩码剔除零错 ray
+- 现场备注：GALLIUM_DRIVER=null 与启动器 zink 档预期注入值不一致（不影响判定，渲染主链正常；记录供 2.3 双引擎同步参考）
+- route-decision.md 状态头 + §4.2 阶段表更新：2.0 标记真机通过，2.1 转当前阶段
+- 2.1 场景摄取启动：上游架构侦察（本仓 src/main/java/com/radiance/ —— Minecraft-Radiance/Radiance mod fork，Vulkan 路径追踪 mod）—— client/proxy/world/ChunkProxy（区块摄取）/EntityProxy/PlayerProxy 为摄取拓扑参照，client/vertex/PBRVertexFormats 为 PBR 扩展顶点格式，client/proxy/vulkan/ 为待替换的 Vulkan 下游
+
+Stage Summary:
+- 第二章 2.0 阶段闭环：Metal 直连路线被真机全链路验证，免改包投送通道成立，后续所有原生核复用该通道
+- Release metal-rt-probe-v0.1 更新：body 追加实测结论，上传现场判读资产
+- 2.1 场景摄取开工：摄取拓扑沿用上游 proxy/world 设计，下游从 Vulkan buffer 换 Metal 加速结构（动态 BLAS/TLAS + 增量重建）
+- 待办：①MC 1.21.4 mesh 摄取点侦察（client jar + mojmap 对准 SectionRenderDispatcher/MeshData 真实类名与 mixin 挂点）②2.1 架构设计落库 ③chapter2/scene-ingestion 首批代码 + CI + Release

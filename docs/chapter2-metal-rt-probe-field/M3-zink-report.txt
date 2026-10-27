@@ -1,0 +1,36 @@
+---- S0 环境快照 ----
+[INFO ] java.version  = 21.0.8-internal
+[INFO ] java.vm.name  = OpenJDK 64-Bit Server VM
+[INFO ] os.name       = Mac OS X / aarch64
+[INFO ] user.dir      = /var/mobile/Containers/Data/Application/132BB6A9-CD8E-40EA-8202-AA41493AF270/Documents/instances/default/versions/fabric-loader-0.20.1-1.21.4/game
+[INFO ] AMETHYST_RENDERER = libOSMesa.8.dylib
+[INFO ] GALLIUM_DRIVER     = null
+[INFO ] pojav.lwjgl.version = 333
+[INFO ] org.lwjgl.opengl.libname = libOSMesa.8.dylib
+[INFO ] org.lwjgl.vulkan.libname = MoltenVK
+
+---- S1 解包原生资产（JAR -> game 目录） ----
+[PASS ] 解包完成: /var/mobile/Containers/Data/Application/132BB6A9-CD8E-40EA-8202-AA41493AF270/Documents/instances/default/versions/fabric-loader-0.20.1-1.21.4/game/metalprobe/libradiance_metal_probe.dylib (89408 B)
+[INFO ] metallib: /var/mobile/Containers/Data/Application/132BB6A9-CD8E-40EA-8202-AA41493AF270/Documents/instances/default/versions/fabric-loader-0.20.1-1.21.4/game/metalprobe/trace_kernel.metallib (5720 B)
+
+---- S2 System.load 装载 dylib（投送通道验证） ----
+[PASS ] dylib 装载成功（JVM dlopen 走启动器 hooked_dlopen 受信链）
+
+---- S3 Metal RT 全链路（原生侧细节见下方原生段） ----
+[device] name=Apple M3 GPU
+[device] gpuFamily=Apple9
+[device] maxThreadgroupMemory=32768 B
+[device] supportsRaytracing=YES
+[device] dedicatedIntersectionHW(Apple9+)=YES
+[blas] triangle BLAS built in 14.64 ms (as=344 B, scratch=320 B)
+[tlas] instance TLAS built in 9.17 ms (as=480 B)
+[pipeline] ray_query compute pipeline created in 373.15 ms (threadsPerThreadgroup=1024)
+[runtime-compile] newLibraryWithSource(<metal_raytracing>): OK (shaderpack 路线在真机可用)
+[trace] 262144 rays in 49.10 ms (5.34 M rays/s) —— 真机硬件 RT 吞吐数据
+[verify] hit-rays correct: 131072/131072, masked-miss rays correct: 131072/131072
+VERDICT: METAL_RT_OK (BLAS + TLAS + ray_query + mask culling + distances, in-process, 与渲染主链零干扰)
+
+==============================================================
+最终判定: METAL_RT_OK
+进程内 Metal RT 全链路通过（BLAS + TLAS + ray_query + 掩码剔除 + 距离校验）。第二章路线绿灯：投送通道与硬件 RT 同时成立，进入 2.1 场景摄取。
+==============================================================

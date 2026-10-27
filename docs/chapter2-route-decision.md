@@ -1,6 +1,6 @@
 # 第二章路线裁决 —— Metal 直连 RT 核（metal-direct）为主路线
 
-> 状态：已裁决（2026-10-27）
+> 状态：已裁决（2026-10-27），且已被 metal-rt-probe 2.0 真机实测验证（2026-10-27，M3/zink 档，**METAL_RT_OK**，见 docs/chapter2-metal-rt-probe-field/）
 > 输入：第一章判 C 双机铁证（docs/chapter1-rt-probe-v1.1-field/VERDICT.md）+
 > 用户真机确认（zink 渲染档、M3、可稳定进游戏）+ 本日驱动生态调研 + 启动器源码侦察
 > 结论：**不等待任何 Vulkan RT 驱动；mod JAR 内置 Metal RT 原生核，走"Metal 直连"路线。**
@@ -108,8 +108,8 @@ System.load() → 走与 LWJGL natives 完全相同的受信装载链**。这是
 
 | 阶段 | 交付物 | 验证问题 |
 |---|---|---|
-| 2.0（本次） | `metal-rt-probe` mod（JAR 内置 dylib+metallib） | 投送通道 + 进程内 Metal RT 全链路（BLAS/TLAS/ray_query/掩码剔除/距离正确性 + 首个真机硬件 RT 吞吐数据） |
-| 2.1 | 场景摄取 | MC 区块网格 → JNI → 动态 BLAS/TLAS 重建（增量/refit） |
+| 2.0 ✅ 2026-10-27 真机通过（METAL_RT_OK，M3/zink） | `metal-rt-probe` mod（JAR 内置 dylib+metallib） | 投送通道 + 进程内 Metal RT 全链路（BLAS/TLAS/ray_query/掩码剔除/距离正确性 + 首个真机硬件 RT 吞吐数据 5.34 Mrays/s）—— §4.3 风险 1/2 双双销项 |
+| 2.1（当前） | 场景摄取 | MC 区块网格 → JNI → 动态 BLAS/TLAS 重建（增量/refit） |
 | 2.2 | 路径追踪引擎 | Radiance 移植：MSL 路径追踪 kernel + 光照回传 + GL 纹理呈现 |
 | 2.3 | 性能与融合 | 吞吐调优（Apple9 专用交集硬件特性）、双引擎同步、帧节奏 |
 
