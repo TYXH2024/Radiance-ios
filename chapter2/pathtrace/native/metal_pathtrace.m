@@ -221,6 +221,14 @@ static void encode_instance_matrix(void *dst, float tx, float ty, float tz) {
     m[9] = tx; m[10] = ty; m[11] = tz; // column 3 = translation
 }
 
+// vsub: component-wise float3 subtraction. simd_sub exists only for matrix
+// types in C (vector arithmetic is C++ operator territory — CI clang on the
+// iphoneos SDK confirmed: no float3 overload). dot/cross/normalize DO have
+// C overloads and are used as-is.
+static inline simd_float3 vsub(simd_float3 a, simd_float3 b) {
+    return simd_make_float3(a.x - b.x, a.y - b.y, a.z - b.z);
+}
+
 // Rebuild TLAS over all ready slots + the shading pools (same order). Flushes
 // the retired list afterwards.
 static void rebuild_tlas(void) {
@@ -241,6 +249,7 @@ static void rebuild_tlas(void) {
     // sealed contract. Vertices are stored SECTION-LOCAL (verbatim), so
     // world = local + origin.
     const uint32_t n = (uint32_t)ready.count;
+    uint32_t colorSlots = 0;   // function scope: reported in the [tlas] line
     size_t instBytes = n * sizeof(MTLAccelerationStructureInstanceDescriptor);
     MTLAccelerationStructureInstanceDescriptor *instances =
         (MTLAccelerationStructureInstanceDescriptor *)calloc(1, instBytes);
@@ -330,7 +339,6 @@ static void rebuild_tlas(void) {
     // first triangle index per instance.
     {
         uint64_t totalTris = 0;
-        uint32_t colorSlots = 0;
         for (SceneSlot *s in ready) { totalTris += s.indexCount / 3; }
         uint8_t *colors = (uint8_t *)malloc((size_t)totalTris * 3 * 4);
         float *normals = (float *)malloc((size_t)totalTris * 3 * sizeof(float));
@@ -364,8 +372,8 @@ static void rebuild_tlas(void) {
                         dstC[k * 4 + 2] = col[(size_t)vi * 4 + 2];
                         dstC[k * 4 + 3] = 255;
                     }
-                    simd_float3 e1 = simd_sub(pos[i1], pos[i0]);
-                    simd_float3 e2 = simd_sub(pos[i2], pos[i0]);
+                    simd_float3 e1 = vsub(pos[i1], pos[i0]);
+                    simd_float3 e2 = vsub(pos[i2], pos[i0]);
                     simd_float3 nrm = simd_cross(e1, e2);
                     float len = sqrtf(simd_dot(nrm, nrm));
                     if (!(len > 1e-12f)) {

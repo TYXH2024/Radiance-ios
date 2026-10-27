@@ -67,7 +67,7 @@ jobs:
           nm -gU "$DYLIB" | grep -q "Java_net_prisma_pathtrace_Native_shutdownNative" \
             && echo "JNI_EXPORT_OK(shutdownNative)"
           # 2.1 已删的 v0.4 诊断矩阵入口不得在 2.2 dylib 中出现
-          if nm -gU "$DYLIB" | grep -q "sceneInfoNative\|setPlacementModeNative"; then
+          if nm -gU "$DYLIB" | grep -Eq "sceneInfoNative|setPlacementModeNative"; then
             echo "FATAL: stale 2.1 diagnostic entry points present"; exit 1
           fi
           echo "JNI_SURFACE_CLEAN(2.2)"
