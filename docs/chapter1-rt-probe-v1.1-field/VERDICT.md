@@ -56,3 +56,20 @@ rt-probe **v1.2** 已修复：延迟至 `CLIENT_STARTED`（GL/MobileGlues 就绪
 **注意**：v1.0 时 A20 Pro 进档 1 秒后也闪退过一次，说明 Vulkan 渲染档
 （MobileGlues 翻译链）自身另有不稳定因素；若 v1.2 复测仍闪退，请同时做
 "移除探针"基线与"切稳定渲染器档"对照，把闪退的渲染栈份额与探针份额分开。
+
+### 更新（2026-10-27 下午）：v1.2 复测完成，归因修正
+
+v1.2 真机复测（M3，rtprobe 1.2.0，两次启动）**仍崩在同一位置**
+（`glGetError` NULL SIGSEGV @ `GL.createCapabilities`），且崩溃时刻探针
+**零原生调用**（延迟执行生效：只有 watchdog 在睡，无工作线程、无探针日志、
+elapsed 4.74s 远早于触发窗口）。本次实测在事实上等价于"完全移除探针"的
+基线对照——**上述"探针并发竞争"首要嫌疑假说证伪，闪退的渲染栈份额为 100%**。
+
+根因修正为：**Vulkan 渲染档（`renderer=libMoltenVK.dylib`）+ 无 VulkanMod 的
+混合态**（`configuredVulkan=1 / actualVulkanPath=0`，MobileGlues GL fallback）
+下 GL 翻译层初始化确定性失败。另勘误：v1.0 报告判 F 时"切换 MoltenVK 档"的
+提示系错误指引（`org.lwjgl.vulkan.libname=MoltenVK` 为启动器固定参数，
+常规档下探针同样可用），本判 C 数据属"带病取证"——判定有效，档位选择有误。
+
+完整证据链与用户侧操作指引（切回常规渲染档 + 保留 v1.2 探针复跑）：
+`docs/chapter1-rt-probe-v1.2-field/README.md`。

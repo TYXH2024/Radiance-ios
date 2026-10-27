@@ -63,3 +63,24 @@ Stage Summary:
 - 第一章闭环：判 C 铁证入库，第二章路线定为 ICD 替换；rt-probe 转型为替换后的验收工具（目标判 A）
 - v1.2 发布 rt-probe-v1.2 Release（jar + full zip）
 - 待办：①用户 v1.2 复测：预期判 C 不变 + 游戏不再因探针闪退；若仍闪退做移除探针基线/切渲染器对照 ②第二章启动：KosmicKrisp/honeykrisp ICD 调研与改包方案 ③Prisma 启动器 hook 点接入说明回收
+
+
+---
+
+## 2026-10-27（三）· v1.2 复测判读：闪退与探针无关定案，根因改判 Vulkan 渲染档混合态
+
+Task: 回收用户 v1.2 真机三件套（hs_err_pid6534.log / latestlog.txt / fatal_trace.txt，"这一次没探针了"）→ 判读 → 归因修正落盘 → 更新 Release
+
+Work Log:
+- 用户反馈 v1.2 仍闪退；三份新证据显示两次连续启动（14:35:47 / 14:36:22）同点确定性崩溃：SIGSEGV pc=0x0，`glGetError+0x14`（libmobileglues.dylib GOT 间接跳转 stub，槽位 NULL）← `GL.createCapabilities()` ← Window/MinecraftClient 构造
+- 关键发现——探针零介入证据链五条：①mod 列表 rtprobe 1.2.0（确认用户装的就是 v1.2 发布版：rt-probe-1.1.jar 内部版本实为 1.0.0，1.2.0 仅 v1.2 有）②线程表只有 RTProbe-Watchdog（blocked 睡眠中）无 RTProbe 工作线程 ③latestlog 零 [RTProbe] 输出 ④崩溃 elapsed 4.74s 早于 90s watchdog 与 CLIENT_STARTED ⑤无 rt_probe_report.txt 生成。v1.2 延迟执行设计完全生效，本次实测在事实上等价"移除探针"基线对照——基线同样闪退
+- 归因修正：v1.1-field/VERDICT.md 的"探针并发竞争 MoltenVK"首要嫌疑假说证伪（探针没跑也崩）；真根因为 Vulkan 渲染档（renderer=libMoltenVK.dylib，configuredVulkan=1）+ 无 VulkanMod（actualVulkanPath=0）的混合态下 MobileGlues GL fallback 初始化确定性失败
+- 勘误入档：v1.0 报告判 F 时"切换 MoltenVK 渲染档"提示系错误指引——org.lwjgl.vulkan.libname=MoltenVK 是启动器固定 JVM 参数（v1.0 未切档现场 S0 已存在），常规档下探针同样可加载 MoltenVK；用户被该提示带入 Vulkan 档固有崩溃。判 C 数据属"带病取证"，判定本身有效（换档不换库）
+- 第一章判定不受影响：判 C 维持，第二章 ICD 替换路线不变
+- 落盘：docs/chapter1-rt-probe-v1.2-field/（README 判读 + 三份证据归档）；VERDICT.md 追加"归因修正"更新段
+- Release rt-probe-v1.2 更新：body 追加复测结论与用户操作指引，上传现场判读文档资产
+
+Stage Summary:
+- 闪退悬案闭环：三版崩溃同源（渲染档混合态），探针全线清白；v1.2 的价值反而被本次实测确证（延迟执行=天然归因对照）
+- 用户下一步两步指引：①渲染器切回常规 GL 档 ②保留 v1.2 探针复跑，回传 rt_probe_report.txt（预期判 C 复现 + 游戏存活到标题屏）
+- 待办：①等用户常规档复测报告 ②第二章启动：KosmicKrisp/honeykrisp ICD 调研与改包方案（主线）③Prisma 启动器 hook 点接入说明回收（并行）
