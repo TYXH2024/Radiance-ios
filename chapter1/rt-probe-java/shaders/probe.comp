@@ -1,0 +1,35 @@
+#version 460
+#extension GL_EXT_ray_tracing : require
+#extension GL_EXT_ray_query : require
+
+// RT 能力探针计算着色器：
+// invocation 0: 从 (0.5, 0.5, -1) 朝 +z 打向 z=0 平面的三角形 -> 必中, t=1.0
+// invocation 1: 同起点朝 -z 打（背离三角形）-> 必脱靶, t=-1.0
+
+layout(local_size_x = 2) in;
+
+layout(set = 0, binding = 0) uniform accelerationStructureEXT topLevelAS;
+layout(set = 0, binding = 1, std430) writeonly buffer Result {
+  vec2 results[];
+};
+
+void main() {
+  uint idx = gl_GlobalInvocationID.x;
+  vec3 origin = vec3(0.5, 0.5, -1.0);
+  vec3 dir    = (idx == 0u) ? vec3(0.0, 0.0, 1.0) : vec3(0.0, 0.0, -1.0);
+
+  rayQueryEXT rq;
+  rayQueryInitializeEXT(rq, topLevelAS,
+                        gl_RayFlagsOpaqueEXT, 0xFFu,
+                        origin, 0.0,
+                        dir, 100.0);
+
+  float t = -1.0;
+  if (rayQueryProceedEXT(rq)) {
+    if (rayQueryGetIntersectionTypeEXT(rq, false)
+        == gl_RayQueryCommittedIntersectionTriangleEXT) {
+      t = rayQueryGetIntersectionTEXT(rq, false);
+    }
+  }
+  results[idx] = vec2(t, 0.0);
+}
