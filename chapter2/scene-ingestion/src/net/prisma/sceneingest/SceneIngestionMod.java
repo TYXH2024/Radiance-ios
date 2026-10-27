@@ -39,7 +39,7 @@ public final class SceneIngestionMod {
             return;
         }
         ProbeReport r = new ProbeReport("scene_ingestion_report.txt");
-        r.header("场景摄取探针 (scene-ingestion 0.1.0)");
+        r.header("场景摄取探针 (scene-ingestion 0.2.0)");
         r.info("触发方式: " + triggerSource);
 
         if (isDisabled()) {
@@ -92,8 +92,10 @@ public final class SceneIngestionMod {
         }
         if (!symbolsOk) {
             r.finish("REFLECT_FAIL", "存在未解析符号（共 " + Mappings.FAILURES.size()
-                    + " 个，报告已逐项列出）。原因：yarn 1.21.4+build.8 符号表与真机"
-                    + "运行时不一致，或 MC 版本非 1.21.4。附整份报告回报。");
+                    + " 个，报告已逐项列出；参数类型类（含 World）亦在审计列表内）。"
+                    + "v0.2 已修复 v0.1 的参数类解析缺陷（World/class_1937 未注册导致"
+                    + " method_39969 误报）——若此判定复现，即为 yarn 1.21.4+build.8 "
+                    + "符号表与真机运行时的真实不一致（MC 版本非 1.21.4）。附整份报告回报。");
             return;
         }
         r.pass("符号表全量解析通过（" + Mappings.RESOLVED.size() + " 项）");

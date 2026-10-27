@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "id": "sceneingest",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "name": "Scene Ingestion (Radiance iOS Chapter 2.1)",
   "description": "Ingests real Minecraft world chunk meshes into Metal acceleration structures (per-chunk BLAS + instance TLAS with dynamic rebuild) and verifies with world-space ray queries. Chapter 2 stage 2.1 acceptance probe for the Radiance iOS port.",
   "authors": ["Radiance iOS Port"],

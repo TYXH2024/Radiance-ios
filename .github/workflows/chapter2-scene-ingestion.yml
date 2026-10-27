@@ -39,9 +39,9 @@ jobs:
           set -ex
           chmod +x chapter2/scene-ingestion/build.sh
           bash chapter2/scene-ingestion/build.sh
-          JAR="chapter2/scene-ingestion/scene-ingestion-0.1.0.jar"
+          JAR="chapter2/scene-ingestion/scene-ingestion-0.2.0.jar"
           test -f "$JAR"
-          cp "$JAR" ./scene-ingestion-0.1.0.jar
+          cp "$JAR" ./scene-ingestion-0.2.0.jar
 
       - name: Verify native surface
         run: |
@@ -62,7 +62,7 @@ jobs:
         with:
           name: scene-ingestion-jar
           path: |
-            scene-ingestion-0.1.0.jar
+            scene-ingestion-0.2.0.jar
             chapter2/scene-ingestion/build/native/libradiance_scene.dylib
             chapter2/scene-ingestion/build/native/scene_trace.metallib
           if-no-files-found: error
@@ -70,17 +70,19 @@ jobs:
       - name: Publish prerelease (idempotent)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: scene-ingestion-v0.1
+          TAG: scene-ingestion-v0.2
         run: |
           set -x
           NOTES_FILE=release-notes.md
           cat > "$NOTES_FILE" <<'EOF'
-          # scene-ingestion v0.1 — 第二章 2.1 阶段探针
+          # scene-ingestion v0.2 — 第二章 2.1 阶段探针（v0.1 REFLECT_FAIL 根因修复）
+
+          **v0.2 变更**：修复 v0.1 真机 REFLECT_FAIL 误判——S3 符号审计中 `ChunkRendererRegionBuilder.build`（method_39969）的首参类型 World（class_1937）未预注册，`cls()` 静默降级 Object.class，`getDeclaredMethod` 以错误参数类型查找必然 NoSuchMethod。v0.2 将 World 纳入审计列表（22 类）并加固 `cls()`（未注册类显式 Class.forName，失败显式报错）。yarn 1.21.4+build.8 交叉验证确认该符号宿主/签名从未漂移。
 
           **用途**：把真实 MC 世界的区块网格摄入 Metal 加速结构（每区块 BLAS + 实例 TLAS 动态重建），并以世界空间 ray 求交验证全链路。
 
           ## 安装
-          1. 下载 `scene-ingestion-0.1.0.jar`，放入 mods/ 目录（与 metal-rt-probe 可共存，建议先移除后者避免重复报告）。
+          1. 下载 `scene-ingestion-0.2.0.jar`，放入 mods/ 目录（与 metal-rt-probe 可共存，建议先移除后者避免重复报告；若之前装过 v0.1 请务必替换）。
           2. 渲染器保持 **zink** 档。
           3. 启动游戏并**进入一个存档世界**（本探针在进世界后才开始摄取）。
           4. 进入世界后等待约 30 秒（摄取窗口 20s 起步 + 验证）。
@@ -111,11 +113,11 @@ jobs:
           - 顶点在 BLAS 内存 chunk-local 坐标（recentring），TLAS instance transform = translate(origin)。
           EOF
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" scene-ingestion-0.1.0.jar --clobber
+            gh release upload "$TAG" scene-ingestion-0.2.0.jar --clobber
           else
-            gh release create "$TAG" scene-ingestion-0.1.0.jar \
+            gh release create "$TAG" scene-ingestion-0.2.0.jar \
               --prerelease --target main \
-              --title "scene-ingestion v0.1 — MC world chunks into Metal BLAS/TLAS" \
+              --title "scene-ingestion v0.2 — MC world chunks into Metal BLAS/TLAS (S3 audit fix)" \
               --notes-file "$NOTES_FILE"
           fi
 
@@ -126,6 +128,7 @@ jobs:
             echo "## Chapter 2 — scene-ingestion build (macos-26)"
             echo "- Native dylib: iphoneos arm64, 3 key JNI exports verified"
             echo "- metallib: scene_trace kernel (metal3 std cascade)"
-            echo "- Artifact: scene-ingestion-0.1.0.jar (dylib + metallib + msl embedded)"
-            echo "- Release: scene-ingestion-v0.1 (prerelease, idempotent upload)"
+            echo "- Artifact: scene-ingestion-0.2.0.jar (dylib + metallib + msl embedded)"
+            echo "- Release: scene-ingestion-v0.2 (prerelease, idempotent upload)"
+            echo "- v0.2 fix: World/class_1937 registered in S3 audit; cls() no longer silently degrades to Object.class"
           } >> "$GITHUB_STEP_SUMMARY"

@@ -158,3 +158,22 @@ Stage Summary:
 - 2.1 首批交付完整入库：设计文档 + Java 七类 + native 场景管理 + MSL kernel + build.sh + CI 产线（Release 由 CI 幂等发布 scene-ingestion-v0.1）
 - 与 2.0 的关系：同一投送通道（JAR 内置 dylib→解包→System.load）、同一 Metal 直连架构（自建 MTLDevice）；新增真实世界几何摄取与动态 BLAS/TLAS
 - 待办：①CI 过绿 + Release 资产确认 ②用户真机实测（zink 档 + 进世界 + 等 30s）回传 scene_ingestion_report.txt ③判 SCENE_INGEST_OK → 2.2 路径追踪引擎（MSL path tracer + 光照回传 + GL 纹理呈现）④若 REFLECT_FAIL 按报告逐符号修符号表 ⑤若 NATIVE_MISMATCH 排查 TLAS 变换/相机位置
+
+---
+
+## 2026-10-27（七）· scene-ingestion 0.1.0 真机 REFLECT_FAIL 回收 → 根因定位（探针参数类解析缺陷，非真机符号漂移）→ v0.2.0 修复发布
+
+Task: 回收用户真机 scene_ingestion_report.txt（M3 / OSMesa 宿主档，判定 REFLECT_FAIL，S3 唯一 FAIL = class_6850#method_39969）→ 离线根因定位 → 修复发版
+
+Work Log:
+- 真机报告回收存证 docs/chapter2-scene-ingestion-field/（M3-v0.1.0-report.txt 原文 + README 根因判读）：S1 解包 PASS（dylib 93936 B + metallib 5560 B）、S2 装载 PASS（受信链复验）、S3 审计 46/47，唯一 FAIL = method_39969（ChunkRendererRegionBuilder.build）
+- 根因定位（离线证据链闭环）：重新下载 yarn 1.21.4+build.8 v2 tiny 交叉验证——method_39969 宿主/签名从未漂移（tiny 13238-13244 行：class_6850 上的 (Lclass_1937;Lclass_4076;)Lclass_853;）；46 项 PASS 含 1.21.4 特有 SectionBuilder 全套四参签名，运行时确系官方 1.21.4
+- 真实机制：Mappings.java v0.1 的 cls() 对未注册类名**静默 fallback 返回 Object.class**——World（class_1937）不在 21 类审计列表，而 method_39969 审计需要它做参数类型 → getDeclaredMethod("method_39969", Object.class, class_4076) 参数类型必然不匹配 → NoSuchMethodException → "签名漂移？"提示语把探针自身的错归因给真机
+- 修复 v0.2.0：①World（class_1937）纳入类审计列表（21→22，S3 报告新增 class_1937 PASS 行）②cls() 加固——未注册类显式 Class.forName 并缓存，解析失败显式抛 IllegalStateException，彻底消灭静默降级 ③REFLECT_FAIL 提示语更正（v0.2 后复现即为真实版本不符指纹）④版本全链 bump：fabric.mod.json / build.sh / SceneIngestionMod 报告头
+- CI workflow 同步 bump：JAR scene-ingestion-0.2.0.jar / TAG scene-ingestion-v0.2 / release notes 增 v0.2 变更段 / run summary 更新
+- 本地 ecj 冒烟：9 class 产出零错误（scripts/smoke_sceneingest_v02.sh）
+
+Stage Summary:
+- 0.1.0 REFLECT_FAIL 归因闭环：**探针缺陷而非真机符号漂移**——静默 fallback 制造的假阳性；教训固化为两条纪律：反射审计器的参数类型类必须与符号同表管理；任何 fallback 必须显式报错
+- v0.2.0 直推 main（含 field 存证 docs/chapter2-scene-ingestion-field/），CI 自动构建发布 Release scene-ingestion-v0.2
+- 待办：①CI 过绿确认 ②用户真机复测 v0.2（**替换** mods 内 v0.1 jar，勿共存）③期望走到 S4/S5/S6 判 SCENE_INGEST_OK → 2.2 路径追踪引擎 ④若 NATIVE_MISMATCH 排查 TLAS instance 变换/相机坐标系 ⑤若 SCENE_EMPTY 确认真机进世界后等满 30s

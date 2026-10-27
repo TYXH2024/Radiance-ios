@@ -32,6 +32,7 @@ import java.util.Map;
  *   BlockPos                  class_2338
  *   ChunkSectionPos           class_4076   .from(BlockPos) method_18682
  *   ChunkRendererRegionBuilder class_6850  .build(World, ChunkSectionPos) method_39969
+ *   World                    class_1937   (build 首参类型，v0.2 纳入审计)
  *   SectionBuilder            class_9810   .build(sectionPos, region, sorter, storage)
  *                                          method_60904 → RenderData
  *   SectionBuilder$RenderData class_9810$class_9811 .buffers field_52168 (Map)
@@ -71,6 +72,7 @@ final class Mappings {
     static final String C_VEC3D           = "net.minecraft.class_243";
     static final String C_GAME_RENDERER   = "net.minecraft.class_757";
     static final String C_CLIENT_WORLD    = "net.minecraft.class_638";
+    static final String C_WORLD           = "net.minecraft.class_1937";
 
     // ---- 字段 ----
     static final String F_MC_WORLD        = "field_1687";
@@ -126,12 +128,12 @@ final class Mappings {
         }
         resolved = true;
 
-        // 类（22 个目标）
+        // 类（22 个目标；v0.2 增补 World/class_1937 —— RegionBuilder.build 首参）
         String[] classes = {
             C_MC, C_WORLD_RENDERER, C_STORAGE, C_CHUNK_BUILDER, C_BUILT_CHUNK, C_VEC3I,
             C_BLOCK_POS, C_SECTION_POS, C_REGION_BUILDER, C_REGION, C_SECTION_BUILDER,
             C_RENDER_DATA, C_BUILT_BUFFER, C_DRAW_PARAMS, C_VERTEX_FORMAT, C_VERTEX_SORTER,
-            C_ALLOC_STORAGE, C_CAMERA, C_VEC3D, C_GAME_RENDERER, C_CLIENT_WORLD,
+            C_ALLOC_STORAGE, C_CAMERA, C_VEC3D, C_GAME_RENDERER, C_CLIENT_WORLD, C_WORLD,
         };
         for (String cn : classes) {
             try {
@@ -160,7 +162,7 @@ final class Mappings {
         Class<?> vs = cls(C_VERTEX_SORTER);
         Class<?> cam = cls(C_CAMERA);
         Class<?> gr = cls(C_GAME_RENDERER);
-        Class<?> world = cls("net.minecraft.class_1937"); // World (RegionBuilder.build 首参)
+        Class<?> world = cls(C_WORLD); // World (RegionBuilder.build 首参)
 
         // 字段
         field(r, mc, F_MC_WORLD);
@@ -223,7 +225,20 @@ final class Mappings {
 
     static Class<?> cls(String name) {
         Class<?> c = (Class<?>) RESOLVED.get(name);
-        return c != null ? c : Object.class;
+        if (c != null) {
+            return c;
+        }
+        // v0.2 修复：v0.1 此处静默 fallback 返回 Object.class，导致 method_39969
+        // 以错误参数类型 (Object, ChunkSectionPos) 查找而必然 NoSuchMethod——
+        // 真机 REFLECT_FAIL 的根因（符号本身从未漂移）。未注册类现在显式
+        // Class.forName 并缓存，解析失败显式报错，不再静默降级。
+        try {
+            c = Class.forName(name);
+            RESOLVED.put(name, c);
+        } catch (Throwable t) {
+            throw new IllegalStateException("class 未注册且不可解析: " + name, t);
+        }
+        return c;
     }
 
     @SuppressWarnings("unchecked")
