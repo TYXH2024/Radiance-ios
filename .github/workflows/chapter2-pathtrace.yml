@@ -83,34 +83,37 @@ jobs:
           set -ex
           TAG="pathtrace-v0.1"
           TITLE="pathtrace v0.1 — 2.2 path tracing engine first frame (ingestion fork + vertex-color albedo + offscreen render + PNG)"
-          NOTES="$(cat <<'EOF'
-Radiance iOS 移植 第二章 2.2 第一版（path tracing 引擎首帧）。
+          NOTES_FILE=release-notes.md
+          cat > "$NOTES_FILE" <<'EOF'
+          # pathtrace v0.1 — 第二章 2.2 第一版（path tracing 引擎首帧）
 
-**前置**: 2.1 scene-ingestion v0.5 真机判定 SCENE_INGEST_OK（哨兵 3/3、
-SECTION-LOCAL R=0 精确、命中面整数格线自证）——2.2 契约已盖章。
+          **前置**: 2.1 scene-ingestion v0.5 真机判定 SCENE_INGEST_OK（哨兵 3/3、
+          SECTION-LOCAL R=0 精确、命中面整数格线自证）——2.2 契约已盖章。
 
-**本版内容**:
-- 摄取链 fork（2.1 已四连真机验证的骨架）+ 三处外科手术：
-  1. 顶点 COLOR 提取（VertexFormat.getOffset(COLOR) 动态解析，无硬编码
-     偏移；MC 把方块染色烘进顶点色——即 path tracer 的 albedo）
-  2. 摆放简化（顶点 section-local 原样入库 + TLAS instance =
-     translate(origin)，等价于 2.1 已验证的 recentring+translate(2*origin)）
-  3. TLAS 随建 shading pools（逐三角 3 色 + CPU 法线 + 实例基址表）
-- pathtrace_kernel（MSL metal3 ray_query）：相机 ray → TLAS → 重心插值
-  albedo → 太阳直射 + 阴影 ray → cosine 加权漫反射弹射 → spp 累积 →
-  Reinhard + gamma → RGBA8；atomic 计数器回读（实测 Mray/s，非估算）
-- S6 摆放抽查（哨兵 + 相机姿态 + 整数格线——零粉饰纪律沿用 2.1）
-- S7 离屏渲染 480x270 / 24 spp / 2 bounces + 手写零依赖 PNG 编码器
-  （不依赖 java.desktop）落盘 pathtrace_frame.png + 图像统计自证
-- 判定: PATHTRACE_OK / PLACEMENT_FAIL / RENDER_FAIL / IMAGE_DEGENERATE /
-  SENTINEL_FAIL / SCENE_EMPTY / CAMERA_FAIL（每档语义明确）
+          **本版内容**:
+          - 摄取链 fork（2.1 已四连真机验证的骨架）+ 三处外科手术：
+            1. 顶点 COLOR 提取（VertexFormat.getOffset(COLOR) 动态解析，无硬编码
+               偏移；MC 把方块染色烘进顶点色——即 path tracer 的 albedo）
+            2. 摆放简化（顶点 section-local 原样入库 + TLAS instance =
+               translate(origin)，等价于 2.1 已验证的 recentring+translate(2*origin)）
+            3. TLAS 随建 shading pools（逐三角 3 色 + CPU 法线 + 实例基址表）
+          - pathtrace_kernel（MSL metal3 ray_query）：相机 ray → TLAS → 重心插值
+            albedo → 太阳直射 + 阴影 ray → cosine 加权漫反射弹射 → spp 累积 →
+            Reinhard + gamma → RGBA8；atomic 计数器回读（实测 Mray/s，非估算）
+          - S6 摆放抽查（哨兵 + 相机姿态 + 整数格线——零粉饰纪律沿用 2.1）
+          - S7 离屏渲染 480x270 / 24 spp / 2 bounces + 手写零依赖 PNG 编码器
+            （不依赖 java.desktop）落盘 pathtrace_frame.png + 图像统计自证
+          - 判定: PATHTRACE_OK / PLACEMENT_FAIL / RENDER_FAIL / IMAGE_DEGENERATE /
+            SENTINEL_FAIL / SCENE_EMPTY / CAMERA_FAIL（每档语义明确）
 
-**使用**: 替换 mods/ 内旧探针 JAR（同存档进世界 30-40s）→
-`pathtrace_report.txt` + `pathtrace_frame.png`（均在 game 目录）回报。
-EOF
-          )"
-          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 \
-            && gh release upload "$TAG" ./pathtrace-0.1.0.jar --clobber --repo "$GITHUB_REPOSITORY" \
-            || gh release create "$TAG" ./pathtrace-0.1.0.jar \
-                 --title "$TITLE" --notes "$NOTES" --prerelease --repo "$GITHUB_REPOSITORY"
+          **使用**: 替换 mods/ 内旧探针 JAR（同存档进世界 30-40s）→
+          `pathtrace_report.txt` + `pathtrace_frame.png`（均在 game 目录）回报。
+          EOF
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$TAG" ./pathtrace-0.1.0.jar --clobber --repo "$GITHUB_REPOSITORY"
+          else
+            gh release create "$TAG" ./pathtrace-0.1.0.jar \
+                 --title "$TITLE" --notes-file "$NOTES_FILE" \
+                 --prerelease --repo "$GITHUB_REPOSITORY"
+          fi
           echo "RELEASE_DONE $TAG"
