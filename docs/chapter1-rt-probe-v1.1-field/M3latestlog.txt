@@ -1,0 +1,748 @@
+[shaderc-sandbox] fork() failed errno=1 -- sandbox disabled (iOS sandbox denies fork on this install?)
+[Pre-Init] Prisma Launcher (fork of Amethyst iOS Remastered) INIT!
+[Pre-Init] Fork: https://github.com/Gsjsjzhznsz/Prisma-Minecraft-iOS-Launcher
+[Pre-Init] Upstream: https://github.com/herbrine8403/Amethyst-iOS-MyRemastered
+[Pre-Init] Please try not to post this log of the remastered launcher to the original GitHub Issues for help.
+[Pre-Init] Version: 6.5.0
+[Pre-Init] Commit: bbcf4d0 (main)
+[Pre-Init] Device: iPad Air 11-inch (M3)
+[Pre-Init] iPadOS 18.3.2 (22D2082) (Unjailbroken)
+[Pre-init] Entitlements availability:
+* com.apple.developer.kernel.extended-virtual-addressing: YES
+* com.apple.developer.kernel.increased-memory-limit: YES
+* com.apple.private.security.no-sandbox: NO
+* jb.pmap_cs.custom_trust: NO
+* dynamic-codesigning: NO
+[PLPreferences] Getter could not find preference download.speed_probe.bmclapi
+[PLPreferences] Getter could not find preference download.speed_probe.mcim
+[main_hook] Task202: CAMetalLayer nextDrawable hook installed (Metal first-frame signal; fires only in AMETHYST_METAL sessions while running)
+[AmeMenu] Task237 floating-menu router installed (glass style presents custom menus; native style passes through)
+[Debugging] Debug log enabled: YES
+[Pre-init] Restored game directory preference (default)
+[Pre-init] Task226 game-dir symlink re-pointed to instances/default
+[SceneDelegate] Task191: uncaught-exception handler re-armed at willConnect
+[PLPreferences] Getter could not find preference download.speed_probe.bmclapi
+[BackgroundManager] Task252: ui settings resolved effect=1 (0=translucent 1=blur) opacity=0.10 blurIntensity=0.00 (frostAlpha=0.30) hasBackground=1
+[BackgroundManager] Task254: accessibility archive reduceTransparency=0 reduceMotion=0 (UIBlurEffect renders flat when reduceTransparency=1)
+[HomeAvatar] Task172 branch: network fetch started (URL present, length=186)
+[HomeAvatar] Task172 sync skipped: currentAvatar is nil (check branch log above)
+[PLPreferences] Getter could not find preference general.download_source
+[PLPreferences] Getter could not find preference internal.autolaunch_profile
+[PLPreferences] Getter could not find preference auto_control_update_check
+[HomeAvatar] Task172 branch: network fetch started (URL present, length=186)
+[HomeAvatar] Task172 sync skipped: currentAvatar is nil (check branch log above)
+[PLPreferences] Getter could not find preference general.disable_window_rotation_shim
+[SceneDelegate] Task189: landscape window transform evaluated (bounds={{0, 0}, {1180, 820}} rotated=0)
+[BackgroundManager] Task256: blur intensity at minimum -- frost+dim layers skipped (fully transparent background)
+[SceneDelegate] libterracotta linked, multiplayer available (lazy init)
+[FG-Lifecycle] willEnterForeground: swapOK=0 swapFail=0
+[PLPreferences] Getter could not find preference general.disable_window_rotation_shim
+[HomeAvatar] Task172 fetch completion: img=yes (120x120)
+[HomeAvatar] Task172 direct-sync: 1 visible profile cell(s), image 120x120
+[HomeAvatar] Task172 fetch completion: img=yes (120x120)
+[HomeAvatar] Task172 direct-sync: 1 visible profile cell(s), image 120x120
+[PLPreferences] Getter could not find preference general.disable_window_rotation_shim
+[FG-Lifecycle] didBecomeActive: presentation enforcement did=0
+[FG-Lifecycle] didBecomeActive: swapOK=0 swapFail=0
+[Task266] adaptive sneak sync: key_key.sneak=ABSENT(default left.shift) -> right-shift button(344) emits GLFW 340 (TRANSLATE 344->340, SDL scancode 225 LSHIFT)
+[InputDiag] Task229 resume reassert: cursor baseline reset to (0.0, 0.0), 0 toggle-held mod(s) re-driven
+[InputDiag] Task232 resume geometry probe: physical=0x0 window=0x0 guiScale=1 cursor=(0.0,0.0) grabbing=0
+[HomeAvatar] Task172 direct-sync: 1 visible profile cell(s), image 120x120
+[BingWallpaper] Task151 metadata synced: 8 items (host=https://cn.bing.com, today=20261026)
+[HomeAvatar] Task172 direct-sync: 1 visible profile cell(s), image 120x120
+[LauncherRootVC] Task218 loaded 922 remote versions from bmclapi2.bangbang93.com
+[HomeAvatar] Task173 home VC reused (avatar survives tab switch)
+[PLPreferences] Getter could not find preference download.speed_probe.bmclapi
+2026-10-27 13:58:39.361 AngelAuraAmethyst[6334:1355704] [ThemeOps] Task228 composite glass default (system UIGlassEffect renders black in this process; opt-in trial via AME227_SYSTEM_GLASS=1)
+[MCDL] SHA1 passed for 1.21.4.json
+[MCDL] insertSafety: how to insert assetIndex?
+[MCDL] insertSafety: how to insert assets?
+[MCDL] Replacing JNA 5.15.0 with 5.13.0 for iOS compatibility (required by fabric-loader-0.20.1-1.21.4)
+[MDCL] Skipped library org.lwjgl:lwjgl-freetype:3.3.3
+[MDCL] Skipped library org.lwjgl:lwjgl-freetype:3.3.3:natives-linux
+[MDCL] Skipped library org.lwjgl:lwjgl-freetype:3.3.3:natives-macos-arm64
+[MDCL] Skipped library org.lwjgl:lwjgl-freetype:3.3.3:natives-macos-patch
+[MDCL] Skipped library org.lwjgl:lwjgl-freetype:3.3.3:natives-windows
+[MDCL] Skipped library org.lwjgl:lwjgl-freetype:3.3.3:natives-windows-arm64
+[MDCL] Skipped library org.lwjgl:lwjgl-freetype:3.3.3:natives-windows-x86
+[MDCL] Skipped library org.lwjgl:lwjgl-jemalloc:3.3.3
+[MDCL] Skipped library org.lwjgl:lwjgl-jemalloc:3.3.3:natives-linux
+[MDCL] Skipped library org.lwjgl:lwjgl-jemalloc:3.3.3:natives-macos
+[MDCL] Skipped library org.lwjgl:lwjgl-jemalloc:3.3.3:natives-macos-arm64
+[MDCL] Skipped library org.lwjgl:lwjgl-jemalloc:3.3.3:natives-windows
+[MDCL] Skipped library org.lwjgl:lwjgl-jemalloc:3.3.3:natives-windows-arm64
+[MDCL] Skipped library org.lwjgl:lwjgl-jemalloc:3.3.3:natives-windows-x86
+[MDCL] Skipped library org.lwjgl:lwjgl-openal:3.3.3
+[MDCL] Skipped library org.lwjgl:lwjgl-openal:3.3.3:natives-linux
+[MDCL] Skipped library org.lwjgl:lwjgl-openal:3.3.3:natives-macos
+[MDCL] Skipped library org.lwjgl:lwjgl-openal:3.3.3:natives-macos-arm64
+[MDCL] Skipped library org.lwjgl:lwjgl-openal:3.3.3:natives-windows
+[MDCL] Skipped library org.lwjgl:lwjgl-openal:3.3.3:natives-windows-arm64
+[MDCL] Skipped library org.lwjgl:lwjgl-openal:3.3.3:natives-windows-x86
+[MDCL] Skipped library org.lwjgl:lwjgl-opengl:3.3.3
+[MDCL] Skipped library org.lwjgl:lwjgl-opengl:3.3.3:natives-linux
+[MDCL] Skipped library org.lwjgl:lwjgl-opengl:3.3.3:natives-macos
+[MDCL] Skipped library org.lwjgl:lwjgl-opengl:3.3.3:natives-macos-arm64
+[MDCL] Skipped library org.lwjgl:lwjgl-opengl:3.3.3:natives-windows
+[MDCL] Skipped library org.lwjgl:lwjgl-opengl:3.3.3:natives-windows-arm64
+[MDCL] Skipped library org.lwjgl:lwjgl-opengl:3.3.3:natives-windows-x86
+[MDCL] Skipped library org.lwjgl:lwjgl-stb:3.3.3
+[MDCL] Skipped library org.lwjgl:lwjgl-stb:3.3.3:natives-linux
+[MDCL] Skipped library org.lwjgl:lwjgl-stb:3.3.3:natives-macos
+[MDCL] Skipped library org.lwjgl:lwjgl-stb:3.3.3:natives-macos-arm64
+[MDCL] Skipped library org.lwjgl:lwjgl-stb:3.3.3:natives-windows
+[MDCL] Skipped library org.lwjgl:lwjgl-stb:3.3.3:natives-windows-arm64
+[MDCL] Skipped library org.lwjgl:lwjgl-stb:3.3.3:natives-windows-x86
+[MDCL] Skipped library org.lwjgl:lwjgl-tinyfd:3.3.3
+[MDCL] Skipped library org.lwjgl:lwjgl-tinyfd:3.3.3:natives-linux
+[MDCL] Skipped library org.lwjgl:lwjgl-tinyfd:3.3.3:natives-macos
+[MDCL] Skipped library org.lwjgl:lwjgl-tinyfd:3.3.3:natives-macos-arm64
+[MDCL] Skipped library org.lwjgl:lwjgl-tinyfd:3.3.3:natives-windows
+[MDCL] Skipped library org.lwjgl:lwjgl-tinyfd:3.3.3:natives-windows-arm64
+[MDCL] Skipped library org.lwjgl:lwjgl-tinyfd:3.3.3:natives-windows-x86
+[MDCL] Skipped library org.lwjgl:lwjgl:3.3.3
+[MDCL] Skipped library org.lwjgl:lwjgl:3.3.3:natives-linux
+[MDCL] Skipped library org.lwjgl:lwjgl:3.3.3:natives-macos
+[MDCL] Skipped library org.lwjgl:lwjgl:3.3.3:natives-macos-arm64
+[MDCL] Skipped library org.lwjgl:lwjgl:3.3.3:natives-windows
+[MDCL] Skipped library org.lwjgl:lwjgl:3.3.3:natives-windows-arm64
+[MDCL] Skipped library org.lwjgl:lwjgl:3.3.3:natives-windows-x86
+[MCDL] Unknown artifact object for org.ow2.asm:asm:9.10.1, attempting to generate one
+[MCDL] Warning: couldn't find SHA for /private/var/mobile/Containers/Data/Application/132BB6A9-CD8E-40EA-8202-AA41493AF270/Documents/Library/Application Support/minecraft/libraries/org/ow2/asm/asm/9.10.1/asm-9.10.1.jar, have to assume it's good.
+[MCDL] Unknown artifact object for org.ow2.asm:asm-analysis:9.10.1, attempting to generate one
+[MCDL] Warning: couldn't find SHA for /private/var/mobile/Containers/Data/Application/132BB6A9-CD8E-40EA-8202-AA41493AF270/Documents/Library/Application Support/minecraft/libraries/org/ow2/asm/asm-analysis/9.10.1/asm-analysis-9.10.1.jar, have to assume it's good.
+[MCDL] Unknown artifact object for org.ow2.asm:asm-commons:9.10.1, attempting to generate one
+[MCDL] Warning: couldn't find SHA for /private/var/mobile/Containers/Data/Application/132BB6A9-CD8E-40EA-8202-AA41493AF270/Documents/Library/Application Support/minecraft/libraries/org/ow2/asm/asm-commons/9.10.1/asm-commons-9.10.1.jar, have to assume it's good.
+[MCDL] Unknown artifact object for org.ow2.asm:asm-tree:9.10.1, attempting to generate one
+[MCDL] Warning: couldn't find SHA for /private/var/mobile/Containers/Data/Application/132BB6A9-CD8E-40EA-8202-AA41493AF270/Documents/Library/Application Support/minecraft/libraries/org/ow2/asm/asm-tree/9.10.1/asm-tree-9.10.1.jar, have to assume it's good.
+[MCDL] Unknown artifact object for org.ow2.asm:asm-util:9.10.1, attempting to generate one
+[MCDL] Warning: couldn't find SHA for /private/var/mobile/Containers/Data/Application/132BB6A9-CD8E-40EA-8202-AA41493AF270/Documents/Library/Application Support/minecraft/libraries/org/ow2/asm/asm-util/9.10.1/asm-util-9.10.1.jar, have to assume it's good.
+[MCDL] Unknown artifact object for net.fabricmc:sponge-mixin:0.17.5+mixin.0.8.7, attempting to generate one
+[MCDL] Warning: couldn't find SHA for /private/var/mobile/Containers/Data/Application/132BB6A9-CD8E-40EA-8202-AA41493AF270/Documents/Library/Application Support/minecraft/libraries/net/fabricmc/sponge-mixin/0.17.5+mixin.0.8.7/sponge-mixin-0.17.5+mixin.0.8.7.jar, have to assume it's good.
+[MCDL] Unknown artifact object for net.fabricmc:intermediary:1.21.4, attempting to generate one
+[MCDL] Warning: couldn't find SHA for /private/var/mobile/Containers/Data/Application/132BB6A9-CD8E-40EA-8202-AA41493AF270/Documents/Library/Application Support/minecraft/libraries/net/fabricmc/intermediary/1.21.4/intermediary-1.21.4.jar, have to assume it's good.
+[MCDL] Unknown artifact object for net.fabricmc:fabric-loader:0.20.1, attempting to generate one
+[MCDL] Warning: couldn't find SHA for /private/var/mobile/Containers/Data/Application/132BB6A9-CD8E-40EA-8202-AA41493AF270/Documents/Library/Application Support/minecraft/libraries/net/fabricmc/fabric-loader/0.20.1/fabric-loader-0.20.1.jar, have to assume it's good.
+[PLPreferences] Getter could not find preference download.speed_probe.mcim
+[IconLoader] Initialization complete, disk cache directory: /var/mobile/Containers/Data/Application/132BB6A9-CD8E-40EA-8202-AA41493AF270/Library/Caches/IconLoader, mirror enabled: YES
+[PLPreferences] Getter could not find preference download.speed_probe.mcim
+[PLPreferences] Setter could not find preference download.speed_probe.bmclapi
+2026-10-27 13:58:40.877 AngelAuraAmethyst[6334:1387788] [PLMirrorCenter] Task259 speed probe (family=0): official won (rtt official=895ms mirror=1060ms; throughput official=614KB/s mirror=132KB/s; decided by throughput)
+[MCDL] Task187: verify stage entered (elapsed 1.8s since downloadVersion:)
+[JIT] [RightPanel] Task224 closing presented stack ('PLTaskProgressViewController') + 0.8s settle before JIT wait
+[JIT] [RightPanel] invokeAfterJITEnabled: dynamicCS=0 trollStore=0 CS_DEBUGGED=1 ppid=1 traced=0 exn=0 JIT_FLAGS=0x4
+[JIT] [RightPanel] JIT enabled with live JIT26 debugger, launching game directly
+[TouchController] Task268 profile 'fabric-loader-0.20.1-1.21.4' explicitly disabled -- touch protocol off for this launch
+[SurfaceSwap] Task183 launching SurfaceViewController (synchronous root swap; version=(null))
+2026-10-27 13:58:42.517 AngelAuraAmethyst[6334:1355704] [LGC] Task260: game session MC major -> 1 (in-game glass allowed: NO (legacy draw chain, panels fall back to native))
+[InputDiag] Task255: virtual modifier state reset (released bits=0x0)
+[InputDiag] Task261: session-start input state reset (Task179 ledger + virtual mods)
+[SurfaceViewController] FPS counter setup: profileRenderer=libMoltenVK.dylib, envRenderer=(null), graphicsApi=(null), isVulkan=1, configuredVulkanExpected=1 (actual path decided at runtime via pojavIsActualVulkanPath)
+[PLPreferences] Getter could not find preference ame217.autoRendererBlacklist
+[GameMenu] Task260: glass panel blocked by session gate (MC major <26 legacy draw chain) -- falling back to native panel (auto and manual liquid_glass alike)
+[GameMenu] Task237 native panel applied (legacy FCL look, text-only rows)
+[GameMenu] Task236 floating bar hardened (gear {{0, 0}, {44, 44}} r=22.0 subs=0; stats nil; caption nil)
+[GameMenu] Task243 floating bar restyled (pure dark capsules + 0.5pt/0.20 hairline; LGC glass skipped on Metal)
+[GameMenu] Task236 floating bar hardened (gear {{1149.8399999999999, 380.49998235702515}, {26, 96}} r=13.0 subs=0; stats {{0, 0}, {130, 24}}; caption {{-6, -3}, {34, 19.5}})
+[GameMenu] Task243 floating bar restyled (pure dark capsules + 0.5pt/0.20 hairline; LGC glass skipped on Metal)
+[GameMenu] Task227 gear dock state: DOCKED handle (right edge)
+[GameMenu] Task236 floating bar hardened (gear {{1145, 380.49998235702515}, {26, 96}} r=13.0 subs=0; stats {{4.9999990314245224, 58.999999493360519}, {130, 24}}; caption {{-6, -3}, {34, 19.5}})
+[GameMenu] Task243 floating bar restyled (pure dark capsules + 0.5pt/0.20 hairline; LGC glass skipped on Metal)
+[PLPreferences] Getter could not find preference ame217.autoRendererBlacklist
+[PLPreferences] Getter could not find preference ame217.autoRendererBlacklist
+[SurfaceVC] CAMetalLayer configured: drawableSize=2360x1640, maximumDrawableCount=3, presentsWithTransaction=0, drawsAsynchronously=1, contentsScale=2.00
+[TouchController] Sender ready on port 12450
+[SurfaceViewController] Task238 launch overlay z-order: game menu overlay raised above launch mask (gear/stats/menu visible during launch)
+[PLDisplayLinkTarget] displayLinkTick #1 (configuredVulkan=1, actualVulkanPath=0, stateChanged=0, fpsSource=metalLayerNextDrawable)
+[SurfaceViewController] Launching Minecraft with accountId: 15636550268595530547, version: 21, size: 2360x1640
+[JavaLauncher] Beginning JVM launch
+[JavaLauncher] Task205: AMETHYST_LOG_LEVEL=debug (renderer diagnostics verbose)
+[JavaLauncher] MoltenVK performance tracking + IMMEDIATE present mode requested for VSync diagnosis
+[JavaLauncher] Framerate unlock configuration:
+[JavaLauncher]   video.disable_game_vsync=1
+[JavaLauncher]   POJAV_DISABLE_VSYNC=1
+[JavaLauncher]   UIScreen.maximumFramesPerSecond=60
+[JavaLauncher] Reading custom environment variables
+[JavaLauncher] Warning: skipped empty value custom env variable: 
+[DyldLVBypass] init
+[DyldLVBypass] Using redirectFunctionDirect
+[DyldLVBypass] found dyld_mmap at 0x1bf1134e4
+[DyldLVBypass] hook dyld_mmap succeed!
+[DyldLVBypass] found dyld_fcntl at 0x1bf113620
+[DyldLVBypass] hook dyld_fcntl succeed!
+[PLPreferences] Getter could not find preference ame217.autoRendererBlacklist
+[JavaLauncher] init_loadMobileGluesConfig: renderer=libMoltenVK.dylib
+[JavaLauncher] Vulkan renderer detected, MobileGlues used as GL fallback. Config will take effect.
+[JavaLauncher]   mobileglues.enable_no_error = 0 -> enableNoError = 0
+[JavaLauncher]   mobileglues.enable_ext_timer_query = 1 -> enableExtTimerQuery = 1
+[JavaLauncher]   mobileglues.enable_ext_compute_shader = 0 -> enableExtComputeShader = 0
+[JavaLauncher]   mobileglues.enable_ext_direct_state_access = 0 -> enableExtDirectStateAccess = 0
+[JavaLauncher]   mobileglues.max_glsl_cache_size = 128 -> maxGlslCacheSize = 128
+[JavaLauncher]   mobileglues.multidraw_mode = 0 -> multidrawOrder = native,multiindirect,multibasevertex,multiarrays,indirect,basevertex,unroll,compute (旧键 multidrawMode 已被 MG 2.0.16+ 弃用，不再写入)
+[JavaLauncher]   mobileglues.angle_depth_clear_fix_mode = 0 -> angleDepthClearFixMode = 0
+[JavaLauncher]   mobileglues.custom_gl_version = 0 (raw)
+[JavaLauncher]   -> customGLVersion = 40 (decimal, MobileGlues Version(int) format)
+[JavaLauncher]   mobileglues.fsr1_setting = 0 -> fsr1Setting = 0
+[JavaLauncher] Task130: AMETHYST_FSR_RCAS_SHARPNESS=0.2000 exported (RCAS sharpness, mpv scale, default 0.2, negative = off)
+[GameMenu] Task236 floating bar hardened (gear {{1149.8399999999999, 380.49998235702515}, {26, 96}} r=13.0 subs=1; stats {{4.9999990314245224, 58.999999493360519}, {130, 24}}; caption {{-6, -3}, {34, 19.5}})
+[GameMenu] Task243 floating bar restyled (pure dark capsules + 0.5pt/0.20 hairline; LGC glass skipped on Metal)
+[GameMenu] Task227 gear dock state: DOCKED handle (right edge)
+[GameMenu] Task250: bounds changed to {1180, 820} -> gear handle re-docked / labels re-restored
+[JavaLauncher] MobileGlues config written to /private/var/mobile/Containers/Data/Application/132BB6A9-CD8E-40EA-8202-AA41493AF270/Documents/MG/config.json
+[JavaLauncher] config.json content:
+{
+  "multidrawOrder" : "native,multiindirect,multibasevertex,multiarrays,indirect,basevertex,unroll,compute",
+  "fsr1Setting" : 0,
+  "fsr1RcasSharpness" : 0.20000000000000001,
+  "maxGlslCacheSize" : 128,
+  "customGLVersion" : 40,
+  "enableExtDirectStateAccess" : 0,
+  "enableExtTimerQuery" : 1,
+  "angleDepthClearFixMode" : 0,
+  "enableExtComputeShader" : 0,
+  "enableNoError" : 0
+}
+[JavaLauncher] Task138: POJAV_NATIVEDIR=/private/var/mobile/Containers/Data/Application/132BB6A9-CD8E-40EA-8202-AA41493AF270/Documents (controlify JNA direct-mapping guard: libsdl4j ffi closure thunks are non-executable on iOS, steer Pojav-aware mods to graceful GLFW fallback)
+[JavaLauncher] Task158: library gate clean (51 present, 70 skipped)
+[PLPreferences] Getter could not find preference ame217.autoRendererBlacklist
+[JavaLauncher] RENDERER is set to libMoltenVK.dylib
+[JavaLauncher] GRAPHICS_API is set to default
+[Task244] Vulkan forensics: vulkanmod=0, iris/oculus=0, shaderpacks-dir=0 (renderer=libMoltenVK.dylib, graphicsApi=default) — if crash persists, share the hs_err diagnosis dialog content
+[Task225] keybind wash RETIRED (dump-only; markers v1=0 v2=0, v3 restore off)
+[Task67] ===== options.txt keybind dump (pre-sanitize) =====
+[Task67]   toggleCrouch:false (sneak/sprint toggle mode)
+[Task67]   toggleSprint:false (sneak/sprint toggle mode)
+[Task67]   key_key.attack:key.mouse.left
+[Task67]   key_key.use:key.mouse.right
+[Task67]   key_key.forward:key.keyboard.w
+[Task67]   key_key.left:key.keyboard.a
+[Task67]   key_key.back:key.keyboard.s
+[Task67]   key_key.right:key.keyboard.d
+[Task67]   key_key.jump:key.keyboard.space
+[Task67]   key_key.sneak:key.keyboard.left.shift
+[Task67]   key_key.sprint:key.keyboard.left.control
+[Task67]   key_key.drop:key.keyboard.q
+[Task67]   key_key.inventory:key.keyboard.e
+[Task67]   key_key.chat:key.keyboard.t
+[Task67]   key_key.playerlist:key.keyboard.tab
+[Task67]   key_key.pickItem:key.mouse.middle
+[Task67]   key_key.command:key.keyboard.slash
+[Task67]   key_key.socialInteractions:key.keyboard.p
+[Task67]   key_key.screenshot:key.keyboard.f2
+[Task67]   key_key.togglePerspective:key.keyboard.f5
+[Task67]   key_key.smoothCamera:key.keyboard.unknown
+[Task67] SUSPICIOUS (unknown-scancode binding, left as-is): key_key.smoothCamera:key.keyboard.unknown
+[Task67]   key_key.fullscreen:key.keyboard.f11
+[Task67]   key_key.spectatorOutlines:key.keyboard.unknown
+[Task67] SUSPICIOUS (unknown-scancode binding, left as-is): key_key.spectatorOutlines:key.keyboard.unknown
+[Task67]   key_key.swapOffhand:key.keyboard.f
+[Task67]   key_key.saveToolbarActivator:key.keyboard.c
+[Task67]   key_key.loadToolbarActivator:key.keyboard.x
+[Task67]   key_key.advancements:key.keyboard.l
+[Task67]   key_key.hotbar.1:key.keyboard.1
+[Task67]   key_key.hotbar.2:key.keyboard.2
+[Task67]   key_key.hotbar.3:key.keyboard.3
+[Task67]   key_key.hotbar.4:key.keyboard.4
+[Task67]   key_key.hotbar.5:key.keyboard.5
+[Task67]   key_key.hotbar.6:key.keyboard.6
+[Task67]   key_key.hotbar.7:key.keyboard.7
+[Task67]   key_key.hotbar.8:key.keyboard.8
+[Task67]   key_key.hotbar.9:key.keyboard.9
+[Task67] ===== keybind sanitize: 0 repairs needed (all canonical / defaults) =====
+[Task261] sneak rebind repair: no RIGHT_SHIFT(344) button in active layout (default.json), skip
+[JavaLauncher] Looking for Java 21 or later
+[JavaLauncher] JAVA_HOME has been set to /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/java_runtimes/java-21-openjdk
+[Task141] launch memory from instance profile: 4096 MB
+[Task173] safe heap ceiling: os_proc_available_memory=7840MB -> Xmx ceiling 6640MB (native reserve 1200MB, no floor on authoritative path)
+[JavaLauncher] Max RAM allocation is set to 4096 MB
+[JavaLauncher] Task68 GC/safepoint pause logging enabled (-Xlog:gc,safepoint -> stdout)
+[JavaLauncher] library.path = /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/Frameworks
+[Prisma] Task112: OpenAL pinned to /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/Frameworks/libopenal.dylib
+[JavaLauncher] Published Metallum surface view: 0x131fff2c0 (scale=2)
+[JavaLauncher] Task258: launcher lang pref=system -> MC lang=zh_cn
+[JavaLauncher] Added JVM property -Dmax.fps=260 (frame rate unlock layer 4)
+[JavaLauncher] Task201: Metallum agent skipped: MC major 1 < 26 (agent needs Java 21+ class files, this session runs Java 8)
+[JavaLauncher] Task263: showdown agent enabled (ame.showdown.home=/var/mobile/Containers/Data/Application/132BB6A9-CD8E-40EA-8202-AA41493AF270/Documents/instances/default/versions/fabric-loader-0.20.1-1.21.4/game)
+[PLPreferences] Getter could not find preference debug.ame259_quic_guard
+[JavaLauncher] Task259: link.e4mc.native_path stubbed (netty-quic native SIGBUS guard; e4mc relay degrades gracefully)
+[PLPreferences] Getter could not find preference java.jvm_preset
+[JavaLauncher] JVM GC optimization: G1GC + MaxGCPauseMillis=50 + StringDeduplication (Java 17+; preset=normal)
+[SDLHook] Task133: libjli image detected (/private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/java_runtimes/java-21-openjdk/lib/libjli.dylib) -- rebinding its _dlopen slots
+[SDLHook] Task133: _dlopen slots rebound for image (hits=1, classic+value-scan) -- JVM-side _dlopen chain now routes through the hook
+[SDLHook] Task133: _dlsym slots rebound for image (hits=1, classic+value-scan) -- JVM-side _dlsym chain now routes through the hook
+[SDLHook] Task134: JVM image watchdog started (200ms dyld scan, chain-independent JNA rebind backstop)
+[JavaLauncher] Caciocavallo: isJava8=0 libs=libs_caciocavallo17 mode=/a
+[PLPreferences] Getter could not find preference java.jvm_preset
+[JavaLauncher] Reading custom JVM flags
+[Init] Found JLI lib
+[JavaLauncher] Using LWJGL 333 (mcVersion=fabric-loader-0.20.1-1.21.4)
+[JavaLauncher] Using LWJGL jar at /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/libs/lwjgl-333/lwjgl.jar
+[CwdAlign] Task97: process CWD aligned to game dir: /private/var/mobile/Containers/Data/Application/132BB6A9-CD8E-40EA-8202-AA41493AF270/Documents/instances/default/versions/fabric-loader-0.20.1-1.21.4/game
+[AppKitStub] Task99: NSApplication/NSMenu/NSMenuItem stubs installed (iOS has no AppKit; MC 26.3 MacosUtil menu walk no-ops, numberOfItems=0)
+[AppKitStub] Task229: NSImage stub + NSData legacy-b64 selector installed (MC 1.20.1 MacosUtil.loadIcon no-ops instead of crashing; AppKit-free iOS)
+[Init] Calling JLI_Launch
+[main_hook] Task251: shutdown force-exit watchdog armed (marker=/private/var/mobile/Containers/Data/Application/132BB6A9-CD8E-40EA-8202-AA41493AF270/Documents/ame251_shutdown.marker) + jvm exit rebind watcher
+[PLDisplayLinkTarget] displayLinkTick #2 (configuredVulkan=1, actualVulkanPath=0, stateChanged=0, fpsSource=metalLayerNextDrawable)
+[PLDisplayLinkTarget] displayLinkTick #3 (configuredVulkan=1, actualVulkanPath=0, stateChanged=0, fpsSource=metalLayerNextDrawable)
+[PLDisplayLinkTarget] displayLinkTick #4 (configuredVulkan=1, actualVulkanPath=0, stateChanged=0, fpsSource=metalLayerNextDrawable)
+[SDLHook] Task133: libjvm image detected (/private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/java_runtimes/java-21-openjdk/lib/server/libjvm.dylib) -- rebinding its _dlopen slots
+[SDLHook] Task133: _dlopen slots rebound for image (hits=1, classic+value-scan) -- JVM-side _dlopen chain now routes through the hook
+[SDLHook] Task133: _dlsym slots rebound for image (hits=1, classic+value-scan) -- JVM-side _dlsym chain now routes through the hook
+[PLDisplayLinkTarget] displayLinkTick #5 (configuredVulkan=1, actualVulkanPath=0, stateChanged=0, fpsSource=metalLayerNextDrawable)
+[2026-10-27T13:58:42.861+0800][0.037s] Using G1
+WARNING: Unknown module: cpw.mods.bootstraplauncher specified to --add-exports
+PatchJNAAgent: premain called
+Arc Capes DNS Injector
+Parts of Alibaba's DCM library were used, please read https://github.com/alibaba/java-dns-cache-manipulator/blob/main/README.md for more info
+Added DNS cache entry: s.optifine.net/23.95.137.176
+PatchSVC: premain called
+[Ame251] game-session shutdown hook registered (force-exit marker -> native watchdog)
+[Task263] showdown-agent armed: user.dir=/var/mobile/Containers/Data/Application/132BB6A9-CD8E-40EA-8202-AA41493AF270/Documents/instances/default/versions/fabric-loader-0.20.1-1.21.4/game userDirCanonical=/private/var/mobile/Containers/Data/Application/132BB6A9-CD8E-40EA-8202-AA41493AF270/Documents/instances/default/versions/fabric-loader-0.20.1-1.21.4/game ame.showdown.home=/var/mobile/Containers/Data/Application/132BB6A9-CD8E-40EA-8202-AA41493AF270/Documents/instances/default/versions/fabric-loader-0.20.1-1.21.4/game
+[Task263] io-probe[premain]: java.io dir=NO index.js=NO | NIO dir=NO index.js=NO realpath=<NoSuchFileException>
+[2026-10-27T13:58:43.068+0800][0.244s] GC(0) Pause Young (Normal) (G1 Evacuation Pause) 6M->1M(128M) 0.859ms
+[2026-10-27T13:58:43.068+0800][0.244s] Safepoint "G1CollectForAllocation", Time since last: 178750167 ns, Reaching safepoint: 1416 ns, Cleanup: 84959 ns, At safepoint: 872208 ns, Leaving safepoint: 3042 ns, Total: 961625 ns
+[2026-10-27T13:58:43.118+0800][0.295s] GC(1) Pause Young (Normal) (G1 Evacuation Pause) 21M->17M(128M) 0.868ms
+[2026-10-27T13:58:43.118+0800][0.295s] Safepoint "G1CollectForAllocation", Time since last: 49263166 ns, Reaching safepoint: 1625 ns, Cleanup: 25709 ns, At safepoint: 881083 ns, Leaving safepoint: 1875 ns, Total: 910292 ns
+[PojavLauncher] VSync disabled, maxFps/maxFramerate/framerateLimit set to 260
+[PojavLauncher]   enableVsync=false
+[PojavLauncher]   maxFps=260
+[PojavLauncher]   maxFramerate=260
+[PojavLauncher]   framerateLimit=260
+[PojavLauncher]   inactivityFpsLimit=minimized
+[PojavLauncher] Task104 on-disk verification: inactivityFpsLimit=minimized maxFps=260 enableVsync=false
+[PojavLauncher] MC 26.2+ graphicsApi cleared (default)
+[2026-10-27T13:58:43.164+0800][0.341s] GC(2) Pause Young (Normal) (G1 Evacuation Pause) 27M->18M(128M) 0.437ms
+[2026-10-27T13:58:43.164+0800][0.341s] Safepoint "G1CollectForAllocation", Time since last: 45931458 ns, Reaching safepoint: 1834 ns, Cleanup: 60625 ns, At safepoint: 451333 ns, Leaving safepoint: 4083 ns, Total: 517875 ns
+Library org.ow2.asm:asm: Replaced version asm with asm
+[Tools] Replacing JNA 5.15.0 with 5.13.0 for iOS compatibility
+[Tools] LWJGL report version: 3.3.3 (from version metadata; sodium PreLaunchChecks gate, Task94)
+[Tools] LWJGL report version: 3.3.3 (from version metadata; sodium PreLaunchChecks gate, Task94)
+[Tools] LWJGL report version: 3.3.3 (from version metadata; sodium PreLaunchChecks gate, Task94)
+[Tools] LWJGL report version: 3.3.3 (from version metadata; sodium PreLaunchChecks gate, Task94)
+[Tools] LWJGL report version: 3.3.3 (from version metadata; sodium PreLaunchChecks gate, Task94)
+[Tools] LWJGL report version: 3.3.3 (from version metadata; sodium PreLaunchChecks gate, Task94)
+[Tools] LWJGL report version: 3.3.3 (from version metadata; sodium PreLaunchChecks gate, Task94)
+Launching Minecraft fabric-loader-0.20.1-1.21.4
+[PojavLauncher] LWJGL selected by launcher: 333, reported version: 3.3.3 (metadata: 3.3.3)
+[PojavLauncher] Using fallback log4j config: /var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/log4j-rce-patch-1.12.xml
+[Tools] LWJGL report version: 3.3.3 (from version metadata; sodium PreLaunchChecks gate, Task94)
+[Tools] LWJGL report version: 3.3.3 (from version metadata; sodium PreLaunchChecks gate, Task94)
+[Tools] LWJGL report version: 3.3.3 (from version metadata; sodium PreLaunchChecks gate, Task94)
+[Tools] LWJGL report version: 3.3.3 (from version metadata; sodium PreLaunchChecks gate, Task94)
+[Tools] LWJGL report version: 3.3.3 (from version metadata; sodium PreLaunchChecks gate, Task94)
+[Tools] LWJGL report version: 3.3.3 (from version metadata; sodium PreLaunchChecks gate, Task94)
+[Tools] LWJGL report version: 3.3.3 (from version metadata; sodium PreLaunchChecks gate, Task94)
+Args init finished. Now starting game
+[2026-10-27T13:58:43.444+0800][0.620s] Safepoint "ICBufferFull", Time since last: 278951500 ns, Reaching safepoint: 18042 ns, Cleanup: 197250 ns, At safepoint: 208 ns, Leaving safepoint: 1292 ns, Total: 216792 ns
+[2026-10-27T13:58:43.557+0800][0.734s] Safepoint "ICBufferFull", Time since last: 113432750 ns, Reaching safepoint: 2542 ns, Cleanup: 169291 ns, At safepoint: 500 ns, Leaving safepoint: 334 ns, Total: 172667 ns
+[2026-10-27T13:58:43.604+0800][0.780s] GC(3) Pause Young (Normal) (G1 Evacuation Pause) 112M->59M(150M) 11.729ms
+[2026-10-27T13:58:43.604+0800][0.780s] Safepoint "G1CollectForAllocation", Time since last: 34614833 ns, Reaching safepoint: 2083 ns, Cleanup: 156125 ns, At safepoint: 11749125 ns, Leaving safepoint: 4709 ns, Total: 11912042 ns
+[2026-10-27T13:58:43.663+0800][0.839s] GC(4) Pause Young (Normal) (G1 Evacuation Pause) 71M->62M(150M) 4.395ms
+[2026-10-27T13:58:43.663+0800][0.839s] Safepoint "G1CollectForAllocation", Time since last: 54462458 ns, Reaching safepoint: 1917 ns, Cleanup: 66916 ns, At safepoint: 4411250 ns, Leaving safepoint: 3000 ns, Total: 4483083 ns
+[2026-10-27T13:58:43.724+0800][0.901s] GC(5) Pause Young (Normal) (G1 Evacuation Pause) 74M->62M(150M) 1.234ms
+[2026-10-27T13:58:43.724+0800][0.901s] Safepoint "G1CollectForAllocation", Time since last: 60177459 ns, Reaching safepoint: 2625 ns, Cleanup: 95083 ns, At safepoint: 1248625 ns, Leaving safepoint: 5125 ns, Total: 1351458 ns
+[2026-10-27T13:58:43.789+0800][0.966s] GC(6) Pause Young (Concurrent Start) (Metadata GC Threshold) 70M->62M(198M) 0.976ms
+[2026-10-27T13:58:43.789+0800][0.966s] GC(7) Concurrent Mark Cycle
+[2026-10-27T13:58:43.789+0800][0.966s] Safepoint "CollectForMetadataAllocation", Time since last: 63909375 ns, Reaching safepoint: 1708 ns, Cleanup: 137209 ns, At safepoint: 995541 ns, Leaving safepoint: 2542 ns, Total: 1137000 ns
+[2026-10-27T13:58:43.802+0800][0.979s] GC(7) Pause Remark 63M->63M(198M) 1.378ms
+[2026-10-27T13:58:43.802+0800][0.979s] Safepoint "G1PauseRemark", Time since last: 11507417 ns, Reaching safepoint: 17541 ns, Cleanup: 27250 ns, At safepoint: 1390084 ns, Leaving safepoint: 2833 ns, Total: 1437708 ns
+[2026-10-27T13:58:43.808+0800][0.985s] GC(7) Pause Cleanup 64M->64M(198M) 0.024ms
+[2026-10-27T13:58:43.808+0800][0.985s] Safepoint "G1PauseCleanup", Time since last: 5934792 ns, Reaching safepoint: 16125 ns, Cleanup: 791 ns, At safepoint: 29542 ns, Leaving safepoint: 833 ns, Total: 47291 ns
+[2026-10-27T13:58:43.808+0800][0.985s] GC(7) Concurrent Mark Cycle 19.117ms
+[13:58:43] [main/INFO]: Loading Minecraft 1.21.4 with Fabric Loader 0.20.1
+[2026-10-27T13:58:43.935+0800][1.112s] Safepoint "ICBufferFull", Time since last: 126863917 ns, Reaching safepoint: 1917 ns, Cleanup: 223166 ns, At safepoint: 292 ns, Leaving safepoint: 417 ns, Total: 225792 ns
+[13:58:43] [main/INFO]: Loading 52 mods:
+	- fabric-api 0.110.5+1.21.4
+	   |-- fabric-api-base 0.4.52+8ca5486f82
+	   |-- fabric-api-lookup-api-v1 1.6.83+7feeb73382
+	   |-- fabric-biome-api-v1 15.0.3+f12498d082
+	   |-- fabric-block-api-v1 1.0.30+7feeb73382
+	   |-- fabric-block-view-api-v2 1.0.18+7feeb73382
+	   |-- fabric-blockrenderlayer-v1 2.0.6+7feeb73382
+	   |-- fabric-client-tags-api-v1 1.1.26+7feeb73382
+	   |-- fabric-command-api-v1 1.2.60+f71b366f82
+	   |-- fabric-command-api-v2 2.2.39+e496eb1582
+	   |-- fabric-commands-v0 0.2.77+df3654b382
+	   |-- fabric-content-registries-v0 9.1.11+7feeb73382
+	   |-- fabric-convention-tags-v1 2.1.5+7f945d5b82
+	   |-- fabric-convention-tags-v2 2.9.5+15afce7982
+	   |-- fabric-crash-report-info-v1 0.3.5+7feeb73382
+	   |-- fabric-data-attachment-api-v1 1.4.2+9aea556b82
+	   |-- fabric-data-generation-api-v1 22.1.1+5bea021682
+	   |-- fabric-dimensions-v1 4.0.9+7feeb73382
+	   |-- fabric-entity-events-v1 2.0.10+60fccc7682
+	   |-- fabric-events-interaction-v0 4.0.0+a4eebcf082
+	   |-- fabric-game-rule-api-v1 1.0.61+7feeb73382
+	   |-- fabric-item-api-v1 11.1.11+203e6b2382
+	   |-- fabric-item-group-api-v1 4.1.20+7feeb73382
+	   |-- fabric-key-binding-api-v1 1.0.55+7feeb73382
+	   |-- fabric-keybindings-v0 0.2.53+df3654b382
+	   |-- fabric-lifecycle-events-v1 2.5.2+bf2a60eb82
+	   |-- fabric-loot-api-v2 3.0.30+3f89f5a582
+	   |-- fabric-loot-api-v3 1.0.18+203e6b2382
+	   |-- fabric-message-api-v1 6.0.23+7feeb73382
+	   |-- fabric-model-loading-api-v1 4.0.1+84404cdd82
+	   |-- fabric-networking-api-v1 4.3.7+cc0fa2fe82
+	   |-- fabric-object-builder-api-v1 18.0.4+6383078582
+	   |-- fabric-particles-v1 4.0.12+7feeb73382
+	   |-- fabric-recipe-api-v1 8.0.2+203e6b2382
+	   |-- fabric-registry-sync-v0 6.0.0+cc0fa2fe82
+	   |-- fabric-renderer-api-v1 5.0.0+84404cdd82
+	   |-- fabric-renderer-indigo 2.0.0+84404cdd82
+	   |-- fabric-rendering-data-attachment-v1 0.3.56+73761d2e82
+	   |-- fabric-rendering-fluids-v1 3.1.17+7feeb73382
+	   |-- fabric-rendering-v1 10.0.0+6a293bdb82
+	   |-- fabric-resource-conditions-api-v1 5.0.12+203e6b2382
+	   |-- fabric-resource-loader-v0 3.0.9+203e6b2382
+	   |-- fabric-screen-api-v1 2.0.36+7feeb73382
+	   |-- fabric-screen-handler-api-v1 1.3.105+7feeb73382
+	   |-- fabric-sound-api-v1 1.0.31+7feeb73382
+	   |-- fabric-transfer-api-v1 5.4.5+1885ad7482
+	   \-- fabric-transitive-access-wideners-v1 6.3.1+56e78b9b82
+	- fabricloader 0.20.1
+	   \-- mixinextras 0.5.5
+	- java 21
+	- minecraft 1.21.4
+	- rtprobe 1.0.0
+[2026-10-27T13:58:44.048+0800][1.225s] GC(8) Pause Young (Prepare Mixed) (G1 Evacuation Pause) 102M->66M(198M) 2.022ms
+[2026-10-27T13:58:44.048+0800][1.225s] Safepoint "G1CollectForAllocation", Time since last: 110899291 ns, Reaching safepoint: 1917 ns, Cleanup: 155042 ns, At safepoint: 2038875 ns, Leaving safepoint: 6458 ns, Total: 2202292 ns
+[13:58:44] [main/INFO]: SpongePowered MIXIN Subsystem Version=0.8.7 Source=file:/private/var/mobile/Containers/Data/Application/132BB6A9-CD8E-40EA-8202-AA41493AF270/Documents/Library/Application%20Support/minecraft/libraries/net/fabricmc/sponge-mixin/0.17.5+mixin.0.8.7/sponge-mixin-0.17.5+mixin.0.8.7.jar Service=Knot/Fabric Env=CLIENT
+[2026-10-27T13:58:44.134+0800][1.310s] Safepoint "ICBufferFull", Time since last: 85158667 ns, Reaching safepoint: 18791 ns, Cleanup: 195542 ns, At safepoint: 417 ns, Leaving safepoint: 2083 ns, Total: 216833 ns
+[2026-10-27T13:58:44.229+0800][1.406s] Safepoint "ICBufferFull", Time since last: 95356667 ns, Reaching safepoint: 16500 ns, Cleanup: 246000 ns, At safepoint: 458 ns, Leaving safepoint: 1125 ns, Total: 264083 ns
+[2026-10-27T13:58:44.256+0800][1.433s] Safepoint "ICBufferFull", Time since last: 26443458 ns, Reaching safepoint: 1500 ns, Cleanup: 175334 ns, At safepoint: 291 ns, Leaving safepoint: 2459 ns, Total: 179584 ns
+[2026-10-27T13:58:44.295+0800][1.472s] GC(9) Pause Young (Mixed) (G1 Evacuation Pause) 128M->77M(198M) 2.807ms
+[2026-10-27T13:58:44.295+0800][1.472s] Safepoint "G1CollectForAllocation", Time since last: 36424125 ns, Reaching safepoint: 2375 ns, Cleanup: 158083 ns, At safepoint: 2824875 ns, Leaving safepoint: 6208 ns, Total: 2991541 ns
+[2026-10-27T13:58:44.393+0800][1.569s] GC(10) Pause Young (Normal) (G1 Evacuation Pause) 127M->82M(198M) 2.851ms
+[2026-10-27T13:58:44.393+0800][1.569s] Safepoint "G1CollectForAllocation", Time since last: 94085417 ns, Reaching safepoint: 17500 ns, Cleanup: 211833 ns, At safepoint: 2868667 ns, Leaving safepoint: 7833 ns, Total: 3105833 ns
+[2026-10-27T13:58:44.530+0800][1.707s] Safepoint "ICBufferFull", Time since last: 137516292 ns, Reaching safepoint: 1792 ns, Cleanup: 241041 ns, At safepoint: 459 ns, Leaving safepoint: 208 ns, Total: 243500 ns
+[2026-10-27T13:58:44.534+0800][1.710s] GC(11) Pause Young (Normal) (G1 Evacuation Pause) 156M->86M(198M) 2.893ms
+[2026-10-27T13:58:44.534+0800][1.710s] Safepoint "G1CollectForAllocation", Time since last: 455042 ns, Reaching safepoint: 17000 ns, Cleanup: 7250 ns, At safepoint: 2908708 ns, Leaving safepoint: 5500 ns, Total: 2938458 ns
+[13:58:44] [main/INFO]: Initializing MixinExtras via com.llamalad7.mixinextras.service.MixinExtrasServiceImpl(version=0.5.5).
+[2026-10-27T13:58:44.707+0800][1.883s] Safepoint "ICBufferFull", Time since last: 172713833 ns, Reaching safepoint: 1042 ns, Cleanup: 226625 ns, At safepoint: 250 ns, Leaving safepoint: 292 ns, Total: 228209 ns
+[2026-10-27T13:58:44.719+0800][1.896s] GC(12) Pause Young (Concurrent Start) (Metadata GC Threshold) 138M->87M(198M) 3.082ms
+[2026-10-27T13:58:44.719+0800][1.896s] GC(13) Concurrent Mark Cycle
+[2026-10-27T13:58:44.719+0800][1.896s] Safepoint "CollectForMetadataAllocation", Time since last: 9494208 ns, Reaching safepoint: 1000 ns, Cleanup: 72083 ns, At safepoint: 3105959 ns, Leaving safepoint: 7166 ns, Total: 3186208 ns
+[2026-10-27T13:58:44.737+0800][1.914s] GC(13) Pause Remark 89M->89M(198M) 2.488ms
+[2026-10-27T13:58:44.737+0800][1.914s] Safepoint "G1PauseRemark", Time since last: 15154834 ns, Reaching safepoint: 1291 ns, Cleanup: 69667 ns, At safepoint: 2502292 ns, Leaving safepoint: 1583 ns, Total: 2574833 ns
+[2026-10-27T13:58:44.745+0800][1.922s] GC(13) Pause Cleanup 89M->89M(198M) 0.046ms
+[2026-10-27T13:58:44.745+0800][1.922s] Safepoint "G1PauseCleanup", Time since last: 7834917 ns, Reaching safepoint: 22458 ns, Cleanup: 14708 ns, At safepoint: 53625 ns, Leaving safepoint: 1709 ns, Total: 92500 ns
+[2026-10-27T13:58:44.745+0800][1.922s] GC(13) Concurrent Mark Cycle 25.887ms
+[2026-10-27T13:58:44.803+0800][1.979s] Safepoint "ICBufferFull", Time since last: 57289125 ns, Reaching safepoint: 17541 ns, Cleanup: 196125 ns, At safepoint: 459 ns, Leaving safepoint: 2666 ns, Total: 216791 ns
+[2026-10-27T13:58:44.838+0800][2.015s] Safepoint "ICBufferFull", Time since last: 35248417 ns, Reaching safepoint: 27542 ns, Cleanup: 157083 ns, At safepoint: 375 ns, Leaving safepoint: 2917 ns, Total: 187917 ns
+[2026-10-27T13:58:44.891+0800][2.067s] Safepoint "ICBufferFull", Time since last: 52525958 ns, Reaching safepoint: 1750 ns, Cleanup: 153583 ns, At safepoint: 375 ns, Leaving safepoint: 1459 ns, Total: 157167 ns
+[2026-10-27T13:58:44.917+0800][2.093s] Safepoint "ICBufferFull", Time since last: 25775458 ns, Reaching safepoint: 1708 ns, Cleanup: 176875 ns, At safepoint: 209 ns, Leaving safepoint: 1583 ns, Total: 180375 ns
+PatchJNAAgent: Replacing class
+[2026-10-27T13:58:44.988+0800][2.164s] Safepoint "ICBufferFull", Time since last: 70754083 ns, Reaching safepoint: 225459 ns, Cleanup: 214708 ns, At safepoint: 292 ns, Leaving safepoint: 2708 ns, Total: 443167 ns
+Platform.isMac called from com.sun.jna.Native
+Platform.isMac called from com.sun.jna.Native
+Platform.isMac called from com.sun.jna.Native
+2026-10-27 13:58:45.005 AngelAuraAmethyst[6334:1387940] [Prisma] Task107: re-signed ad-hoc after platform retag (in place) (/private/var/mobile/Containers/Data/Application/132BB6A9-CD8E-40EA-8202-AA41493AF270/Documents/Library/Caches/JNA/temp/jna16561041383111780346.tmp)
+[SDLHook] Task133: libjnidispatch image detected (/private/var/mobile/Containers/Data/Application/132BB6A9-CD8E-40EA-8202-AA41493AF270/Documents/Library/Caches/JNA/temp/jna16561041383111780346.tmp / install libjnidispatch.jnilib) -- invoking Task132 dlsym rebind (direct hdr+slide)
+[SDLHook] Task135: _dlsym slot 0x123888040 already == hooked_dlsym (idempotent hit, __DATA,__la_symbol_ptr) -- fishhook add-image callback or earlier pass won the race
+[2026-10-27T13:58:45.007+0800][2.184s] Safepoint "ICBufferFull", Time since last: 18820667 ns, Reaching safepoint: 394875 ns, Cleanup: 169541 ns, At safepoint: 292 ns, Leaving safepoint: 1250 ns, Total: 565958 ns
+Platform.isMac called from com.sun.jna.Native
+Platform.isMac called from com.sun.jna.NativeLibrary
+Platform.isMac called from com.sun.jna.NativeLibrary
+[2026-10-27T13:58:45.033+0800][2.209s] GC(14) Pause Young (Prepare Mixed) (G1 Evacuation Pause) 179M->111M(198M) 7.369ms
+[2026-10-27T13:58:45.033+0800][2.209s] Safepoint "G1CollectForAllocation", Time since last: 17897792 ns, Reaching safepoint: 48583 ns, Cleanup: 169042 ns, At safepoint: 7386583 ns, Leaving safepoint: 12042 ns, Total: 7616250 ns
+[13:58:45] [main/WARN]: Failed sysctl call: hw.packages, Error code: 1
+Platform.isMac called from com.sun.jna.NativeLibrary
+Platform.isMac called from com.sun.jna.NativeLibrary
+Platform.isMac called from com.sun.jna.NativeLibrary
+Platform.isMac called from com.sun.jna.NativeLibrary
+[2026-10-27T13:58:45.061+0800][2.238s] Safepoint "ICBufferFull", Time since last: 27994583 ns, Reaching safepoint: 65750 ns, Cleanup: 194667 ns, At safepoint: 291 ns, Leaving safepoint: 2167 ns, Total: 262875 ns
+[13:58:45] [main/WARN]: Failed sysctl call: machdep.cpu.brand_string, Error code: 1
+[13:58:45] [main/WARN]: Failed sysctl call: machdep.cpu.vendor, Error code: 2
+[13:58:45] [main/WARN]: Failed sysctl call: machdep.cpu.stepping, Error code: 2
+[13:58:45] [main/WARN]: Failed sysctl call: machdep.cpu.model, Error code: 2
+[13:58:45] [main/WARN]: Failed sysctl call: machdep.cpu.family, Error code: 2
+[13:58:45] [main/WARN]: Failed sysctl call: machdep.cpu.signature, Error code: 2
+[13:58:45] [main/WARN]: Failed sysctl call: machdep.cpu.feature_bits, Error code: 2
+[13:58:45] [main/WARN]: Failed sysctl call: vm.swapusage, Error code: 1
+[2026-10-27T13:58:45.084+0800][2.261s] Safepoint "ICBufferFull", Time since last: 22777958 ns, Reaching safepoint: 5375 ns, Cleanup: 170167 ns, At safepoint: 417 ns, Leaving safepoint: 2750 ns, Total: 178709 ns
+[13:58:45] [Datafixer Bootstrap/INFO]: 243 Datafixer optimizations took 160 milliseconds
+[2026-10-27T13:58:45.138+0800][2.315s] GC(15) Pause Young (Mixed) (G1 Evacuation Pause) 171M->118M(238M) 9.020ms
+[2026-10-27T13:58:45.138+0800][2.315s] Safepoint "G1CollectForAllocation", Time since last: 45185125 ns, Reaching safepoint: 17916 ns, Cleanup: 153334 ns, At safepoint: 9036333 ns, Leaving safepoint: 10417 ns, Total: 9218000 ns
+[2026-10-27T13:58:45.198+0800][2.374s] Safepoint "ICBufferFull", Time since last: 59221041 ns, Reaching safepoint: 17584 ns, Cleanup: 164916 ns, At safepoint: 542 ns, Leaving safepoint: 1292 ns, Total: 184334 ns
+[2026-10-27T13:58:45.266+0800][2.443s] Safepoint "ICBufferFull", Time since last: 68525875 ns, Reaching safepoint: 1291 ns, Cleanup: 182917 ns, At safepoint: 375 ns, Leaving safepoint: 333 ns, Total: 184916 ns
+[2026-10-27T13:58:45.397+0800][2.573s] Safepoint "ICBufferFull", Time since last: 129922792 ns, Reaching safepoint: 2208 ns, Cleanup: 236375 ns, At safepoint: 292 ns, Leaving safepoint: 1500 ns, Total: 240375 ns
+[2026-10-27T13:58:45.472+0800][2.648s] GC(16) Pause Young (Concurrent Start) (G1 Evacuation Pause) 206M->122M(238M) 3.161ms
+[2026-10-27T13:58:45.472+0800][2.648s] GC(17) Concurrent Mark Cycle
+[2026-10-27T13:58:45.472+0800][2.648s] Safepoint "G1CollectForAllocation", Time since last: 71944542 ns, Reaching safepoint: 2166 ns, Cleanup: 143417 ns, At safepoint: 3180417 ns, Leaving safepoint: 4916 ns, Total: 3330916 ns
+[2026-10-27T13:58:45.501+0800][2.677s] GC(17) Pause Remark 125M->125M(238M) 4.365ms
+[2026-10-27T13:58:45.501+0800][2.677s] Safepoint "G1PauseRemark", Time since last: 24411125 ns, Reaching safepoint: 16667 ns, Cleanup: 51625 ns, At safepoint: 4375833 ns, Leaving safepoint: 2042 ns, Total: 4446167 ns
+[2026-10-27T13:58:45.515+0800][2.691s] GC(17) Pause Cleanup 126M->126M(238M) 0.036ms
+[2026-10-27T13:58:45.515+0800][2.691s] Safepoint "G1PauseCleanup", Time since last: 13697333 ns, Reaching safepoint: 15917 ns, Cleanup: 19333 ns, At safepoint: 45500 ns, Leaving safepoint: 1292 ns, Total: 82042 ns
+[2026-10-27T13:58:45.515+0800][2.691s] GC(17) Concurrent Mark Cycle 42.876ms
+[2026-10-27T13:58:45.573+0800][2.749s] Safepoint "ICBufferFull", Time since last: 57948583 ns, Reaching safepoint: 16917 ns, Cleanup: 177083 ns, At safepoint: 250 ns, Leaving safepoint: 1250 ns, Total: 195500 ns
+[2026-10-27T13:58:45.608+0800][2.784s] Safepoint "ICBufferFull", Time since last: 34739959 ns, Reaching safepoint: 1750 ns, Cleanup: 201750 ns, At safepoint: 291 ns, Leaving safepoint: 1875 ns, Total: 205666 ns
+[2026-10-27T13:58:45.652+0800][2.829s] Safepoint "ICBufferFull", Time since last: 44419542 ns, Reaching safepoint: 17833 ns, Cleanup: 198250 ns, At safepoint: 209 ns, Leaving safepoint: 1791 ns, Total: 218083 ns
+[2026-10-27T13:58:45.677+0800][2.854s] GC(18) Pause Young (Prepare Mixed) (G1 Evacuation Pause) 210M->125M(238M) 3.265ms
+[2026-10-27T13:58:45.678+0800][2.854s] Safepoint "G1CollectForAllocation", Time since last: 21840417 ns, Reaching safepoint: 18083 ns, Cleanup: 97667 ns, At safepoint: 3281375 ns, Leaving safepoint: 7167 ns, Total: 3404292 ns
+[2026-10-27T13:58:45.723+0800][2.900s] Safepoint "ICBufferFull", Time since last: 45200875 ns, Reaching safepoint: 2375 ns, Cleanup: 220666 ns, At safepoint: 209 ns, Leaving safepoint: 1625 ns, Total: 224875 ns
+[2026-10-27T13:58:45.778+0800][2.955s] Safepoint "ICBufferFull", Time since last: 55302000 ns, Reaching safepoint: 1916 ns, Cleanup: 191500 ns, At safepoint: 250 ns, Leaving safepoint: 2625 ns, Total: 196291 ns
+[2026-10-27T13:58:45.829+0800][3.005s] GC(19) Pause Young (Mixed) (G1 Evacuation Pause) 213M->129M(238M) 6.958ms
+[2026-10-27T13:58:45.829+0800][3.005s] Safepoint "G1CollectForAllocation", Time since last: 43101000 ns, Reaching safepoint: 1667 ns, Cleanup: 197750 ns, At safepoint: 6975167 ns, Leaving safepoint: 3208 ns, Total: 7177792 ns
+[2026-10-27T13:58:45.898+0800][3.074s] GC(20) Pause Young (Concurrent Start) (G1 Evacuation Pause) 213M->134M(238M) 4.984ms
+[2026-10-27T13:58:45.898+0800][3.074s] GC(21) Concurrent Mark Cycle
+[2026-10-27T13:58:45.898+0800][3.074s] Safepoint "G1CollectForAllocation", Time since last: 64071000 ns, Reaching safepoint: 2125 ns, Cleanup: 92792 ns, At safepoint: 5003375 ns, Leaving safepoint: 6416 ns, Total: 5104708 ns
+[2026-10-27T13:58:45.939+0800][3.116s] GC(21) Pause Remark 167M->167M(238M) 5.373ms
+[2026-10-27T13:58:45.939+0800][3.116s] Safepoint "G1PauseRemark", Time since last: 36077167 ns, Reaching safepoint: 62875 ns, Cleanup: 33750 ns, At safepoint: 5387250 ns, Leaving safepoint: 4000 ns, Total: 5487875 ns
+[2026-10-27T13:58:45.955+0800][3.131s] GC(21) Pause Cleanup 169M->169M(238M) 0.045ms
+[2026-10-27T13:58:45.955+0800][3.131s] Safepoint "G1PauseCleanup", Time since last: 15206042 ns, Reaching safepoint: 5666 ns, Cleanup: 51459 ns, At safepoint: 55208 ns, Leaving safepoint: 4083 ns, Total: 116416 ns
+[2026-10-27T13:58:45.955+0800][3.132s] GC(21) Concurrent Mark Cycle 57.078ms
+[2026-10-27T13:58:45.996+0800][3.172s] GC(22) Pause Young (Prepare Mixed) (G1 Evacuation Pause) 210M->140M(238M) 4.532ms
+[2026-10-27T13:58:45.996+0800][3.172s] Safepoint "G1CollectForAllocation", Time since last: 36426292 ns, Reaching safepoint: 1917 ns, Cleanup: 90166 ns, At safepoint: 4547917 ns, Leaving safepoint: 3083 ns, Total: 4643083 ns
+[2026-10-27T13:58:46.090+0800][3.267s] GC(23) Pause Young (Mixed) (G1 Evacuation Pause) 210M->143M(410M) 4.593ms
+[2026-10-27T13:58:46.090+0800][3.267s] Safepoint "G1CollectForAllocation", Time since last: 89867834 ns, Reaching safepoint: 1833 ns, Cleanup: 129542 ns, At safepoint: 4609291 ns, Leaving safepoint: 3209 ns, Total: 4743875 ns
+[2026-10-27T13:58:46.118+0800][3.294s] Safepoint "ICBufferFull", Time since last: 26889916 ns, Reaching safepoint: 16750 ns, Cleanup: 178042 ns, At safepoint: 417 ns, Leaving safepoint: 2083 ns, Total: 197292 ns
+[2026-10-27T13:58:46.162+0800][3.338s] Safepoint "ICBufferFull", Time since last: 44120292 ns, Reaching safepoint: 2125 ns, Cleanup: 172625 ns, At safepoint: 333 ns, Leaving safepoint: 1917 ns, Total: 177000 ns
+[2026-10-27T13:58:46.204+0800][3.380s] Safepoint "ICBufferFull", Time since last: 41863166 ns, Reaching safepoint: 1917 ns, Cleanup: 128292 ns, At safepoint: 333 ns, Leaving safepoint: 1417 ns, Total: 131959 ns
+[2026-10-27T13:58:46.235+0800][3.411s] Safepoint "ICBufferFull", Time since last: 30559583 ns, Reaching safepoint: 1833 ns, Cleanup: 125709 ns, At safepoint: 291 ns, Leaving safepoint: 1917 ns, Total: 129750 ns
+[2026-10-27T13:58:46.249+0800][3.426s] Safepoint "ICBufferFull", Time since last: 14367083 ns, Reaching safepoint: 1834 ns, Cleanup: 130041 ns, At safepoint: 292 ns, Leaving safepoint: 1208 ns, Total: 133375 ns
+[2026-10-27T13:58:46.274+0800][3.450s] Safepoint "ICBufferFull", Time since last: 24493584 ns, Reaching safepoint: 1708 ns, Cleanup: 119792 ns, At safepoint: 291 ns, Leaving safepoint: 1334 ns, Total: 123125 ns
+[2026-10-27T13:58:46.362+0800][3.538s] Safepoint "ICBufferFull", Time since last: 88123416 ns, Reaching safepoint: 2084 ns, Cleanup: 127375 ns, At safepoint: 166 ns, Leaving safepoint: 2292 ns, Total: 131917 ns
+[2026-10-27T13:58:46.505+0800][3.682s] Safepoint "ICBufferFull", Time since last: 143058625 ns, Reaching safepoint: 2083 ns, Cleanup: 209959 ns, At safepoint: 333 ns, Leaving safepoint: 2458 ns, Total: 214833 ns
+[2026-10-27T13:58:46.609+0800][3.786s] Safepoint "ICBufferFull", Time since last: 103824000 ns, Reaching safepoint: 1917 ns, Cleanup: 177083 ns, At safepoint: 292 ns, Leaving safepoint: 375 ns, Total: 179667 ns
+[2026-10-27T13:58:46.642+0800][3.818s] GC(24) Pause Young (Normal) (G1 Evacuation Pause) 371M->151M(410M) 6.590ms
+[2026-10-27T13:58:46.642+0800][3.818s] Safepoint "G1CollectForAllocation", Time since last: 26097167 ns, Reaching safepoint: 2208 ns, Cleanup: 29500 ns, At safepoint: 6609458 ns, Leaving safepoint: 4209 ns, Total: 6645375 ns
+[2026-10-27T13:58:46.753+0800][3.929s] Safepoint "ICBufferFull", Time since last: 110710250 ns, Reaching safepoint: 17666 ns, Cleanup: 193292 ns, At safepoint: 333 ns, Leaving safepoint: 2667 ns, Total: 213958 ns
+[2026-10-27T13:58:47.005+0800][4.182s] Safepoint "ICBufferFull", Time since last: 252167083 ns, Reaching safepoint: 1625 ns, Cleanup: 215625 ns, At safepoint: 292 ns, Leaving safepoint: 3083 ns, Total: 220625 ns
+[SDLHook] Task193: LWJGL native image detected (/private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/Frameworks/liblwjgl.dylib / install bin/libs/native/macos/arm64/org/lwjgl/liblwjgl.dylib) -- rebinding its _dlsym slots (GL NULL-resolution forensics)
+[SDLHook] Task135: _dlsym slot 0x1283dc0e0 already == hooked_dlsym (idempotent hit, __DATA_CONST,__got) -- fishhook add-image callback or earlier pass won the race
+[2026-10-27T13:58:47.109+0800][4.285s] GC(25) Pause Young (Concurrent Start) (G1 Humongous Allocation) 347M->162M(410M) 7.056ms
+[2026-10-27T13:58:47.109+0800][4.285s] GC(26) Concurrent Mark Cycle
+[2026-10-27T13:58:47.109+0800][4.285s] Safepoint "G1TryInitiateConcMark", Time since last: 96157792 ns, Reaching safepoint: 18583 ns, Cleanup: 217709 ns, At safepoint: 7074541 ns, Leaving safepoint: 9042 ns, Total: 7319875 ns
+[2026-10-27T13:58:47.159+0800][4.335s] GC(26) Pause Remark 174M->174M(410M) 6.695ms
+[2026-10-27T13:58:47.159+0800][4.335s] Safepoint "G1PauseRemark", Time since last: 43318167 ns, Reaching safepoint: 17625 ns, Cleanup: 92250 ns, At safepoint: 6722916 ns, Leaving safepoint: 3542 ns, Total: 6836333 ns
+[13:58:47] [Render thread/INFO]: Environment: Environment[sessionHost=https://sessionserver.mojang.com, servicesHost=https://api.minecraftservices.com, name=PROD]
+[2026-10-27T13:58:47.178+0800][4.355s] GC(26) Pause Cleanup 176M->176M(410M) 0.046ms
+[2026-10-27T13:58:47.178+0800][4.355s] Safepoint "G1PauseCleanup", Time since last: 19377833 ns, Reaching safepoint: 17167 ns, Cleanup: 28833 ns, At safepoint: 57625 ns, Leaving safepoint: 2250 ns, Total: 105875 ns
+[2026-10-27T13:58:47.179+0800][4.355s] GC(26) Concurrent Mark Cycle 69.975ms
+[13:58:47] [Render thread/INFO]: Setting user: TYXH2024
+[13:58:47] [RTProbe/INFO]: [STDOUT]: [RTProbe] ==============================================================
+[13:58:47] [RTProbe/INFO]: [STDOUT]: [RTProbe] Vulkan 硬件光追能力探针 (rt-probe 1.1)  —— Radiance 移植第一章
+[13:58:47] [RTProbe/INFO]: [STDOUT]: [RTProbe] 时间: 2026-10-27 13:58:47
+[13:58:47] [RTProbe/INFO]: [STDOUT]: [RTProbe] 报告文件: /var/mobile/Containers/Data/Application/132BB6A9-CD8E-40EA-8202-AA41493AF270/Documents/instances/default/versions/fabric-loader-0.20.1-1.21.4/game/rt_probe_report.txt
+[13:58:47] [RTProbe/INFO]: [STDOUT]: [RTProbe] ==============================================================
+[13:58:47] [RTProbe/INFO]: [STDOUT]: [RTProbe] 
+[13:58:47] [RTProbe/INFO]: [STDOUT]: [RTProbe] ---- 总流程 ----
+[2026-10-27T13:58:47.268+0800][4.445s] Safepoint "ICBufferFull", Time since last: 89689459 ns, Reaching safepoint: 5583 ns, Cleanup: 284208 ns, At safepoint: 542 ns, Leaving safepoint: 3375 ns, Total: 293708 ns
+[13:58:47] [RTProbe/INFO]: [STDOUT]: [RTProbe] 
+[13:58:47] [RTProbe/INFO]: [STDOUT]: [RTProbe] ---- S0 环境快照 ----
+[13:58:47] [RTProbe/INFO]: [STDOUT]: [RTProbe] [INFO ] java.version  = 21.0.8-internal
+[13:58:47] [RTProbe/INFO]: [STDOUT]: [RTProbe] [INFO ] java.vendor   = N/A
+[13:58:47] [RTProbe/INFO]: [STDOUT]: [RTProbe] [INFO ] java.vm.name  = OpenJDK 64-Bit Server VM
+[13:58:47] [RTProbe/INFO]: [STDOUT]: [RTProbe] [INFO ] os.name       = Mac OS X 18.3.2 / aarch64
+[13:58:47] [RTProbe/INFO]: [STDOUT]: [RTProbe] [INFO ] user.dir      = /var/mobile/Containers/Data/Application/132BB6A9-CD8E-40EA-8202-AA41493AF270/Documents/instances/default/versions/fabric-loader-0.20.1-1.21.4/game
+[13:58:47] [RTProbe/INFO]: [STDOUT]: [RTProbe] [INFO ] user.home     = /private/var/mobile/Containers/Data/Application/132BB6A9-CD8E-40EA-8202-AA41493AF270/Documents
+[13:58:47] [RTProbe/INFO]: [STDOUT]: [RTProbe] [INFO ] sys[org.lwjgl.vulkan.libname] = MoltenVK
+[13:58:47] [RTProbe/INFO]: [STDOUT]: [RTProbe] [INFO ] sys[org.lwjgl.opengl.libname] = mobileglues
+[13:58:47] [RTProbe/INFO]: [STDOUT]: [RTProbe] [INFO ] sys[ame.game.session] = 1
+[13:58:47] [RTProbe/INFO]: [STDOUT]: [RTProbe] [INFO ] sys[pojav.lwjgl.version] = 333
+[13:58:47] [RTProbe/INFO]: [STDOUT]: [RTProbe] [INFO ] sys[java.library.path] = /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/Frameworks
+[13:58:47] [RTProbe/INFO]: [STDOUT]: [RTProbe] [INFO ] sys[ame.launcher.lang] = zh_cn
+[13:58:47] [RTProbe/INFO]: [STDOUT]: [RTProbe] [INFO ] sys[ame.showdown.home] = /var/mobile/Containers/Data/Application/132BB6A9-CD8E-40EA-8202-AA41493AF270/Documents/instances/default/versions/fabric-loader-0.20.1-1.21.4/game
+[13:58:47] [RTProbe/INFO]: [STDOUT]: [RTProbe] [INFO ] LWJGL 版本: 3.3.3
+[13:58:47] [RTProbe/INFO]: [STDOUT]: [RTProbe] [INFO ] LWJGL Vulkan 绑定类检查:
+[13:58:47] [RTProbe/INFO]: [STDOUT]: [RTProbe] [INFO ]    有    Vulkan 1.0 核心                                              org.lwjgl.vulkan.VK10
+[13:58:47] [RTProbe/INFO]: [STDOUT]: [RTProbe] [INFO ]    有    Vulkan 1.1 核心                                              org.lwjgl.vulkan.VK11
+[13:58:47] [RTProbe/INFO]: [STDOUT]: [RTProbe] [INFO ]    有    Vulkan 1.2 核心                                              org.lwjgl.vulkan.VK12
+[13:58:47] [RTProbe/INFO]: [STDOUT]: [RTProbe] [INFO ]    有    Vulkan 1.3 核心                                              org.lwjgl.vulkan.VK13
+[13:58:47] [RTProbe/INFO]: [STDOUT]: [RTProbe] [INFO ]    有    props2 查询                                                  org.lwjgl.vulkan.KHRGetPhysicalDeviceProperties2
+[13:58:47] [RTProbe/INFO]: [STDOUT]: [RTProbe] [INFO ]    有    iOS/macOS 枚举 MoltenVK 必需                                   org.lwjgl.vulkan.KHRPortabilityEnumeration
+[13:58:47] [RTProbe/INFO]: [STDOUT]: [RTProbe] [INFO ]    有    BLAS/TLAS 设备地址                                             org.lwjgl.vulkan.KHRBufferDeviceAddress
+[13:58:47] [RTProbe/INFO]: [STDOUT]: [RTProbe] [INFO ]    有    AS 依赖                                                      org.lwjgl.vulkan.KHRDeferredHostOperations
+[13:58:47] [RTProbe/INFO]: [STDOUT]: [RTProbe] [INFO ]    有    AS 依赖                                                      org.lwjgl.vulkan.KHRGetMemoryRequirements2
+[13:58:47] [RTProbe/INFO]: [STDOUT]: [RTProbe] [INFO ]    有    AS 宿主侧构建命令                                                 org.lwjgl.vulkan.KHRAccelerationStructure
+[13:58:47] [RTProbe/INFO]: [STDOUT]: [RTProbe] [INFO ]    有    TLAS 实例结构体                                                 org.lwjgl.vulkan.VkAccelerationStructureInstanceKHR
+[13:58:47] [RTProbe/INFO]: [STDOUT]: [RTProbe] [INFO ]    有    ray query 特性查询                                             org.lwjgl.vulkan.VkPhysicalDeviceRayQueryFeaturesKHR
+[13:58:47] [RTProbe/INFO]: [STDOUT]: [RTProbe] [INFO ]    有    ray query 常量(壳类即可)                                         org.lwjgl.vulkan.KHRRayQuery
+[13:58:47] [RTProbe/INFO]: [STDOUT]: [RTProbe] [INFO ]    有    RT 管线(本探针不需要)                                              org.lwjgl.vulkan.KHRRayTracingPipeline
+[13:58:47] [RTProbe/INFO]: [STDOUT]: [RTProbe] [INFO ]    有    Metal surface(本探针不需要)                                      org.lwjgl.vulkan.EXTMetalSurface
+[13:58:47] [RTProbe/INFO]: [STDOUT]: [RTProbe] [PASS ] LWJGL Vulkan 绑定类齐全，判定 B（需换 LWJGL）可排除
+[13:58:47] [RTProbe/INFO]: [STDOUT]: [RTProbe] 
+[13:58:47] [Render thread/INFO]: [Indigo] Registering Indigo renderer!
+[13:58:47] [RTProbe/INFO]: [STDOUT]: [RTProbe] ---- S1 加载 Vulkan 实现 (VK.create，已加载则复用) ----
+[2026-10-27T13:58:47.331+0800][4.507s] Safepoint "ICBufferFull", Time since last: 62107000 ns, Reaching safepoint: 16417 ns, Cleanup: 267875 ns, At safepoint: 708 ns, Leaving safepoint: 2250 ns, Total: 287250 ns
+[13:58:47] [RTProbe/INFO]: [STDOUT]: [RTProbe] [PASS ] Vulkan 库已由宿主(启动器/渲染栈/LWJGL 静态初始化)提前加载 —— 复用现有库句柄（v1.1 修复点：v1.0 在此误判 F）
+[13:58:47] [Render thread/INFO]: [STDOUT]: [GLFWBridge] Task261: class init START (BUNDLE_PATH=/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app)
+[13:58:47] [RTProbe/INFO]: [STDOUT]: [RTProbe] 
+[13:58:47] [RTProbe/INFO]: [STDOUT]: [RTProbe] ---- S2 实例支持版本 ----
+[SDLHook] hooked SDL_GetKeyboardState (real=0x0, Task67 kb-state poll observability)
+[InputDiag] initSDLEventFuncs: PushEvent=0x0 GetWindowID=0x0 g_sdlWindow=0x0 Task66GetKBState=0x10274e980 SetModState=0x0
+[13:58:47] [RTProbe/INFO]: [STDOUT]: [RTProbe] [PASS ] 实例最高支持 Vulkan 1.4.357
+[13:58:47] [RTProbe/INFO]: [STDOUT]: [RTProbe] 
+[13:58:47] [RTProbe/INFO]: [STDOUT]: [RTProbe] ---- S3 实例层 / 实例扩展清单 ----
+[input_bridge] Task225 CTCDesktopPeer resolved via com/github package (Java 17/21/25 caciocavallo)
+[input_bridge] Task226 CTCDesktopPeer openFile/openUri natives registered
+[JNI] JNI_OnLoadGLFW registered, class=0x1084d4fea, method=0x3019226d8, keyDownBuffer=0x13ba17480
+[13:58:47] [RTProbe/INFO]: [STDOUT]: [RTProbe] [INFO ] 实例层(1): [MoltenVK]
+[13:58:47] [RTProbe/INFO]: [STDOUT]: [RTProbe] [INFO ] 实例扩展(18): [VK_KHR_device_group_creation, VK_KHR_external_fence_capabilities, VK_KHR_external_memory_capabilities, VK_KHR_external_semaphore_capabilities, VK_KHR_get_physical_device_properties2, VK_KHR_get_surface_capabilities2, VK_KHR_surface, VK_KHR_surface_maintenance1, VK_KHR_surface_protected_capabilities, VK_EXT_debug_report, VK_EXT_debug_utils, VK_EXT_headless_surface, VK_EXT_layer_settings, VK_EXT_metal_surface, VK_EXT_surface_maintenance1, VK_EXT_swapchain_colorspace, VK_MVK_ios_surface, VK_MVK_moltenvk]
+[13:58:47] [RTProbe/INFO]: [STDOUT]: [RTProbe] [INFO ] 检测到 MoltenVK 层: 否；portability_enumeration 扩展: 否
+[13:58:47] [RTProbe/INFO]: [STDOUT]: [RTProbe] 
+[13:58:47] [RTProbe/INFO]: [STDOUT]: [RTProbe] ---- S4 创建 VkInstance ----
+[13:58:47] [RTProbe/INFO]: [STDOUT]: [RTProbe] [PASS ] VkInstance 创建成功 (启用扩展: [VK_KHR_get_physical_device_properties2])
+[13:58:47] [RTProbe/INFO]: [STDOUT]: [RTProbe] 
+[13:58:47] [RTProbe/INFO]: [STDOUT]: [RTProbe] ---- S5 物理设备枚举 ----
+[13:58:47] [RTProbe/INFO]: [STDOUT]: [RTProbe] [INFO ] 物理设备数量: 1
+[13:58:47] [RTProbe/INFO]: [STDOUT]: [RTProbe] 
+[13:58:47] [RTProbe/INFO]: [STDOUT]: [RTProbe] ---- S5.0 设备: Apple M3 GPU ----
+[13:58:47] [RTProbe/INFO]: [STDOUT]: [RTProbe] [INFO ] apiVersion=1.2.357  vendorID=0x106B  deviceID=0x12030009  driverVersion=0x000028A3
+[13:58:47] [RTProbe/INFO]: [STDOUT]: [RTProbe] [INFO ] driverVersion 按 MoltenVK 打包方式解读: 0x28a3
+[13:58:47] [RTProbe/INFO]: [STDOUT]: [RTProbe] [INFO ] 设备扩展(134): [VK_KHR_16bit_storage, VK_KHR_8bit_storage, VK_KHR_bind_memory2, VK_KHR_buffer_device_address, VK_KHR_calibrated_timestamps, VK_KHR_copy_commands2, VK_KHR_create_renderpass2, VK_KHR_dedicated_allocation, VK_KHR_deferred_host_operations, VK_KHR_depth_stencil_resolve, VK_KHR_descriptor_update_template, VK_KHR_device_group, VK_KHR_draw_indirect_count, VK_KHR_driver_properties, VK_KHR_dynamic_rendering, VK_KHR_dynamic_rendering_local_read, VK_KHR_external_fence, VK_KHR_external_memory, VK_KHR_external_semaphore, VK_KHR_format_feature_flags2, VK_KHR_fragment_shader_barycentric, VK_KHR_get_memory_requirements2, VK_KHR_global_priority, VK_KHR_image_format_list, VK_KHR_imageless_framebuffer, VK_KHR_incremental_present, VK_KHR_index_type_uint8, VK_KHR_line_rasterization, VK_KHR_load_store_op_none, VK_KHR_maintenance1, VK_KHR_maintenance2, VK_KHR_maintenance3, VK_KHR_maintenance4, VK_KHR_maintenance5, VK_KHR_maintenance6, VK_KHR_maintenance7, VK_KHR_maintenance8, VK_KHR_maintenance9, VK_KHR_map_memory2, VK_KHR_multiview, VK_KHR_portability_subset, VK_KHR_present_id, VK_KHR_present_id2, VK_KHR_present_wait, VK_KHR_present_wait2, VK_KHR_push_descriptor, VK_KHR_relaxed_block_layout, VK_KHR_robustness2, VK_KHR_sampler_mirror_clamp_to_edge, VK_KHR_sampler_ycbcr_conversion, VK_KHR_separate_depth_stencil_layouts, VK_KHR_shader_draw_parameters, VK_KHR_shader_expect_assume, VK_KHR_shader_float_controls, VK_KHR_shader_float_controls2, VK_KHR_shader_float16_int8, VK_KHR_shader_fma, VK_KHR_shader_integer_dot_product, VK_KHR_shader_maximal_reconvergence, VK_KHR_shader_non_semantic_info, VK_KHR_shader_relaxed_extended_instruction, VK_KHR_shader_subgroup_extended_types, VK_KHR_shader_subgroup_rotate, VK_KHR_shader_subgroup_uniform_control_flow, VK_KHR_shader_terminate_invocation, VK_KHR_spirv_1_4, VK_KHR_storage_buffer_storage_class, VK_KHR_swapchain, VK_KHR_swapchain_maintenance1, VK_KHR_swapchain_mutable_format, VK_KHR_synchronization2, VK_KHR_timeline_semaphore, VK_KHR_uniform_buffer_standard_layout, VK_KHR_variable_pointers, VK_KHR_vertex_attribute_divisor, VK_KHR_vulkan_memory_model, VK_KHR_zero_initialize_workgroup_memory, VK_EXT_4444_formats, VK_EXT_buffer_device_address, VK_EXT_calibrated_timestamps, VK_EXT_debug_marker, VK_EXT_depth_clip_control, VK_EXT_depth_clip_enable, VK_EXT_descriptor_indexing, VK_EXT_extended_dynamic_state, VK_EXT_extended_dynamic_state2, VK_EXT_extended_dynamic_state3, VK_EXT_external_memory_host, VK_EXT_external_memory_metal, VK_EXT_fragment_shader_interlock, VK_EXT_global_priority, VK_EXT_global_priority_query, VK_EXT_host_image_copy, VK_EXT_host_query_reset, VK_EXT_image_2d_view_of_3d, VK_EXT_image_robustness, VK_EXT_index_type_uint8, VK_EXT_inline_uniform_block, VK_EXT_line_rasterization, VK_EXT_load_store_op_none, VK_EXT_memory_budget, VK_EXT_metal_objects, VK_EXT_multi_draw, VK_EXT_nested_command_buffer, VK_EXT_pipeline_creation_cache_control, VK_EXT_pipeline_creation_feedback, VK_EXT_pipeline_robustness, VK_EXT_post_depth_coverage, VK_EXT_private_data, VK_EXT_robustness2, VK_EXT_sample_locations, VK_EXT_scalar_block_layout, VK_EXT_separate_stencil_usage, VK_EXT_shader_atomic_float, VK_EXT_shader_demote_to_helper_invocation, VK_EXT_shader_stencil_export, VK_EXT_shader_subgroup_ballot, VK_EXT_shader_subgroup_vote, VK_EXT_shader_viewport_index_layer, VK_EXT_subgroup_size_control, VK_EXT_swapchain_maintenance1, VK_EXT_texel_buffer_alignment, VK_EXT_texture_compression_astc_hdr, VK_EXT_tooling_info, VK_EXT_vertex_attribute_divisor, VK_EXT_ycbcr_2plane_444_formats, VK_AMD_gpu_shader_half_float, VK_AMD_negative_viewport_height, VK_AMD_shader_image_load_store_lod, VK_AMD_shader_trinary_minmax, VK_GOOGLE_display_timing, VK_IMG_format_pvrtc, VK_INTEL_shader_integer_functions2, VK_NV_fragment_shader_barycentric]
+[13:58:47] [RTProbe/INFO]: [STDOUT]: [RTProbe] [INFO ] driverName=MoltenVK  driverInfo=1.4.3
+[13:58:47] [RTProbe/INFO]: [STDOUT]: [RTProbe] 
+[13:58:47] [RTProbe/INFO]: [STDOUT]: [RTProbe] ---- S6.0 RT 扩展审计 ----
+[13:58:47] [RTProbe/INFO]: [STDOUT]: [RTProbe] [INFO ]    无    VK_KHR_acceleration_structure    加速结构（BLAS/TLAS 构建命令）   (必需)
+[13:58:47] [RTProbe/INFO]: [STDOUT]: [RTProbe] [INFO ]    无    VK_KHR_ray_query                 ray query（着色器内求交）      (必需)
+[13:58:47] [RTProbe/INFO]: [STDOUT]: [RTProbe] [INFO ]    有    VK_KHR_deferred_host_operations  延迟宿主操作（AS 依赖）          (必需)
+[13:58:47] [RTProbe/INFO]: [STDOUT]: [RTProbe] [INFO ]    有    VK_KHR_get_memory_requirements2  内存需求查询（AS 依赖）          (1.1核心/依赖)
+[13:58:47] [RTProbe/INFO]: [STDOUT]: [RTProbe] [INFO ]    有    VK_KHR_buffer_device_address     缓冲设备地址（几何/实例寻址）        (1.2核心)
+[13:58:47] [RTProbe/INFO]: [STDOUT]: [RTProbe] [INFO ]    有    VK_KHR_spirv_1_4                 SPIR-V 1.4（RT 着色器需要）   (1.2核心)
+[13:58:47] [RTProbe/INFO]: [STDOUT]: [RTProbe] [INFO ]    有    VK_KHR_portability_subset        MoltenVK 可移植子集         (应存在)
+[13:58:47] [RTProbe/INFO]: [STDOUT]: [RTProbe] [INFO ]    有    VK_KHR_driver_properties         驱动属性（读 MoltenVK 版本）    (可选)
+[13:58:47] [RTProbe/INFO]: [STDOUT]: [RTProbe] 
+[13:58:47] [RTProbe/INFO]: [STDOUT]: [RTProbe] ---- S7.0 RT 特性审计 ----
+[13:58:47] [RTProbe/INFO]: [STDOUT]: [RTProbe] [INFO ] accelerationStructure 特性 = false
+[13:58:47] [RTProbe/INFO]: [STDOUT]: [RTProbe] [INFO ] rayQuery 特性           = false
+[13:58:47] [RTProbe/INFO]: [STDOUT]: [RTProbe] [INFO ] bufferDeviceAddress 特性 = true
+[13:58:47] [RTProbe/INFO]: [STDOUT]: [RTProbe] 
+[13:58:47] [RTProbe/INFO]: [STDOUT]: [RTProbe] ---- S8.0 判定与逻辑设备创建 ----
+[13:58:47] [RTProbe/INFO]: [STDOUT]: [RTProbe] [INFO ] 该设备缺少必需的 RT 扩展（缺失硬性项 2 个），无法进入构建阶段。
+[13:58:47] [RTProbe/INFO]: [STDOUT]: [RTProbe] 
+[13:58:47] [RTProbe/INFO]: [STDOUT]: [RTProbe] ==============================================================
+[13:58:47] [RTProbe/INFO]: [STDOUT]: [RTProbe] 最终判定: C
+[13:58:47] [RTProbe/INFO]: [STDOUT]: [RTProbe] 探针在扩展审计阶段停止：JAR 环境本身工作正常（Vulkan 已加载、设备已枚举、扩展清单已完整取证），但本 MoltenVK 不暴露 Vulkan RT 扩展。下一步：改包替换 Vulkan ICD 为支持 Metal RT 的实现（KosmicKrisp/honeykrisp 路线），或给本启动器捆绑的 MoltenVK 加 RT 支持后用同一个探针 JAR 复测。
+[13:58:47] [RTProbe/INFO]: [STDOUT]: [RTProbe] 
+[13:58:47] [RTProbe/INFO]: [STDOUT]: [RTProbe] 本次运行涉及的判定规则:
+[13:58:47] [RTProbe/INFO]: [STDOUT]: [RTProbe]   - C | 设备缺少 VK_KHR_acceleration_structure / VK_KHR_ray_query -> 当前 MoltenVK 未暴露 Metal RT（截至 1.4.2 上游未实现），需改包替换 ICD（KosmicKrisp/honeykrisp 或自研 shim）
+[13:58:47] [RTProbe/INFO]: [STDOUT]: [RTProbe] ==============================================================
+[13:58:47] [RTProbe/INFO]: [STDOUT]: [RTProbe] 请把整份 rt_probe_report.txt 回传，即可据此决定下一章路线。
+[13:58:47] [RTProbe/INFO]: [STDOUT]: [RTProbe] [INFO ] 探针结束。报告文件: /var/mobile/Containers/Data/Application/132BB6A9-CD8E-40EA-8202-AA41493AF270/Documents/instances/default/versions/fabric-loader-0.20.1-1.21.4/game/rt_probe_report.txt
+[13:58:47] [Render thread/INFO]: [STDOUT]: [GLFWBridge] Task261: class init DONE (window 2360x1640)
+[2026-10-27T13:58:47.518+0800][4.695s] Safepoint "ICBufferFull", Time since last: 187572542 ns, Reaching safepoint: 19666 ns, Cleanup: 208042 ns, At safepoint: 333 ns, Leaving safepoint: 2125 ns, Total: 230166 ns
+[13:58:47] [Render thread/INFO]: Backend library: LWJGL version 3.3.3
+[RenderDiag] fps=0 swapOK=0 swapFail=0 maxGap=0ms avgGap=0ms pres=0/0ms build=0/0ms mem=950MB layer=0x300da8bd0 drawable=2360x1640 scale=2.00 bounds=1180x820 inWindow=1
+[13:58:47] [Render thread/INFO]: [STDOUT]: [GLFWBridge] Task261: glfwInit() entered
+[13:58:47] [Render thread/INFO]: [STDOUT]: [GLFWBridge] Task261: glfwInit() returned true (3ms)
+[13:58:47] [Render thread/INFO]: [STDOUT]: [GLFWBridge] Task261: glfwCreateWindow(2360x1640, title=Minecraft* 1.21.4) entered
+[egl_bridge] Task261: pojavCreateContext ENTERED (renderer=libMoltenVK.dylib, api=default) -- pre-init probe
+[egl_bridge] Task261: pojavInitOpenGL starting (uninit path)
+[egl_bridge] Vulkan renderer: initializing GL bridge for OpenGL path fallback (graphicsApi linkage)
+[egl_bridge] Task261: pojavInitOpenGL returned (inited=1)
+[egl_bridge] pojavCreateContext: clientAPI=196609 (GLFW_NO_API=0), renderer=libMoltenVK.dylib, graphicsApi=default
+[egl_bridge] OpenGL path: creating EGL/GL context via br_init_context
+[MG-Bridge] bootstrap skipped: frontend image or mg_init_gles unavailable -- EGL stays on raw ANGLE (legacy behavior)
+EGLBridge: Binding to OpenGL ES
+[GLGeo] Task60 native-scale alignment (main thread): bounds=1180x820 drawableSize 2360x1640 scale 2.00 -> drawableSize 2360x1640 scale 2.00 (surface==drawable==physical px; Task50 1x retired -- CA linear 2x upscale was the blur)
+[RenderDiag] EGL window surface created: surface=0x1 layer=0x300da8bd0 bounds=1180x820 contentsScale=2.00 drawableSize=2360x1640 ownerInWindow=1
+[RenderDiag] Task188 layer: pixelFormat=80 opaque=1 framebufferOnly=0 maxDrawables=3 (BGRA8Unorm=80 alpha-bearing; opaque=0 => alpha composited)
+[RenderDiag] Task41 ES probe pinned to @executable_path/Frameworks/libGLESv2.framework/libGLESv2
+[GLGeo] Task48 creation recorded: layer=0x300da8bd0 expectedSurface=2360x1640
+[13:58:47] [Render thread/INFO]: [STDOUT]: [GLFWBridge] Task261: glfwCreateWindow returned ptr=0x3004b5f20
+[gl_bridge] Task146 make-current #1: self=0x3004b5f20 surface=0x1 ctx=0x1 thread=0x170023000 main=0
+[gl_bridge] Task140 make-current readback: ctx=0x1 (current context confirmed)
+[TinyGL] Task173 desktop-GL completion layer: 20/20 resolved via eglGetProcAddress (all present)
+[tinygl4angle] Task203 query: glGetString #1 name=0x1F02 -> "OpenGL ES 3.0.0 (ANGLE 2.1.2440 git hash: 6024e9c05548)"
+[TinyGL] Task179 desktop identity: GL_VERSION 'OpenGL ES 3.0.0 (ANGLE 2.1.2440 git hash: 6024e9c05548)' -> '3.3.0 (ANGLE 2.1.2440 git hash: 6024e9c05548)' (ES3 context, facade-form spoof)
+[gl_bridge] Task146 glGetString tri-probe: default=0x226b85450 ver=<NULL> | renderer=0x1263d5304 ver=3.3.0 (ANGLE 2.1.2440 git hash: 6024e9c05548) | D
+[gl_bridge] mg_init_gles not found (old MobileGlues?)
+[gl_bridge] eglSwapInterval(0) after eglMakeCurrent (POJAV_DISABLE_VSYNC=1, renderer=libMoltenVK.dylib) frontend=1 raw=0(rawPtr=0x0)
+[SDLHook] Task193: LWJGL native image detected (/private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/Frameworks/liblwjgl_opengl.dylib / install bin/libs/native/macos/arm64/org/lwjgl/opengl/liblwjgl_opengl.dylib) -- rebinding its _dlsym slots (GL NULL-resolution forensics)
+[SDLHook] Task132: libjnidispatch image missing symtab/linkedit (layout change?), dlsym rebind skipped
+Initializing MobileGlues ...
+The Open Source License of MobileGlues: 
+  GNU LGPL-2.1 License
+MG_DIR_PATH = /private/var/mobile/Containers/Data/Application/132BB6A9-CD8E-40EA-8202-AA41493AF270/Documents/MG
+config.json loaded successfully
+[MobileGlues] Setting: enableAngle                 = false
+[MobileGlues] Setting: ignoreError                 = 0
+[MobileGlues] Setting: enableExtComputeShader      = false
+[MobileGlues] Setting: enableExtTimerQuery         = true
+[MobileGlues] Setting: enableExtDirectStateAccess  = false
+[MobileGlues] Setting: maxGlslCacheSize            = 128
+[MobileGlues] Setting: angleDepthClearFixMode      = 0
+[MobileGlues] Setting: bufferCoherentAsFlush       = 0
+[MobileGlues] Setting: customGLVersion             = 4.0.0
+[MobileGlues] Setting: fsr1Setting                 = 0
+[MobileGlues] Setting: fsr1RcasSharpness           = 0.200 (Task 130 RCAS, mpv scale, negative=off)
+[MobileGlues] Setting: hideMGEnvLevel              = 0
+#
+# A fatal error has been detected by the Java Runtime Environment:
+#
+#  SIGSEGV (0xb) at pc=0x0000000000000000, pid=6334, tid=54815
+#
+# JRE version: OpenJDK Runtime Environment (21.0.8) (build 21.0.8-internal-adhoc.ci.openjdk-21)
+# Java VM: OpenJDK 64-Bit Server VM (21.0.8-internal-adhoc.ci.openjdk-21, mixed mode, tiered, compressed oops, compressed class ptrs, g1 gc, bsd-aarch64)
+# Problematic frame:
+# C  [libmobileglues.dylib+0x23f2d8]  glGetError+0x14
+#
+# No core dump will be written. Core dumps have been disabled. To enable core dumping, try "ulimit -c unlimited" before starting Java again
+#
+# An error report file with more information is saved as:
+# /private/var/mobile/Containers/Data/Application/132BB6A9-CD8E-40EA-8202-AA41493AF270/Documents/hs_err_pid6334.log
+#
+# If you would like to submit a bug report, please visit:
+#   https://bugreport.java.com/bugreport/crash.jsp
+# The crash happened outside the Java Virtual Machine in native code.
+# See problematic frame for where to report the bug.
+#
+abort() called
+[thread 75267 also had an error]
+
+===== [Amethyst fatal trace] 2026-10-27 13:58:47.659 =====
+reason: abort() called
+thread: (unnamed)
+  #00 0x10273f174  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/AngelAuraAmethyst  ame_write_fatal_trace + 78196
+  #01 0x10273f630  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/AngelAuraAmethyst  hooked_abort + 79408
+  #02 0x13e824d68  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/java_runtimes/java-21-openjdk/lib/server/libjvm.dylib  _ZN2os5abortEbPvPKv + 8539496
+  #03 0x13ea70f08  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/java_runtimes/java-21-openjdk/lib/server/libjvm.dylib  _ZN7VMError14report_and_dieEiPKcS1_PcP6ThreadPhPvS6_S1_im + 10948360
+  #04 0x13ea70660  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/java_runtimes/java-21-openjdk/lib/server/libjvm.dylib  _ZN7VMError14report_and_dieEiPKcS1_PcP6ThreadPhPvS6_S1_im + 10946144
+  #05 0x13ea7134c  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/java_runtimes/java-21-openjdk/lib/server/libjvm.dylib  _ZN7VMError14report_and_dieEP6ThreadPKcim11VMErrorTypeS3_Pc + 10949452
+  #06 0x13ea719cc  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/java_runtimes/java-21-openjdk/lib/server/libjvm.dylib  _ZN7VMError32install_secondary_signal_handlerEv + 10951116
+  #07 0x223ae2ca8  /usr/lib/system/libsystem_platform.dylib  <redacted> + 19624
+  #08 0x13e3ad1b0  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/java_runtimes/java-21-openjdk/lib/server/libjvm.dylib  _ZN20BlockLocationPrinterI15G1CollectedHeapE16base_oop_or_nullEPv + 3854768
+  #09 0x13e3ad1b0  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/java_runtimes/java-21-openjdk/lib/server/libjvm.dylib  _ZN20BlockLocationPrinterI15G1CollectedHeapE16base_oop_or_nullEPv + 3854768
+  #10 0x13e3a9cf4  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/java_runtimes/java-21-openjdk/lib/server/libjvm.dylib  _ZN20BlockLocationPrinterI15G1CollectedHeapE14print_locationEP12outputStreamPv + 3841268
+  #11 0x13e818840  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/java_runtimes/java-21-openjdk/lib/server/libjvm.dylib  _ZN2os14print_locationEP12outputStreamlb + 8489024
+  #12 0x13e820058  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/java_runtimes/java-21-openjdk/lib/server/libjvm.dylib  _ZN2os19print_register_infoEP12outputStreamPKvRi + 8519768
+  #13 0x13ea6df18  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/java_runtimes/java-21-openjdk/lib/server/libjvm.dylib  _ZN7VMError6reportEP12outputStreamb + 10936088
+  #14 0x13ea70bbc  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/java_runtimes/java-21-openjdk/lib/server/libjvm.dylib  _ZN7VMError14report_and_dieEiPKcS1_PcP6ThreadPhPvS6_S1_im + 10947516
+  #15 0x13ea70660  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/java_runtimes/java-21-openjdk/lib/server/libjvm.dylib  _ZN7VMError14report_and_dieEiPKcS1_PcP6ThreadPhPvS6_S1_im + 10946144
+  #16 0x13ea7134c  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/java_runtimes/java-21-openjdk/lib/server/libjvm.dylib  _ZN7VMError14report_and_dieEP6ThreadPKcim11VMErrorTypeS3_Pc + 10949452
+  #17 0x13e93a4f8  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/java_runtimes/java-21-openjdk/lib/server/libjvm.dylib  JVM_handle_bsd_signal + 9676024
+  #18 0x223ae2ca8  /usr/lib/system/libsystem_platform.dylib  <redacted> + 19624
+  #19 0x13d4cb2dc  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/Frameworks/libmobileglues.dylib  glGetError + 2355932
+  #20 0x1511cca88
+  #21 0x1511c904c
+  #22 0x1511c8f70
+  #23 0x1511c8f70
+  #24 0x1511c8f70
+  #25 0x1511c917c
+  #26 0x1511c8f70
+  #27 0x1511c917c
+  #28 0x1511c917c
+  #29 0x1511c917c
+  #30 0x1511c917c
+  #31 0x1511c962c
+  #32 0x1511c917c
+  #33 0x1511c917c
+  #34 0x1511c917c
+  #35 0x1511c8f70
+  #36 0x1511c8f70
+  #37 0x1511c8f70
+  #38 0x1511c9420
+  #39 0x1511c8f70
+  #40 0x1511c917c
+  #41 0x1511c917c
+  #42 0x1511c4154
+  #43 0x13e4affb4  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/java_runtimes/java-21-openjdk/lib/server/libjvm.dylib  _ZN9JavaCalls11call_helperEP9JavaValueRK12methodHandleP17JavaCallArgumentsP10JavaThread + 4915124
+  #44 0x13e52a224  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/java_runtimes/java-21-openjdk/lib/server/libjvm.dylib  _ZL17jni_invoke_staticP7JNIEnv_P9JavaValueP8_jobject11JNICallTypeP10_jmethodIDP18JNI_ArgumentPusherP10JavaThread + 5415460
+  #45 0x13e52d820  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/java_runtimes/java-21-openjdk/lib/server/libjvm.dylib  jni_CallStaticVoidMethod + 5429280
+  #46 0x1236d7130  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/java_runtimes/java-21-openjdk/lib/libjli.dylib  JavaMain + 45360
+  #47 0x1236d9c48  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/java_runtimes/java-21-openjdk/lib/libjli.dylib  ThreadJavaMain + 56392
+  #48 0x223b8b7d0  /usr/lib/system/libsystem_pthread.dylib  _pthread_start + 6096
+  #49 0x223b8b480  /usr/lib/system/libsystem_pthread.dylib  thread_start + 5248
+
+[main_hook] Task208: abort() originated inside libjvm (JVM fatal) -- terminating for real, no crash-view park

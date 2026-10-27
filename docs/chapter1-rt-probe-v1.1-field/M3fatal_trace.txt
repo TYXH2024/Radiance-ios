@@ -1,0 +1,319 @@
+
+===== [Amethyst fatal trace] 2026-10-20 22:44:50.705 =====
+reason: Task251: shutdown marker -> _exit(0) (post-main hang guard)
+thread: Ame251-ShutdownWatchdog
+  #00 0x100e83174  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/AngelAuraAmethyst  ame_write_fatal_trace + 78196
+  #01 0x100e876b8  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/AngelAuraAmethyst  __ame251_armShutdownForceExitWatchdog_block_invoke_2 + 95928
+  #02 0x186b255bc  /System/Library/Frameworks/Foundation.framework/Foundation  <redacted> + 8979900
+  #03 0x2124037d0  /usr/lib/system/libsystem_pthread.dylib  _pthread_start + 6096
+  #04 0x212403480  /usr/lib/system/libsystem_pthread.dylib  thread_start + 5248
+
+===== [Amethyst fatal trace] 2026-10-25 15:00:17.372 =====
+reason: Task251: shutdown marker -> _exit(0) (post-main hang guard)
+thread: Ame251-ShutdownWatchdog
+  #00 0x104973174  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/AngelAuraAmethyst  ame_write_fatal_trace + 78196
+  #01 0x1049776b8  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/AngelAuraAmethyst  __ame251_armShutdownForceExitWatchdog_block_invoke_2 + 95928
+  #02 0x186b255bc  /System/Library/Frameworks/Foundation.framework/Foundation  <redacted> + 8979900
+  #03 0x2124037d0  /usr/lib/system/libsystem_pthread.dylib  _pthread_start + 6096
+  #04 0x212403480  /usr/lib/system/libsystem_pthread.dylib  thread_start + 5248
+
+===== [Amethyst fatal trace] 2026-10-25 15:51:19.996 =====
+reason: abort() called
+thread: (unnamed)
+  #00 0x1000cb174  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/AngelAuraAmethyst  ame_write_fatal_trace + 78196
+  #01 0x1000cb630  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/AngelAuraAmethyst  hooked_abort + 79408
+  #02 0x12e34cd68  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/java_runtimes/java-21-openjdk/lib/server/libjvm.dylib  _ZN2os5abortEbPvPKv + 8539496
+  #03 0x12e598f08  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/java_runtimes/java-21-openjdk/lib/server/libjvm.dylib  _ZN7VMError14report_and_dieEiPKcS1_PcP6ThreadPhPvS6_S1_im + 10948360
+  #04 0x12e598660  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/java_runtimes/java-21-openjdk/lib/server/libjvm.dylib  _ZN7VMError14report_and_dieEiPKcS1_PcP6ThreadPhPvS6_S1_im + 10946144
+  #05 0x12e59934c  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/java_runtimes/java-21-openjdk/lib/server/libjvm.dylib  _ZN7VMError14report_and_dieEP6ThreadPKcim11VMErrorTypeS3_Pc + 10949452
+  #06 0x12e4624f8  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/java_runtimes/java-21-openjdk/lib/server/libjvm.dylib  JVM_handle_bsd_signal + 9676024
+  #07 0x21235aca8  /usr/lib/system/libsystem_platform.dylib  <redacted> + 19624
+  #08 0x1335172dc  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/Frameworks/libmobileglues.dylib  glGetError + 2355932
+  #09 0x12ececa88
+  #10 0x12ece904c
+  #11 0x12ece8f70
+  #12 0x12ece8f70
+  #13 0x12ece8f70
+  #14 0x12ece917c
+  #15 0x12ece8f70
+  #16 0x12ece917c
+  #17 0x12ece917c
+  #18 0x12ece917c
+  #19 0x12ece917c
+  #20 0x12ece962c
+  #21 0x12ece917c
+  #22 0x12ece917c
+  #23 0x12ece917c
+  #24 0x12ece8f70
+  #25 0x12ece8f70
+  #26 0x12ece8f70
+  #27 0x12ece9420
+  #28 0x12ece8f70
+  #29 0x12ece917c
+  #30 0x12ece917c
+  #31 0x12ece4154
+  #32 0x12dfd7fb4  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/java_runtimes/java-21-openjdk/lib/server/libjvm.dylib  _ZN9JavaCalls11call_helperEP9JavaValueRK12methodHandleP17JavaCallArgumentsP10JavaThread + 4915124
+  #33 0x12e052224  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/java_runtimes/java-21-openjdk/lib/server/libjvm.dylib  _ZL17jni_invoke_staticP7JNIEnv_P9JavaValueP8_jobject11JNICallTypeP10_jmethodIDP18JNI_ArgumentPusherP10JavaThread + 5415460
+  #34 0x12e055820  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/java_runtimes/java-21-openjdk/lib/server/libjvm.dylib  jni_CallStaticVoidMethod + 5429280
+  #35 0x1240d3130  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/java_runtimes/java-21-openjdk/lib/libjli.dylib  JavaMain + 45360
+  #36 0x1240d5c48  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/java_runtimes/java-21-openjdk/lib/libjli.dylib  ThreadJavaMain + 56392
+  #37 0x2124037d0  /usr/lib/system/libsystem_pthread.dylib  _pthread_start + 6096
+  #38 0x212403480  /usr/lib/system/libsystem_pthread.dylib  thread_start + 5248
+
+===== [Amethyst fatal trace] 2026-10-26 01:10:04.792 =====
+reason: Task251: shutdown marker -> _exit(0) (post-main hang guard)
+thread: Ame251-ShutdownWatchdog
+  #00 0x1020ef174  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/AngelAuraAmethyst  ame_write_fatal_trace + 78196
+  #01 0x1020f36b8  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/AngelAuraAmethyst  __ame251_armShutdownForceExitWatchdog_block_invoke_2 + 95928
+  #02 0x1982ad5bc  /System/Library/Frameworks/Foundation.framework/Foundation  <redacted> + 8979900
+  #03 0x223b8b7d0  /usr/lib/system/libsystem_pthread.dylib  _pthread_start + 6096
+  #04 0x223b8b480  /usr/lib/system/libsystem_pthread.dylib  thread_start + 5248
+
+===== [Amethyst fatal trace] 2026-10-26 01:38:12.020 =====
+reason: abort() called
+thread: (unnamed)
+  #00 0x102f8f174  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/AngelAuraAmethyst  ame_write_fatal_trace + 78196
+  #01 0x102f8f630  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/AngelAuraAmethyst  hooked_abort + 79408
+  #02 0x13f024d68  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/java_runtimes/java-21-openjdk/lib/server/libjvm.dylib  _ZN2os5abortEbPvPKv + 8539496
+  #03 0x13f270f08  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/java_runtimes/java-21-openjdk/lib/server/libjvm.dylib  _ZN7VMError14report_and_dieEiPKcS1_PcP6ThreadPhPvS6_S1_im + 10948360
+  #04 0x13f270660  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/java_runtimes/java-21-openjdk/lib/server/libjvm.dylib  _ZN7VMError14report_and_dieEiPKcS1_PcP6ThreadPhPvS6_S1_im + 10946144
+  #05 0x13f27134c  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/java_runtimes/java-21-openjdk/lib/server/libjvm.dylib  _ZN7VMError14report_and_dieEP6ThreadPKcim11VMErrorTypeS3_Pc + 10949452
+  #06 0x13f13a4f8  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/java_runtimes/java-21-openjdk/lib/server/libjvm.dylib  JVM_handle_bsd_signal + 9676024
+  #07 0x223ae2ca8  /usr/lib/system/libsystem_platform.dylib  <redacted> + 19624
+  #08 0x121def504  /private/var/mobile/Containers/Data/Application/132BB6A9-CD8E-40EA-8202-AA41493AF270/Documents/instances/default/versions/fabric-loader-0.20.1-1.21.4/game/radiance/libcore.dylib  takeover_tick_body + 13572
+  #09 0x19a9c0998  /System/Library/Frameworks/QuartzCore.framework/QuartzCore  <redacted> + 965016
+  #10 0x19a9c036c  /System/Library/Frameworks/QuartzCore.framework/QuartzCore  <redacted> + 963436
+  #11 0x19a9bff04  /System/Library/Frameworks/QuartzCore.framework/QuartzCore  <redacted> + 962308
+  #12 0x19b6b8710  /System/Library/PrivateFrameworks/UIKitCore.framework/UIKitCore  <redacted> + 640784
+  #13 0x19b6bb040  /System/Library/PrivateFrameworks/UIKitCore.framework/UIKitCore  <redacted> + 651328
+  #14 0x19b6b8c5c  /System/Library/PrivateFrameworks/UIKitCore.framework/UIKitCore  <redacted> + 642140
+  #15 0x198e70f4c  /System/Library/Frameworks/CoreFoundation.framework/CoreFoundation  <redacted> + 474956
+  #16 0x198e70ee0  /System/Library/Frameworks/CoreFoundation.framework/CoreFoundation  <redacted> + 474848
+  #17 0x198e73b40  /System/Library/Frameworks/CoreFoundation.framework/CoreFoundation  <redacted> + 486208
+  #18 0x198e72d3c  /System/Library/Frameworks/CoreFoundation.framework/CoreFoundation  <redacted> + 482620
+  #19 0x198ec5284  /System/Library/Frameworks/CoreFoundation.framework/CoreFoundation  CFRunLoopRunSpecific + 819844
+  #20 0x1e61214c0  /System/Library/PrivateFrameworks/GraphicsServices.framework/GraphicsServices  GSEventRunModal + 5312
+  #21 0x19ba0a674  /System/Library/PrivateFrameworks/UIKitCore.framework/UIKitCore  <redacted> + 4122228
+  #22 0x19b630e88  /System/Library/PrivateFrameworks/UIKitCore.framework/UIKitCore  UIApplicationMain + 85640
+  #23 0x102f8ee40  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/AngelAuraAmethyst  main + 77376
+  #24 0x1bf119de8  /usr/lib/dyld  <redacted> + 196072
+
+===== [Amethyst fatal trace] 2026-10-26 13:17:52.036 =====
+reason: abort() called
+thread: (unnamed)
+  #00 0x102ff7174  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/AngelAuraAmethyst  ame_write_fatal_trace + 78196
+  #01 0x102ff7630  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/AngelAuraAmethyst  hooked_abort + 79408
+  #02 0x13dc24d68  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/java_runtimes/java-21-openjdk/lib/server/libjvm.dylib  _ZN2os5abortEbPvPKv + 8539496
+  #03 0x13de70f08  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/java_runtimes/java-21-openjdk/lib/server/libjvm.dylib  _ZN7VMError14report_and_dieEiPKcS1_PcP6ThreadPhPvS6_S1_im + 10948360
+  #04 0x13de70660  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/java_runtimes/java-21-openjdk/lib/server/libjvm.dylib  _ZN7VMError14report_and_dieEiPKcS1_PcP6ThreadPhPvS6_S1_im + 10946144
+  #05 0x13de7134c  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/java_runtimes/java-21-openjdk/lib/server/libjvm.dylib  _ZN7VMError14report_and_dieEP6ThreadPKcim11VMErrorTypeS3_Pc + 10949452
+  #06 0x13dd3a4f8  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/java_runtimes/java-21-openjdk/lib/server/libjvm.dylib  JVM_handle_bsd_signal + 9676024
+  #07 0x11d16679c  /private/var/mobile/Containers/Data/Application/132BB6A9-CD8E-40EA-8202-AA41493AF270/Documents/instances/default/versions/fabric-loader-0.20.1-1.21.4/game/radiance/libcore.dylib  fault_handler + 10140
+  #08 0x223ae2ca8  /usr/lib/system/libsystem_platform.dylib  <redacted> + 19624
+  #09 0x223b9413c  /usr/lib/system/libsystem_pthread.dylib  <redacted> + 41276
+
+===== [Amethyst fatal trace] 2026-10-26 14:44:27.952 =====
+reason: Task251: shutdown marker -> _exit(0) (post-main hang guard)
+thread: Ame251-ShutdownWatchdog
+  #00 0x1049ab174  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/AngelAuraAmethyst  ame_write_fatal_trace + 78196
+  #01 0x1049af6b8  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/AngelAuraAmethyst  __ame251_armShutdownForceExitWatchdog_block_invoke_2 + 95928
+  #02 0x1982ad5bc  /System/Library/Frameworks/Foundation.framework/Foundation  <redacted> + 8979900
+  #03 0x223b8b7d0  /usr/lib/system/libsystem_pthread.dylib  _pthread_start + 6096
+  #04 0x223b8b480  /usr/lib/system/libsystem_pthread.dylib  thread_start + 5248
+
+===== [Amethyst fatal trace] 2026-10-26 20:01:19.405 =====
+reason: abort() called
+thread: (unnamed)
+  #00 0x100317174  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/AngelAuraAmethyst  ame_write_fatal_trace + 78196
+  #01 0x100317630  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/AngelAuraAmethyst  hooked_abort + 79408
+  #02 0x124d1cd68  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/java_runtimes/java-21-openjdk/lib/server/libjvm.dylib  _ZN2os5abortEbPvPKv + 8539496
+  #03 0x124f68f08  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/java_runtimes/java-21-openjdk/lib/server/libjvm.dylib  _ZN7VMError14report_and_dieEiPKcS1_PcP6ThreadPhPvS6_S1_im + 10948360
+  #04 0x124f68660  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/java_runtimes/java-21-openjdk/lib/server/libjvm.dylib  _ZN7VMError14report_and_dieEiPKcS1_PcP6ThreadPhPvS6_S1_im + 10946144
+  #05 0x124f6934c  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/java_runtimes/java-21-openjdk/lib/server/libjvm.dylib  _ZN7VMError14report_and_dieEP6ThreadPKcim11VMErrorTypeS3_Pc + 10949452
+  #06 0x124e324f8  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/java_runtimes/java-21-openjdk/lib/server/libjvm.dylib  JVM_handle_bsd_signal + 9676024
+  #07 0x223ae2ca8  /usr/lib/system/libsystem_platform.dylib  <redacted> + 19624
+  #08 0x119021550  /private/var/mobile/Containers/Data/Application/132BB6A9-CD8E-40EA-8202-AA41493AF270/Documents/instances/default/versions/fabric-loader-0.20.1-1.21.4/game/radiance/libcore.dylib  radiance_takeover_start + 5456
+  #09 0x119020630  /private/var/mobile/Containers/Data/Application/132BB6A9-CD8E-40EA-8202-AA41493AF270/Documents/instances/default/versions/fabric-loader-0.20.1-1.21.4/game/radiance/libcore.dylib  JNI_OnLoad + 1584
+  #10 0x11a33aa3c  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/java_runtimes/java-21-openjdk/lib/libjava.dylib  Java_jdk_internal_loader_NativeLibraries_load + 27196
+  #11 0x136808a88
+  #12 0x13680504c
+  #13 0x13680504c
+  #14 0x136804f70
+  #15 0x136804f70
+  #16 0x136804f70
+  #17 0x13680517c
+  #18 0x13680517c
+  #19 0x13680562c
+  #20 0x13680562c
+  #21 0x13680517c
+  #22 0x13680517c
+  #23 0x13680517c
+  #24 0x13680517c
+  #25 0x13680517c
+  #26 0x13680517c
+  #27 0x13680562c
+  #28 0x13680517c
+  #29 0x13680517c
+  #30 0x13680517c
+  #31 0x136804f70
+  #32 0x136804f70
+  #33 0x136804f70
+  #34 0x136805420
+  #35 0x136804f70
+  #36 0x13680517c
+  #37 0x13680517c
+  #38 0x136800154
+  #39 0x1249a7fb4  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/java_runtimes/java-21-openjdk/lib/server/libjvm.dylib  _ZN9JavaCalls11call_helperEP9JavaValueRK12methodHandleP17JavaCallArgumentsP10JavaThread + 4915124
+  #40 0x124a22224  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/java_runtimes/java-21-openjdk/lib/server/libjvm.dylib  _ZL17jni_invoke_staticP7JNIEnv_P9JavaValueP8_jobject11JNICallTypeP10_jmethodIDP18JNI_ArgumentPusherP10JavaThread + 5415460
+  #41 0x124a25820  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/java_runtimes/java-21-openjdk/lib/server/libjvm.dylib  jni_CallStaticVoidMethod + 5429280
+  #42 0x11a217130  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/java_runtimes/java-21-openjdk/lib/libjli.dylib  JavaMain + 45360
+  #43 0x11a219c48  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/java_runtimes/java-21-openjdk/lib/libjli.dylib  ThreadJavaMain + 56392
+  #44 0x223b8b7d0  /usr/lib/system/libsystem_pthread.dylib  _pthread_start + 6096
+  #45 0x223b8b480  /usr/lib/system/libsystem_pthread.dylib  thread_start + 5248
+
+===== [Amethyst fatal trace] 2026-10-26 22:25:23.778 =====
+reason: abort() called
+thread: (unnamed)
+  #00 0x1022b3174  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/AngelAuraAmethyst  ame_write_fatal_trace + 78196
+  #01 0x1022b3630  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/AngelAuraAmethyst  hooked_abort + 79408
+  #02 0x13f824d68  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/java_runtimes/java-21-openjdk/lib/server/libjvm.dylib  _ZN2os5abortEbPvPKv + 8539496
+  #03 0x13fa70f08  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/java_runtimes/java-21-openjdk/lib/server/libjvm.dylib  _ZN7VMError14report_and_dieEiPKcS1_PcP6ThreadPhPvS6_S1_im + 10948360
+  #04 0x13fa70660  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/java_runtimes/java-21-openjdk/lib/server/libjvm.dylib  _ZN7VMError14report_and_dieEiPKcS1_PcP6ThreadPhPvS6_S1_im + 10946144
+  #05 0x13fa7134c  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/java_runtimes/java-21-openjdk/lib/server/libjvm.dylib  _ZN7VMError14report_and_dieEP6ThreadPKcim11VMErrorTypeS3_Pc + 10949452
+  #06 0x13f93a4f8  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/java_runtimes/java-21-openjdk/lib/server/libjvm.dylib  JVM_handle_bsd_signal + 9676024
+  #07 0x12bb3b0d8  /private/var/mobile/Containers/Data/Application/132BB6A9-CD8E-40EA-8202-AA41493AF270/Documents/instances/default/versions/fabric-loader-0.20.1-1.21.4/game/radiance/libcore.dylib  fault_handler + 45272
+  #08 0x223ae2ca8  /usr/lib/system/libsystem_platform.dylib  <redacted> + 19624
+  #09 0xffff800198a88208
+  #10 0x25885f790  /System/Library/Extensions/AGXMetalG15G_C0.bundle/AGXMetalG15G_C0  <redacted> + 3913616
+  #11 0x12bb3be1c  /private/var/mobile/Containers/Data/Application/132BB6A9-CD8E-40EA-8202-AA41493AF270/Documents/instances/default/versions/fabric-loader-0.20.1-1.21.4/game/radiance/libcore.dylib  tick_trampoline + 48668
+  #12 0x198eed29c  /System/Library/Frameworks/CoreFoundation.framework/CoreFoundation  <redacted> + 983708
+  #13 0x198eecf40  /System/Library/Frameworks/CoreFoundation.framework/CoreFoundation  <redacted> + 982848
+  #14 0x198eeca94  /System/Library/Frameworks/CoreFoundation.framework/CoreFoundation  <redacted> + 981652
+  #15 0x198e73134  /System/Library/Frameworks/CoreFoundation.framework/CoreFoundation  <redacted> + 483636
+  #16 0x198ec5284  /System/Library/Frameworks/CoreFoundation.framework/CoreFoundation  CFRunLoopRunSpecific + 819844
+  #17 0x198ed8824  /System/Library/Frameworks/CoreFoundation.framework/CoreFoundation  CFRunLoopRun + 899108
+  #18 0x12bb3bb10  /private/var/mobile/Containers/Data/Application/132BB6A9-CD8E-40EA-8202-AA41493AF270/Documents/instances/default/versions/fabric-loader-0.20.1-1.21.4/game/radiance/libcore.dylib  present_thread_body + 47888
+  #19 0x223b8b7d0  /usr/lib/system/libsystem_pthread.dylib  _pthread_start + 6096
+  #20 0x223b8b480  /usr/lib/system/libsystem_pthread.dylib  thread_start + 5248
+
+===== [Amethyst fatal trace] 2026-10-26 22:27:10.657 =====
+reason: abort() called
+thread: (unnamed)
+  #00 0x104e63174  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/AngelAuraAmethyst  ame_write_fatal_trace + 78196
+  #01 0x104e63630  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/AngelAuraAmethyst  hooked_abort + 79408
+  #02 0x13f424d68  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/java_runtimes/java-21-openjdk/lib/server/libjvm.dylib  _ZN2os5abortEbPvPKv + 8539496
+  #03 0x13f670f08  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/java_runtimes/java-21-openjdk/lib/server/libjvm.dylib  _ZN7VMError14report_and_dieEiPKcS1_PcP6ThreadPhPvS6_S1_im + 10948360
+  #04 0x13f670660  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/java_runtimes/java-21-openjdk/lib/server/libjvm.dylib  _ZN7VMError14report_and_dieEiPKcS1_PcP6ThreadPhPvS6_S1_im + 10946144
+  #05 0x13f67134c  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/java_runtimes/java-21-openjdk/lib/server/libjvm.dylib  _ZN7VMError14report_and_dieEP6ThreadPKcim11VMErrorTypeS3_Pc + 10949452
+  #06 0x13f53a4f8  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/java_runtimes/java-21-openjdk/lib/server/libjvm.dylib  JVM_handle_bsd_signal + 9676024
+  #07 0x12dbc70d8  /private/var/mobile/Containers/Data/Application/132BB6A9-CD8E-40EA-8202-AA41493AF270/Documents/instances/default/versions/fabric-loader-0.20.1-1.21.4/game/radiance/libcore.dylib  fault_handler + 45272
+  #08 0x223ae2ca8  /usr/lib/system/libsystem_platform.dylib  <redacted> + 19624
+  #09 0x198a88208  /System/Library/Frameworks/Metal.framework/Metal  <redacted> + 1204744
+  #10 0x25885f790  /System/Library/Extensions/AGXMetalG15G_C0.bundle/AGXMetalG15G_C0  <redacted> + 3913616
+  #11 0x12dbc7e1c  /private/var/mobile/Containers/Data/Application/132BB6A9-CD8E-40EA-8202-AA41493AF270/Documents/instances/default/versions/fabric-loader-0.20.1-1.21.4/game/radiance/libcore.dylib  tick_trampoline + 48668
+  #12 0x198eed29c  /System/Library/Frameworks/CoreFoundation.framework/CoreFoundation  <redacted> + 983708
+  #13 0x198eecf40  /System/Library/Frameworks/CoreFoundation.framework/CoreFoundation  <redacted> + 982848
+  #14 0x198eeca94  /System/Library/Frameworks/CoreFoundation.framework/CoreFoundation  <redacted> + 981652
+  #15 0x198e73134  /System/Library/Frameworks/CoreFoundation.framework/CoreFoundation  <redacted> + 483636
+  #16 0x198ec5284  /System/Library/Frameworks/CoreFoundation.framework/CoreFoundation  CFRunLoopRunSpecific + 819844
+  #17 0x198ed8824  /System/Library/Frameworks/CoreFoundation.framework/CoreFoundation  CFRunLoopRun + 899108
+  #18 0x12dbc7b10  /private/var/mobile/Containers/Data/Application/132BB6A9-CD8E-40EA-8202-AA41493AF270/Documents/instances/default/versions/fabric-loader-0.20.1-1.21.4/game/radiance/libcore.dylib  present_thread_body + 47888
+  #19 0x223b8b7d0  /usr/lib/system/libsystem_pthread.dylib  _pthread_start + 6096
+  #20 0x223b8b480  /usr/lib/system/libsystem_pthread.dylib  thread_start + 5248
+
+===== [Amethyst fatal trace] 2026-10-27 13:05:34.306 =====
+reason: abort() called
+thread: (unnamed)
+  #00 0x102c3b174  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/AngelAuraAmethyst  ame_write_fatal_trace + 78196
+  #01 0x102c3b630  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/AngelAuraAmethyst  hooked_abort + 79408
+  #02 0x14d024d68  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/java_runtimes/java-21-openjdk/lib/server/libjvm.dylib  _ZN2os5abortEbPvPKv + 8539496
+  #03 0x14d270f08  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/java_runtimes/java-21-openjdk/lib/server/libjvm.dylib  _ZN7VMError14report_and_dieEiPKcS1_PcP6ThreadPhPvS6_S1_im + 10948360
+  #04 0x14d270660  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/java_runtimes/java-21-openjdk/lib/server/libjvm.dylib  _ZN7VMError14report_and_dieEiPKcS1_PcP6ThreadPhPvS6_S1_im + 10946144
+  #05 0x14d27134c  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/java_runtimes/java-21-openjdk/lib/server/libjvm.dylib  _ZN7VMError14report_and_dieEP6ThreadPKcim11VMErrorTypeS3_Pc + 10949452
+  #06 0x14d13a4f8  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/java_runtimes/java-21-openjdk/lib/server/libjvm.dylib  JVM_handle_bsd_signal + 9676024
+  #07 0x223ae2ca8  /usr/lib/system/libsystem_platform.dylib  <redacted> + 19624
+  #08 0x1404ff2dc  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/Frameworks/libmobileglues.dylib  glGetError + 2355932
+  #09 0x1545cca88
+  #10 0x1545c904c
+  #11 0x1545c8f70
+  #12 0x1545c8f70
+  #13 0x1545c8f70
+  #14 0x1545c917c
+  #15 0x1545c8f70
+  #16 0x1545c917c
+  #17 0x1545c917c
+  #18 0x1545c917c
+  #19 0x1545c917c
+  #20 0x1545c962c
+  #21 0x1545c917c
+  #22 0x1545c917c
+  #23 0x1545c917c
+  #24 0x1545c8f70
+  #25 0x1545c8f70
+  #26 0x1545c8f70
+  #27 0x1545c9420
+  #28 0x1545c8f70
+  #29 0x1545c917c
+  #30 0x1545c917c
+  #31 0x1545c4154
+  #32 0x14ccaffb4  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/java_runtimes/java-21-openjdk/lib/server/libjvm.dylib  _ZN9JavaCalls11call_helperEP9JavaValueRK12methodHandleP17JavaCallArgumentsP10JavaThread + 4915124
+  #33 0x14cd2a224  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/java_runtimes/java-21-openjdk/lib/server/libjvm.dylib  _ZL17jni_invoke_staticP7JNIEnv_P9JavaValueP8_jobject11JNICallTypeP10_jmethodIDP18JNI_ArgumentPusherP10JavaThread + 5415460
+  #34 0x14cd2d820  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/java_runtimes/java-21-openjdk/lib/server/libjvm.dylib  jni_CallStaticVoidMethod + 5429280
+  #35 0x11d62f130  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/java_runtimes/java-21-openjdk/lib/libjli.dylib  JavaMain + 45360
+  #36 0x11d631c48  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/java_runtimes/java-21-openjdk/lib/libjli.dylib  ThreadJavaMain + 56392
+  #37 0x223b8b7d0  /usr/lib/system/libsystem_pthread.dylib  _pthread_start + 6096
+  #38 0x223b8b480  /usr/lib/system/libsystem_pthread.dylib  thread_start + 5248
+
+===== [Amethyst fatal trace] 2026-10-27 13:58:47.659 =====
+reason: abort() called
+thread: (unnamed)
+  #00 0x10273f174  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/AngelAuraAmethyst  ame_write_fatal_trace + 78196
+  #01 0x10273f630  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/AngelAuraAmethyst  hooked_abort + 79408
+  #02 0x13e824d68  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/java_runtimes/java-21-openjdk/lib/server/libjvm.dylib  _ZN2os5abortEbPvPKv + 8539496
+  #03 0x13ea70f08  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/java_runtimes/java-21-openjdk/lib/server/libjvm.dylib  _ZN7VMError14report_and_dieEiPKcS1_PcP6ThreadPhPvS6_S1_im + 10948360
+  #04 0x13ea70660  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/java_runtimes/java-21-openjdk/lib/server/libjvm.dylib  _ZN7VMError14report_and_dieEiPKcS1_PcP6ThreadPhPvS6_S1_im + 10946144
+  #05 0x13ea7134c  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/java_runtimes/java-21-openjdk/lib/server/libjvm.dylib  _ZN7VMError14report_and_dieEP6ThreadPKcim11VMErrorTypeS3_Pc + 10949452
+  #06 0x13ea719cc  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/java_runtimes/java-21-openjdk/lib/server/libjvm.dylib  _ZN7VMError32install_secondary_signal_handlerEv + 10951116
+  #07 0x223ae2ca8  /usr/lib/system/libsystem_platform.dylib  <redacted> + 19624
+  #08 0x13e3ad1b0  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/java_runtimes/java-21-openjdk/lib/server/libjvm.dylib  _ZN20BlockLocationPrinterI15G1CollectedHeapE16base_oop_or_nullEPv + 3854768
+  #09 0x13e3ad1b0  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/java_runtimes/java-21-openjdk/lib/server/libjvm.dylib  _ZN20BlockLocationPrinterI15G1CollectedHeapE16base_oop_or_nullEPv + 3854768
+  #10 0x13e3a9cf4  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/java_runtimes/java-21-openjdk/lib/server/libjvm.dylib  _ZN20BlockLocationPrinterI15G1CollectedHeapE14print_locationEP12outputStreamPv + 3841268
+  #11 0x13e818840  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/java_runtimes/java-21-openjdk/lib/server/libjvm.dylib  _ZN2os14print_locationEP12outputStreamlb + 8489024
+  #12 0x13e820058  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/java_runtimes/java-21-openjdk/lib/server/libjvm.dylib  _ZN2os19print_register_infoEP12outputStreamPKvRi + 8519768
+  #13 0x13ea6df18  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/java_runtimes/java-21-openjdk/lib/server/libjvm.dylib  _ZN7VMError6reportEP12outputStreamb + 10936088
+  #14 0x13ea70bbc  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/java_runtimes/java-21-openjdk/lib/server/libjvm.dylib  _ZN7VMError14report_and_dieEiPKcS1_PcP6ThreadPhPvS6_S1_im + 10947516
+  #15 0x13ea70660  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/java_runtimes/java-21-openjdk/lib/server/libjvm.dylib  _ZN7VMError14report_and_dieEiPKcS1_PcP6ThreadPhPvS6_S1_im + 10946144
+  #16 0x13ea7134c  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/java_runtimes/java-21-openjdk/lib/server/libjvm.dylib  _ZN7VMError14report_and_dieEP6ThreadPKcim11VMErrorTypeS3_Pc + 10949452
+  #17 0x13e93a4f8  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/java_runtimes/java-21-openjdk/lib/server/libjvm.dylib  JVM_handle_bsd_signal + 9676024
+  #18 0x223ae2ca8  /usr/lib/system/libsystem_platform.dylib  <redacted> + 19624
+  #19 0x13d4cb2dc  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/Frameworks/libmobileglues.dylib  glGetError + 2355932
+  #20 0x1511cca88
+  #21 0x1511c904c
+  #22 0x1511c8f70
+  #23 0x1511c8f70
+  #24 0x1511c8f70
+  #25 0x1511c917c
+  #26 0x1511c8f70
+  #27 0x1511c917c
+  #28 0x1511c917c
+  #29 0x1511c917c
+  #30 0x1511c917c
+  #31 0x1511c962c
+  #32 0x1511c917c
+  #33 0x1511c917c
+  #34 0x1511c917c
+  #35 0x1511c8f70
+  #36 0x1511c8f70
+  #37 0x1511c8f70
+  #38 0x1511c9420
+  #39 0x1511c8f70
+  #40 0x1511c917c
+  #41 0x1511c917c
+  #42 0x1511c4154
+  #43 0x13e4affb4  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/java_runtimes/java-21-openjdk/lib/server/libjvm.dylib  _ZN9JavaCalls11call_helperEP9JavaValueRK12methodHandleP17JavaCallArgumentsP10JavaThread + 4915124
+  #44 0x13e52a224  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/java_runtimes/java-21-openjdk/lib/server/libjvm.dylib  _ZL17jni_invoke_staticP7JNIEnv_P9JavaValueP8_jobject11JNICallTypeP10_jmethodIDP18JNI_ArgumentPusherP10JavaThread + 5415460
+  #45 0x13e52d820  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/java_runtimes/java-21-openjdk/lib/server/libjvm.dylib  jni_CallStaticVoidMethod + 5429280
+  #46 0x1236d7130  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/java_runtimes/java-21-openjdk/lib/libjli.dylib  JavaMain + 45360
+  #47 0x1236d9c48  /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/java_runtimes/java-21-openjdk/lib/libjli.dylib  ThreadJavaMain + 56392
+  #48 0x223b8b7d0  /usr/lib/system/libsystem_pthread.dylib  _pthread_start + 6096
+  #49 0x223b8b480  /usr/lib/system/libsystem_pthread.dylib  thread_start + 5248

@@ -33,7 +33,7 @@ public final class ProbeReport {
         } catch (Throwable ignored) {
         }
         line("==============================================================");
-        line("Vulkan 硬件光追能力探针 (rt-probe 1.1)  —— Radiance 移植第一章");
+        line("Vulkan 硬件光追能力探针 (rt-probe 1.2)  —— Radiance 移植第一章");
         line("时间: " + new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date()));
         line("报告文件: " + file);
         line("==============================================================");

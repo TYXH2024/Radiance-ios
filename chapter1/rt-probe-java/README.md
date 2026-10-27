@@ -9,7 +9,44 @@
 
 ---
 
-## 0. v1.1 变更（针对真机 M3 / A20Pro 首轮报告的修复）
+## 0. v1.2 变更（针对 2026-10-27 第二轮真机报告的修复）
+
+**第二轮真机结果**（M3 / iOS 18.3.2 与 A20 Pro / iOS 27.0.1，均跑 Vulkan 渲染档）：
+探针 v1.1 完整跑通并双双判 **C**（捆绑 MoltenVK 1.4.3 不暴露
+`VK_KHR_acceleration_structure` / `VK_KHR_ray_query`，134/135 项设备扩展全清单在案）
+——**第一章裁决落定**。但游戏随后依然闪退，崩溃点两台完全一致：
+
+```
+SIGSEGV pc=0x0, libmobileglues.dylib glGetError+0x14
+  <- GL.createCapabilities() <- Minecraft Window 构造（Render thread）
+```
+
+时序取证（latestlog）：探针在 mod 初始化阶段跑完（判 C）→ `glfwCreateWindow` →
+"Initializing MobileGlues ..."（GL→Vulkan 翻译层开始初始化）→ settings 打印完后
+**Vulkan 后端未完成** → MC 调 `glGetError` 撞 NULL 函数表 → SIGSEGV。
+
+**归因**：v1.0 时（探针零原生调用）A20 Pro 能通过 GL 初始化进到存档；v1.1 时两台
+都崩在 GL 初始化——唯一变量是探针在后台线程创建了自建 `VkInstance` 并**泄漏未销毁**
+（判 C 路径直接 return），与 Render thread 上 MobileGlues 的初始化**并发竞争** MoltenVK，
+疑似导致翻译层后端初始化失败。同时注意：v1.0 时 A20 Pro 进档 1 秒后也闪退过——
+**渲染栈在 Vulkan 档本身另有不稳定因素**，与探针无关的那部分需另行排查
+（建议闪退时切稳定渲染器档位对照）。
+
+**v1.2 修复**：
+1. **延迟执行**：探针不再在 mod 初始化阶段跑。新增 client entrypoint，经反射注册
+   fabric-api 的 `CLIENT_STARTED` 事件——MinecraftClient 完全启动（Window/GL 上下文/
+   MobileGlues 全部就绪）后的安全窗口才执行；fabric-api 缺失时由 90 秒 watchdog 兜底
+   （此时 GL 初始化同样早已完成）；
+2. **实例全路径销毁**：判 C/E 提前退出与 RtPipeline 结束时统一 `vkDestroyInstance`
+   （v1.1 泄漏实例残留整个进程周期）；A 路径 cleanup 同时补 `vkDestroyDevice`；
+3. **归因对照开关**：`-Drtprobe.disabled=true`（或环境变量 `RTPROBE_DISABLED=1`）
+   时探针只写环境快照、**零原生 Vulkan 调用**——配合"不装探针"基线，可干净归因闪退；
+4. 报告新增"触发方式"字段（CLIENT_STARTED / fallback-timeout / standalone-main）；
+   fabric.mod.json 版本号修正（1.0.0 → 1.2.0，此前一直误报 1.0.0）。
+
+---
+
+## 0.5 v1.1 变更（针对真机 M3 / A20Pro 首轮报告的修复）
 
 **真机现象**：两台设备首轮均在 S1 处判 F，异常为
 `IllegalStateException: Vulkan has already been created.`

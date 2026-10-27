@@ -177,6 +177,7 @@ final class VulkanProbe {
             if (err != VK_SUCCESS || pdCount.get(0) == 0) {
                 r.fail("未枚举到任何物理设备 (err=" + translate(err) + ", count=" + pdCount.get(0) + ")", null);
                 r.finish("E", "无物理设备 -> MoltenVK 未正确初始化，附报告回报。");
+                destroyInstance(r, instance); // v1.2: 失败路径同样不泄漏
                 return null;
             }
             PointerBuffer pds = stack.mallocPointer(pdCount.get(0));
@@ -186,12 +187,17 @@ final class VulkanProbe {
             Ctx chosen = null;
             for (int i = 0; i < pds.capacity(); i++) {
                 VkPhysicalDevice pd = new VkPhysicalDevice(pds.get(i), instance);
-                Ctx c = inspectDevice(r, i, pd);
+                Ctx c = inspectDevice(r, i, pd, instance);
                 if (c != null && chosen == null) {
                     chosen = c;
                 }
             }
             if (chosen == null) {
+                // v1.2 修复：判 C/E 路径同样销毁实例。
+                // v1.1 在此泄漏 VkInstance（进程存活），现场取证显示 MobileGlues
+                // (GL->Vulkan 翻译层) 随后初始化未完成，MC 调 glGetError 撞 NULL 函数表
+                // SIGSEGV —— 残留实例 + 与 GL 初始化并发竞争是首要嫌疑。
+                destroyInstance(r, instance);
                 return null; // inspectDevice 内已写判定
             }
             r.ok("选定设备: " + chosen.deviceName + " (Vulkan " + verStr(chosen.apiVersion) + ")");
@@ -200,7 +206,7 @@ final class VulkanProbe {
     }
 
     /** 单个物理设备的完整体检。返回可用 Ctx 则代表该设备可进入 RT 管线。 */
-    private static Ctx inspectDevice(ProbeReport r, int index, VkPhysicalDevice pd) {
+    private static Ctx inspectDevice(ProbeReport r, int index, VkPhysicalDevice pd, VkInstance instance) {
         try (MemoryStack stack = MemoryStack.stackPush()) {
             VkPhysicalDeviceProperties props = VkPhysicalDeviceProperties.calloc(stack);
             VK10.vkGetPhysicalDeviceProperties(pd, props);
@@ -383,7 +389,7 @@ final class VulkanProbe {
             r.ok("逻辑设备创建成功，启用扩展: " + enable);
 
             Ctx ctx = new Ctx();
-            ctx.instance = null; // 单设备场景无需保留
+            ctx.instance = instance; // v1.2: 保留给 RtPipeline.cleanup 统一销毁（v1.1 误置 null）
             ctx.pd = pd;
             ctx.device = device;
             ctx.queue = new VkQueue(pQueue.get(0), device);
@@ -395,6 +401,22 @@ final class VulkanProbe {
     }
 
     // ================= 工具方法 =================
+
+    /** v1.2: 审计结束/提前退出时销毁探针自建实例，避免残留实例干扰宿主翻译层 */
+    static void destroyInstance(ProbeReport r, VkInstance instance) {
+        if (instance != null) {
+            try {
+                VK10.vkDestroyInstance(instance, null);
+                if (r != null) {
+                    r.info("VkInstance 已销毁（v1.2 修复：v1.1 泄漏实例，判 C 后残留于整个进程周期）");
+                }
+            } catch (Throwable t) {
+                if (r != null) {
+                    r.fail("vkDestroyInstance 失败（不致命）", t);
+                }
+            }
+        }
+    }
 
     static List<String> enumInstanceLayers(ProbeReport r) {
         List<String> out = new ArrayList<>();

@@ -667,6 +667,7 @@ final class RtPipeline {
         try { if (instMem != 0) VK10.vkFreeMemory(dev, instMem, null); } catch (Throwable ignored) {}
         try { if (outBuf != 0) VK10.vkDestroyBuffer(dev, outBuf, null); } catch (Throwable ignored) {}
         try { if (outMem != 0) VK10.vkFreeMemory(dev, outMem, null); } catch (Throwable ignored) {}
+        try { if (ctx.device != null) VK10.vkDestroyDevice(ctx.device, null); } catch (Throwable ignored) {} // v1.2: 补销毁逻辑设备
         try { if (ctx.instance != null) org.lwjgl.vulkan.VK10.vkDestroyInstance(ctx.instance, null); } catch (Throwable ignored) {}
     }
 }

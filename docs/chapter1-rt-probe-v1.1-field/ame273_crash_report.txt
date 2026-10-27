@@ -1,0 +1,28 @@
+=== ame273 crash report ===
+time: 2026-10-27 14:00:32
+exit_code: 6
+category: jvm_fatal
+category_cn: JVM/原生层致命错误
+category_en: JVM/native fatal error
+headline: # C  [libmobileglues.dylib+0x23f2d8]  glGetError+0x14
+fix: 完整原生回溯在 hs_err_pid*.log（启动器 Documents 根目录）；若问题帧指向渲染器/图形库，可在设置中切换渲染器后重试
+detail_begin
+# Java VM: OpenJDK 64-Bit Server VM (21.0.8-internal-adhoc.ci.openjdk-21, mixed mode, tiered, compressed oops, g1 gc, bsd-aarch64)
+# Problematic frame:
+# C  [libmobileglues.dylib+0x23f2d8]  glGetError+0x14
+#
+# No core dump will be written. Core dumps have been disabled. To enable core dumping, try "ulimit -c unlimited" before starting Java again
+#
+# An error report file with more information is saved as:
+# /private/var/mobile/Containers/Data/Application/8BCCCFC1-5C33-44BA-811F-FC58EE9FCC6E/Documents/hs_err_pid18393.log
+#
+# If you would like to submit a bug report, please visit:
+#   https://bugreport.java.com/bugreport/crash.jsp
+# The crash happened outside the Java Virtual Machine in native code.
+# See problematic frame for where to report the bug.
+#
+abort() called
+===== [Amethyst fatal trace] 2026-10-27 14:00:31.968 =====
+reason: abort() called
+thread: (unnamed)
+detail_end

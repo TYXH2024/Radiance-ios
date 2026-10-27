@@ -1,0 +1,91 @@
+==============================================================
+Vulkan 硬件光追能力探针 (rt-probe 1.1)  —— Radiance 移植第一章
+时间: 2026-10-27 13:58:47
+报告文件: /var/mobile/Containers/Data/Application/132BB6A9-CD8E-40EA-8202-AA41493AF270/Documents/instances/default/versions/fabric-loader-0.20.1-1.21.4/game/rt_probe_report.txt
+==============================================================
+
+---- 总流程 ----
+
+---- S0 环境快照 ----
+[INFO ] java.version  = 21.0.8-internal
+[INFO ] java.vendor   = N/A
+[INFO ] java.vm.name  = OpenJDK 64-Bit Server VM
+[INFO ] os.name       = Mac OS X 18.3.2 / aarch64
+[INFO ] user.dir      = /var/mobile/Containers/Data/Application/132BB6A9-CD8E-40EA-8202-AA41493AF270/Documents/instances/default/versions/fabric-loader-0.20.1-1.21.4/game
+[INFO ] user.home     = /private/var/mobile/Containers/Data/Application/132BB6A9-CD8E-40EA-8202-AA41493AF270/Documents
+[INFO ] sys[org.lwjgl.vulkan.libname] = MoltenVK
+[INFO ] sys[org.lwjgl.opengl.libname] = mobileglues
+[INFO ] sys[ame.game.session] = 1
+[INFO ] sys[pojav.lwjgl.version] = 333
+[INFO ] sys[java.library.path] = /private/var/containers/Bundle/Application/6817011E-D04E-427D-824E-D707B2C4E7DC/AngelAuraAmethyst.app/Frameworks
+[INFO ] sys[ame.launcher.lang] = zh_cn
+[INFO ] sys[ame.showdown.home] = /var/mobile/Containers/Data/Application/132BB6A9-CD8E-40EA-8202-AA41493AF270/Documents/instances/default/versions/fabric-loader-0.20.1-1.21.4/game
+[INFO ] LWJGL 版本: 3.3.3
+[INFO ] LWJGL Vulkan 绑定类检查:
+[INFO ]    有    Vulkan 1.0 核心                                              org.lwjgl.vulkan.VK10
+[INFO ]    有    Vulkan 1.1 核心                                              org.lwjgl.vulkan.VK11
+[INFO ]    有    Vulkan 1.2 核心                                              org.lwjgl.vulkan.VK12
+[INFO ]    有    Vulkan 1.3 核心                                              org.lwjgl.vulkan.VK13
+[INFO ]    有    props2 查询                                                  org.lwjgl.vulkan.KHRGetPhysicalDeviceProperties2
+[INFO ]    有    iOS/macOS 枚举 MoltenVK 必需                                   org.lwjgl.vulkan.KHRPortabilityEnumeration
+[INFO ]    有    BLAS/TLAS 设备地址                                             org.lwjgl.vulkan.KHRBufferDeviceAddress
+[INFO ]    有    AS 依赖                                                      org.lwjgl.vulkan.KHRDeferredHostOperations
+[INFO ]    有    AS 依赖                                                      org.lwjgl.vulkan.KHRGetMemoryRequirements2
+[INFO ]    有    AS 宿主侧构建命令                                                 org.lwjgl.vulkan.KHRAccelerationStructure
+[INFO ]    有    TLAS 实例结构体                                                 org.lwjgl.vulkan.VkAccelerationStructureInstanceKHR
+[INFO ]    有    ray query 特性查询                                             org.lwjgl.vulkan.VkPhysicalDeviceRayQueryFeaturesKHR
+[INFO ]    有    ray query 常量(壳类即可)                                         org.lwjgl.vulkan.KHRRayQuery
+[INFO ]    有    RT 管线(本探针不需要)                                              org.lwjgl.vulkan.KHRRayTracingPipeline
+[INFO ]    有    Metal surface(本探针不需要)                                      org.lwjgl.vulkan.EXTMetalSurface
+[PASS ] LWJGL Vulkan 绑定类齐全，判定 B（需换 LWJGL）可排除
+
+---- S1 加载 Vulkan 实现 (VK.create，已加载则复用) ----
+[PASS ] Vulkan 库已由宿主(启动器/渲染栈/LWJGL 静态初始化)提前加载 —— 复用现有库句柄（v1.1 修复点：v1.0 在此误判 F）
+
+---- S2 实例支持版本 ----
+[PASS ] 实例最高支持 Vulkan 1.4.357
+
+---- S3 实例层 / 实例扩展清单 ----
+[INFO ] 实例层(1): [MoltenVK]
+[INFO ] 实例扩展(18): [VK_KHR_device_group_creation, VK_KHR_external_fence_capabilities, VK_KHR_external_memory_capabilities, VK_KHR_external_semaphore_capabilities, VK_KHR_get_physical_device_properties2, VK_KHR_get_surface_capabilities2, VK_KHR_surface, VK_KHR_surface_maintenance1, VK_KHR_surface_protected_capabilities, VK_EXT_debug_report, VK_EXT_debug_utils, VK_EXT_headless_surface, VK_EXT_layer_settings, VK_EXT_metal_surface, VK_EXT_surface_maintenance1, VK_EXT_swapchain_colorspace, VK_MVK_ios_surface, VK_MVK_moltenvk]
+[INFO ] 检测到 MoltenVK 层: 否；portability_enumeration 扩展: 否
+
+---- S4 创建 VkInstance ----
+[PASS ] VkInstance 创建成功 (启用扩展: [VK_KHR_get_physical_device_properties2])
+
+---- S5 物理设备枚举 ----
+[INFO ] 物理设备数量: 1
+
+---- S5.0 设备: Apple M3 GPU ----
+[INFO ] apiVersion=1.2.357  vendorID=0x106B  deviceID=0x12030009  driverVersion=0x000028A3
+[INFO ] driverVersion 按 MoltenVK 打包方式解读: 0x28a3
+[INFO ] 设备扩展(134): [VK_KHR_16bit_storage, VK_KHR_8bit_storage, VK_KHR_bind_memory2, VK_KHR_buffer_device_address, VK_KHR_calibrated_timestamps, VK_KHR_copy_commands2, VK_KHR_create_renderpass2, VK_KHR_dedicated_allocation, VK_KHR_deferred_host_operations, VK_KHR_depth_stencil_resolve, VK_KHR_descriptor_update_template, VK_KHR_device_group, VK_KHR_draw_indirect_count, VK_KHR_driver_properties, VK_KHR_dynamic_rendering, VK_KHR_dynamic_rendering_local_read, VK_KHR_external_fence, VK_KHR_external_memory, VK_KHR_external_semaphore, VK_KHR_format_feature_flags2, VK_KHR_fragment_shader_barycentric, VK_KHR_get_memory_requirements2, VK_KHR_global_priority, VK_KHR_image_format_list, VK_KHR_imageless_framebuffer, VK_KHR_incremental_present, VK_KHR_index_type_uint8, VK_KHR_line_rasterization, VK_KHR_load_store_op_none, VK_KHR_maintenance1, VK_KHR_maintenance2, VK_KHR_maintenance3, VK_KHR_maintenance4, VK_KHR_maintenance5, VK_KHR_maintenance6, VK_KHR_maintenance7, VK_KHR_maintenance8, VK_KHR_maintenance9, VK_KHR_map_memory2, VK_KHR_multiview, VK_KHR_portability_subset, VK_KHR_present_id, VK_KHR_present_id2, VK_KHR_present_wait, VK_KHR_present_wait2, VK_KHR_push_descriptor, VK_KHR_relaxed_block_layout, VK_KHR_robustness2, VK_KHR_sampler_mirror_clamp_to_edge, VK_KHR_sampler_ycbcr_conversion, VK_KHR_separate_depth_stencil_layouts, VK_KHR_shader_draw_parameters, VK_KHR_shader_expect_assume, VK_KHR_shader_float_controls, VK_KHR_shader_float_controls2, VK_KHR_shader_float16_int8, VK_KHR_shader_fma, VK_KHR_shader_integer_dot_product, VK_KHR_shader_maximal_reconvergence, VK_KHR_shader_non_semantic_info, VK_KHR_shader_relaxed_extended_instruction, VK_KHR_shader_subgroup_extended_types, VK_KHR_shader_subgroup_rotate, VK_KHR_shader_subgroup_uniform_control_flow, VK_KHR_shader_terminate_invocation, VK_KHR_spirv_1_4, VK_KHR_storage_buffer_storage_class, VK_KHR_swapchain, VK_KHR_swapchain_maintenance1, VK_KHR_swapchain_mutable_format, VK_KHR_synchronization2, VK_KHR_timeline_semaphore, VK_KHR_uniform_buffer_standard_layout, VK_KHR_variable_pointers, VK_KHR_vertex_attribute_divisor, VK_KHR_vulkan_memory_model, VK_KHR_zero_initialize_workgroup_memory, VK_EXT_4444_formats, VK_EXT_buffer_device_address, VK_EXT_calibrated_timestamps, VK_EXT_debug_marker, VK_EXT_depth_clip_control, VK_EXT_depth_clip_enable, VK_EXT_descriptor_indexing, VK_EXT_extended_dynamic_state, VK_EXT_extended_dynamic_state2, VK_EXT_extended_dynamic_state3, VK_EXT_external_memory_host, VK_EXT_external_memory_metal, VK_EXT_fragment_shader_interlock, VK_EXT_global_priority, VK_EXT_global_priority_query, VK_EXT_host_image_copy, VK_EXT_host_query_reset, VK_EXT_image_2d_view_of_3d, VK_EXT_image_robustness, VK_EXT_index_type_uint8, VK_EXT_inline_uniform_block, VK_EXT_line_rasterization, VK_EXT_load_store_op_none, VK_EXT_memory_budget, VK_EXT_metal_objects, VK_EXT_multi_draw, VK_EXT_nested_command_buffer, VK_EXT_pipeline_creation_cache_control, VK_EXT_pipeline_creation_feedback, VK_EXT_pipeline_robustness, VK_EXT_post_depth_coverage, VK_EXT_private_data, VK_EXT_robustness2, VK_EXT_sample_locations, VK_EXT_scalar_block_layout, VK_EXT_separate_stencil_usage, VK_EXT_shader_atomic_float, VK_EXT_shader_demote_to_helper_invocation, VK_EXT_shader_stencil_export, VK_EXT_shader_subgroup_ballot, VK_EXT_shader_subgroup_vote, VK_EXT_shader_viewport_index_layer, VK_EXT_subgroup_size_control, VK_EXT_swapchain_maintenance1, VK_EXT_texel_buffer_alignment, VK_EXT_texture_compression_astc_hdr, VK_EXT_tooling_info, VK_EXT_vertex_attribute_divisor, VK_EXT_ycbcr_2plane_444_formats, VK_AMD_gpu_shader_half_float, VK_AMD_negative_viewport_height, VK_AMD_shader_image_load_store_lod, VK_AMD_shader_trinary_minmax, VK_GOOGLE_display_timing, VK_IMG_format_pvrtc, VK_INTEL_shader_integer_functions2, VK_NV_fragment_shader_barycentric]
+[INFO ] driverName=MoltenVK  driverInfo=1.4.3
+
+---- S6.0 RT 扩展审计 ----
+[INFO ]    无    VK_KHR_acceleration_structure    加速结构（BLAS/TLAS 构建命令）   (必需)
+[INFO ]    无    VK_KHR_ray_query                 ray query（着色器内求交）      (必需)
+[INFO ]    有    VK_KHR_deferred_host_operations  延迟宿主操作（AS 依赖）          (必需)
+[INFO ]    有    VK_KHR_get_memory_requirements2  内存需求查询（AS 依赖）          (1.1核心/依赖)
+[INFO ]    有    VK_KHR_buffer_device_address     缓冲设备地址（几何/实例寻址）        (1.2核心)
+[INFO ]    有    VK_KHR_spirv_1_4                 SPIR-V 1.4（RT 着色器需要）   (1.2核心)
+[INFO ]    有    VK_KHR_portability_subset        MoltenVK 可移植子集         (应存在)
+[INFO ]    有    VK_KHR_driver_properties         驱动属性（读 MoltenVK 版本）    (可选)
+
+---- S7.0 RT 特性审计 ----
+[INFO ] accelerationStructure 特性 = false
+[INFO ] rayQuery 特性           = false
+[INFO ] bufferDeviceAddress 特性 = true
+
+---- S8.0 判定与逻辑设备创建 ----
+[INFO ] 该设备缺少必需的 RT 扩展（缺失硬性项 2 个），无法进入构建阶段。
+
+==============================================================
+最终判定: C
+探针在扩展审计阶段停止：JAR 环境本身工作正常（Vulkan 已加载、设备已枚举、扩展清单已完整取证），但本 MoltenVK 不暴露 Vulkan RT 扩展。下一步：改包替换 Vulkan ICD 为支持 Metal RT 的实现（KosmicKrisp/honeykrisp 路线），或给本启动器捆绑的 MoltenVK 加 RT 支持后用同一个探针 JAR 复测。
+
+本次运行涉及的判定规则:
+  - C | 设备缺少 VK_KHR_acceleration_structure / VK_KHR_ray_query -> 当前 MoltenVK 未暴露 Metal RT（截至 1.4.2 上游未实现），需改包替换 ICD（KosmicKrisp/honeykrisp 或自研 shim）
+==============================================================
+请把整份 rt_probe_report.txt 回传，即可据此决定下一章路线。
+[INFO ] 探针结束。报告文件: /var/mobile/Containers/Data/Application/132BB6A9-CD8E-40EA-8202-AA41493AF270/Documents/instances/default/versions/fabric-loader-0.20.1-1.21.4/game/rt_probe_report.txt

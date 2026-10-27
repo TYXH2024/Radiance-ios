@@ -43,3 +43,23 @@ Stage Summary:
 - 预期判定 C（捆绑 MoltenVK 1.4.2 上游未实现 RT 扩展，issue #427/#1956）→ 届时与原生线殊途同归转 ICD 替换（KosmicKrisp/honeykrisp）；若 A 则免改包直进第二章
 - 待办：①用户以 v1.1 jar 在 M3 / A20 Pro 复测，回传 rt_probe_report.txt + latestlog.txt + crash-reports（闪退定位）②按判定表走裁决 ③并行回收 Prisma 启动器侦察结论补 hook 点接入说明
 
+
+---
+
+## 2026-10-27（二）· 第一章结案：双真机判 C + 闪退归因（探针泄漏实例为首要嫌疑）→ rt-probe v1.2
+
+Task: 回收 M3/A20Pro v1.1 双件套（探针报告 + 闪退证据）→ 第一章裁决 → 修复探针崩溃源 → v1.2 发 Release
+
+Work Log:
+- v1.1 双真机全链路跑通，双双判 C：MoltenVK 1.4.3（实例 Vulkan 1.4.357 / 设备 api 1.2.357）134/135 设备扩展中无 VK_KHR_acceleration_structure / VK_KHR_ray_query，特性全 false；AS 依赖项（deferred_host_ops/BDA/spirv_1_4）反而在场——缺的只有驱动层两扩展
+- 第一章裁决落定 VERDICT.md：不改包路线终结，第二章转 ICD 替换（KosmicKrisp/honeykrisp 或自研 shim），替换后以同一探针复验收 A
+- 闪退归因：双机同点 SIGSEGV pc=0x0 @ libmobileglues glGetError+0x14（GL.createCapabilities ← Window 构造）；latestlog 时序显示 MobileGlues 初始化未完成。v1.0 对照（探针零原生调用时 A20 能过 GL 初始化）锁定唯一变量：v1.1 探针在 mod init 后台线程建 VkInstance 且判 C 路径泄漏未销毁，与 Render thread 的 MobileGlues 初始化并发竞争 MoltenVK
+- 另行记录：v1.0 时 A20 进档 1 秒亦闪退——Vulkan 渲染档翻译链自身另有不稳定因素，需以"移除探针基线 + 切稳定渲染器档"对照剥离
+- rt-probe v1.2 四项修复：①延迟执行（client entrypoint 反射注册 fabric-api CLIENT_STARTED——回调签名引用 net.minecraft.client.Minecraft，为保零 depends 改用反射+Proxy；无 fabric-api 时 90s watchdog 兜底）②实例全路径销毁（判 C/E/枚举失败路径 + RtPipeline cleanup 补 vkDestroyDevice/vkDestroyInstance）③-Drtprobe.disabled=true 归因开关（零原生调用）④fabric.mod.json 版本 1.0.0→1.2.0 修正 + 报告新增触发方式字段
+- 构建：build.sh 加 fabric-lifecycle-events-v1 + fabric-api-base 编译依赖（最终 FabricClientEntry 改反射后其实只在开发期有用，保留）；glslang 二进制随沙箱事故丢失，build.sh 加 SPIR-V 新鲜度跳过逻辑复用现有 spv；双降级路径冒烟通过（异常干净捕获/落盘/exit=0）
+- 证据归档 docs/chapter1-rt-probe-v1.1-field/：双探针报告 + 双 hs_err + 双 latestlog + 双 fatal_trace + ame273 崩溃报告 + VERDICT.md；v1.2 源码同步 chapter1/rt-probe-java/
+
+Stage Summary:
+- 第一章闭环：判 C 铁证入库，第二章路线定为 ICD 替换；rt-probe 转型为替换后的验收工具（目标判 A）
+- v1.2 发布 rt-probe-v1.2 Release（jar + full zip）
+- 待办：①用户 v1.2 复测：预期判 C 不变 + 游戏不再因探针闪退；若仍闪退做移除探针基线/切渲染器对照 ②第二章启动：KosmicKrisp/honeykrisp ICD 调研与改包方案 ③Prisma 启动器 hook 点接入说明回收

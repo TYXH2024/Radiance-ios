@@ -1,13 +1,17 @@
 {
   "schemaVersion": 1,
   "id": "rtprobe",
-  "version": "1.0.0",
+  "version": "1.2.0",
   "name": "Vulkan RT Capability Probe",
-  "description": "Radiance 移植第一章能力探针：在启动器真实 JAR 环境中验证 Vulkan 硬件光追（加速结构 + ray query）是否可用。",
+  "description": "Radiance 移植第一章能力探针：在启动器真实 JAR 环境中验证 Vulkan 硬件光追（加速结构 + ray query）是否可用。v1.2：延迟至 CLIENT_STARTED 执行 + 实例全路径销毁 + 归因禁用开关。",
   "authors": ["prisma-rt-port"],
   "environment": "*",
   "entrypoints": {
-    "main": ["net.prisma.rtprobe.FabricEntry"]
+    "main": ["net.prisma.rtprobe.FabricEntry"],
+    "client": ["net.prisma.rtprobe.FabricClientEntry"]
+  },
+  "suggests": {
+    "fabric-lifecycle-events-v1": "*"
   },
   "depends": {}
 }
