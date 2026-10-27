@@ -1,0 +1,57 @@
+==============================================================
+Vulkan 硬件光追能力探针 (rt-probe 1.0)  —— Radiance 移植第一章
+时间: 2026-10-27 13:07:16
+报告文件: /var/mobile/Containers/Data/Application/8BCCCFC1-5C33-44BA-811F-FC58EE9FCC6E/Documents/instances/default/versions/fabric-loader-0.20.1-1.21.4/game/rt_probe_report.txt
+==============================================================
+
+---- 总流程 ----
+
+---- S0 环境快照 ----
+[INFO ] java.version  = 21.0.8-internal
+[INFO ] java.vendor   = N/A
+[INFO ] java.vm.name  = OpenJDK 64-Bit Server VM
+[INFO ] os.name       = Mac OS X 27.0.1 / aarch64
+[INFO ] user.dir      = /var/mobile/Containers/Data/Application/8BCCCFC1-5C33-44BA-811F-FC58EE9FCC6E/Documents/instances/default/versions/fabric-loader-0.20.1-1.21.4/game
+[INFO ] user.home     = /private/var/mobile/Containers/Data/Application/8BCCCFC1-5C33-44BA-811F-FC58EE9FCC6E/Documents
+[INFO ] sys[org.lwjgl.vulkan.libname] = MoltenVK
+[INFO ] sys[org.lwjgl.opengl.libname] = MobileGL
+[INFO ] sys[ame.game.session] = 1
+[INFO ] sys[pojav.lwjgl.version] = 333
+[INFO ] sys[java.library.path] = /private/var/containers/Bundle/Application/BE3401AA-F668-4E8E-936D-1768C8F36225/AngelAuraAmethyst.app/Frameworks
+[INFO ] sys[ame.launcher.lang] = zh_cn
+[INFO ] sys[ame.showdown.home] = /var/mobile/Containers/Data/Application/8BCCCFC1-5C33-44BA-811F-FC58EE9FCC6E/Documents/instances/default/versions/fabric-loader-0.20.1-1.21.4/game
+[INFO ] LWJGL 版本: 3.3.3
+[INFO ] LWJGL Vulkan 绑定类检查:
+[INFO ]    有    Vulkan 1.0 核心                                              org.lwjgl.vulkan.VK10
+[INFO ]    有    Vulkan 1.1 核心                                              org.lwjgl.vulkan.VK11
+[INFO ]    有    Vulkan 1.2 核心                                              org.lwjgl.vulkan.VK12
+[INFO ]    有    Vulkan 1.3 核心                                              org.lwjgl.vulkan.VK13
+[INFO ]    有    props2 查询                                                  org.lwjgl.vulkan.KHRGetPhysicalDeviceProperties2
+[INFO ]    有    iOS/macOS 枚举 MoltenVK 必需                                   org.lwjgl.vulkan.KHRPortabilityEnumeration
+[INFO ]    有    BLAS/TLAS 设备地址                                             org.lwjgl.vulkan.KHRBufferDeviceAddress
+[INFO ]    有    AS 依赖                                                      org.lwjgl.vulkan.KHRDeferredHostOperations
+[INFO ]    有    AS 依赖                                                      org.lwjgl.vulkan.KHRGetMemoryRequirements2
+[INFO ]    有    AS 宿主侧构建命令                                                 org.lwjgl.vulkan.KHRAccelerationStructure
+[INFO ]    有    TLAS 实例结构体                                                 org.lwjgl.vulkan.VkAccelerationStructureInstanceKHR
+[INFO ]    有    ray query 特性查询                                             org.lwjgl.vulkan.VkPhysicalDeviceRayQueryFeaturesKHR
+[INFO ]    有    ray query 常量(壳类即可)                                         org.lwjgl.vulkan.KHRRayQuery
+[INFO ]    有    RT 管线(本探针不需要)                                              org.lwjgl.vulkan.KHRRayTracingPipeline
+[INFO ]    有    Metal surface(本探针不需要)                                      org.lwjgl.vulkan.EXTMetalSurface
+[PASS ] LWJGL Vulkan 绑定类齐全，判定 B（需换 LWJGL）可排除
+
+---- S1 加载 Vulkan 实现 (VK10.create) ----
+[FAIL ] LWJGL 无法加载 Vulkan 库
+        异常: java.lang.IllegalStateException: Vulkan has already been created.
+          at knot//org.lwjgl.vulkan.VK.create(VK.java:124)
+          at knot//org.lwjgl.vulkan.VK.create(VK.java:78)
+          at knot//net.prisma.rtprobe.VulkanProbe.run(VulkanProbe.java:84)
+          at knot//net.prisma.rtprobe.RTProbeMod.runAll(RTProbeMod.java:28)
+          at java.base/java.lang.Thread.run(Unknown Source)
+[INFO ] 请确认：启动器内该版本档位的渲染器已选 Vulkan/MoltenVK（renderer=libMoltenVK.dylib）
+
+==============================================================
+最终判定: F
+Vulkan 实现加载失败 -> 探针未进入 Vulkan 阶段。请把档位渲染器切换为 MoltenVK 后重跑；若已选仍失败，说明 LWJGL 与 MoltenVK 链路有问题，附报告回报。
+==============================================================
+请把整份 rt_probe_report.txt 回传，即可据此决定下一章路线。
+[INFO ] 探针结束。报告文件: /var/mobile/Containers/Data/Application/8BCCCFC1-5C33-44BA-811F-FC58EE9FCC6E/Documents/instances/default/versions/fabric-loader-0.20.1-1.21.4/game/rt_probe_report.txt
