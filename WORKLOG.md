@@ -177,3 +177,23 @@ Stage Summary:
 - 0.1.0 REFLECT_FAIL 归因闭环：**探针缺陷而非真机符号漂移**——静默 fallback 制造的假阳性；教训固化为两条纪律：反射审计器的参数类型类必须与符号同表管理；任何 fallback 必须显式报错
 - v0.2.0 直推 main（含 field 存证 docs/chapter2-scene-ingestion-field/），CI 自动构建发布 Release scene-ingestion-v0.2
 - 待办：①CI 过绿确认 ②用户真机复测 v0.2（**替换** mods 内 v0.1 jar，勿共存）③期望走到 S4/S5/S6 判 SCENE_INGEST_OK → 2.2 路径追踪引擎 ④若 NATIVE_MISMATCH 排查 TLAS instance 变换/相机坐标系 ⑤若 SCENE_EMPTY 确认真机进世界后等满 30s
+
+---
+
+## 2026-10-27（八）· scene-ingestion 0.2.0 真机回收：摄取主链成立（600 槽位/BLAS/TLAS 动态重建全验证）→ 离线定位三缺陷（TLAS 矩阵布局炸弹 + res() 静默 null 复发 + 积压截流）→ v0.3.0 修复发布
+
+Task: 回收 v0.2.0 真机报告（NATIVE_MISMATCH，S6 相机读取 NPE 拦停）→ 离线根因定位 → 修复发版
+
+Work Log:
+- 真机报告回收存证 docs/chapter2-scene-ingestion-field/M3-v0.2.0-report.txt + README v0.2 章节：S3 全量 57 项 PASS（v0.2 修复生效）；**摄取主链真机验证成立**——600 槽位网格发现（5×24×5）、BLAS 构建 30 次（常规 0.7–4ms，一次 1245ms 离群疑 scratch 预热）、TLAS 动态重建 5 次（0.43–3.08ms）、退役延迟释放协议工作正常、36556 三角形进入 Metal 加速结构；与 OSMesa 软渲染宿主并行无干扰
+- 缺陷 1（S6 NPE）：cameraPos() 运行时读 Vec3d x/y/z（field_1352/1351/1350）但三字段不在 S3 审计列表，res() 对未注册符号**静默返回 null** → f.get() 裸 NPE——与 v0.1 cls() 同家族第三次出现（v0.2 只修了 cls()）；且判定逻辑把"cam==null 跳过 S6"与"ray 全 miss"混同，输出误导性 NATIVE_MISMATCH（实际未发射任何 ray）
+- 缺陷 2（30/600 摄取率）：首轮扫描快照全部 data 引用后，每轮 8 个 cap 截流的 592 个区块被标记"干净"永不摄取——后续重建全靠 MC 被动重发布（用户转动触发的 translucent 重排序）；主动积压从未排空
+- 缺陷 3（离线文档核查抓出的定时炸弹）：**TLAS 实例矩阵布局错误**——证据链：Apple 文档 simd_float3x4 = "3 列 × 4 行"（columns 为三个 simd_float4）+ Metal4 instanceTransformationMatrixLayout 默认 ColumnMajor + Apple 论坛存档（thread/653267）"需用转置"；数学推导：matrix_float3x4 内存 = col0(4)|col1(4)|col2(4)，行向量约定 p'=[x y z 1]·M(4×3)，单位阵+平移 = [1,0,0,tx, 0,1,0,ty, 0,0,1,tz]（平移在 flat[3]/[7]/[11]）；v0.2 误按 4 行×3 列行主序写在 flat[9..11] → Metal 解码出剪切型垃圾矩阵（p'y=x）→ ray 必然全 miss；2.0 探针 TLAS 用单位变换故从未暴露——被相机 NPE 掩盖的隐藏炸弹，若 S6 真跑会产出"排查 TLAS 变换"的误导方向
+- 修复 v0.3.0：①metal_scene.m 实例矩阵按 simd 列主序重写（m[3]/m[7]/m[11]=origin 平移）②Mappings.java：Vec3d x/y/z 入审计（57→60 项）+ res() 未知符号显式抛错（静默 null 家族三连修）③SceneProxy.java：neverIngested(generation==0) 槽位永远视为脏（积压排空）；限额 8→16（600 槽位约 19s）；收口=积压排空/静置 6s/35s 强制 + 15s 最短窗口；摄取期相机位置缓存（每轮刷新，退出世界后 S6 仍可发射 ray——纯 native 操作）④SceneIngestionMod.java：S6 直读失败回退缓存 + 新增 CAMERA_FAIL 判定（与全 miss 语义分离）+ NATIVE_MISMATCH 提示语更新
+- 本地 ecj 冒烟：9 class 零错误（scripts/smoke_sceneingest_v03.sh）
+- 版本全链 bump：fabric.mod.json / build.sh / 报告头 / CI workflow（TAG scene-ingestion-v0.3，release notes 详述三修复与新的等待时长指引）
+
+Stage Summary:
+- **2.1 核心已真机验证**：真实 MC 世界几何 → Metal BLAS/TLAS 动态重建链路成立（Q1/Q2 有答案）；剩余 S6 世界空间求交（Q3）待 v0.3 修复后闭环
+- v0.3.0 三修复：TLAS 布局（关键正确性）/ S6 相机（审计+缓存）/ 积压排空（全量摄取）
+- 待办：①CI 过绿 + Release scene-ingestion-v0.3 确认 ②用户真机复测（进存档停留 30–40s，报告出现 shutdown 后可退出）③判 SCENE_INGEST_OK → 2.2 路径追踪引擎 ④若 NATIVE_MISMATCH 复现（布局已修）→ 排查相机悬空/虚空世界或回报 ⑤若 CAMERA_FAIL → 回报（理论不应出现）

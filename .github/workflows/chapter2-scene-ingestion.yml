@@ -39,9 +39,9 @@ jobs:
           set -ex
           chmod +x chapter2/scene-ingestion/build.sh
           bash chapter2/scene-ingestion/build.sh
-          JAR="chapter2/scene-ingestion/scene-ingestion-0.2.0.jar"
+          JAR="chapter2/scene-ingestion/scene-ingestion-0.3.0.jar"
           test -f "$JAR"
-          cp "$JAR" ./scene-ingestion-0.2.0.jar
+          cp "$JAR" ./scene-ingestion-0.3.0.jar
 
       - name: Verify native surface
         run: |
@@ -62,7 +62,7 @@ jobs:
         with:
           name: scene-ingestion-jar
           path: |
-            scene-ingestion-0.2.0.jar
+            scene-ingestion-0.3.0.jar
             chapter2/scene-ingestion/build/native/libradiance_scene.dylib
             chapter2/scene-ingestion/build/native/scene_trace.metallib
           if-no-files-found: error
@@ -70,22 +70,25 @@ jobs:
       - name: Publish prerelease (idempotent)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: scene-ingestion-v0.2
+          TAG: scene-ingestion-v0.3
         run: |
           set -x
           NOTES_FILE=release-notes.md
           cat > "$NOTES_FILE" <<'EOF'
-          # scene-ingestion v0.2 — 第二章 2.1 阶段探针（v0.1 REFLECT_FAIL 根因修复）
+          # scene-ingestion v0.3 — 第二章 2.1 阶段探针（v0.2 三缺陷修复）
 
-          **v0.2 变更**：修复 v0.1 真机 REFLECT_FAIL 误判——S3 符号审计中 `ChunkRendererRegionBuilder.build`（method_39969）的首参类型 World（class_1937）未预注册，`cls()` 静默降级 Object.class，`getDeclaredMethod` 以错误参数类型查找必然 NoSuchMethod。v0.2 将 World 纳入审计列表（22 类）并加固 `cls()`（未注册类显式 Class.forName，失败显式报错）。yarn 1.21.4+build.8 交叉验证确认该符号宿主/签名从未漂移。
+          **v0.3 变更**（v0.2 真机实测回收后定位）：
+          1. **TLAS 实例矩阵布局修复（关键）**：`transformationMatrix` 是 `matrix_float3x4 = simd_float3x4`（Apple 文档：3 列 × 4 行，columns 为三个 simd_float4，Metal 实例矩阵默认 ColumnMajor）。单位阵+平移的正确布局是 `[1,0,0,tx, 0,1,0,ty, 0,0,1,tz]`（平移在 flat[3]/[7]/[11]）。v0.2 误按“4行×3列行主序”写在 flat[9..11]，Metal 会解码出剪切型垃圾矩阵——真机 ray 将全 miss。2.0 探针用单位变换故从未暴露。
+          2. **S6 相机读取修复**：v0.2 的 NPE 根因 = Vec3d x/y/z（field_1352/1351/1350）被 cameraPos() 运行时使用却不在 S3 审计列表，`res()` 静默返回 null。v0.3 入审计（S3 将新增 3 行 PASS）且 `res()` 对未知符号显式报错；另新增摄取期相机位置缓存（每轮刷新，退出世界后 S6 仍可用缓存位置发射 ray）。
+          3. **积压排空**：v0.2 首轮扫描把全部 data 引用快照后，cap 截流的区块被标为“干净”永不摄取（真机 30/600）。v0.3 从未摄取（generation==0）槽位永远视为脏，每轮限额 8→16，600 槽位全量排空约 19s；收口条件 = 积压排空/静置 6s/35s 强制三选一 + 15s 最短窗口。
 
           **用途**：把真实 MC 世界的区块网格摄入 Metal 加速结构（每区块 BLAS + 实例 TLAS 动态重建），并以世界空间 ray 求交验证全链路。
 
           ## 安装
-          1. 下载 `scene-ingestion-0.2.0.jar`，放入 mods/ 目录（与 metal-rt-probe 可共存，建议先移除后者避免重复报告；若之前装过 v0.1 请务必替换）。
+          1. 下载 `scene-ingestion-0.3.0.jar`，放入 mods/ 目录（**替换** v0.2，勿共存；与 metal-rt-probe 建议也不要共存）。
           2. 渲染器保持 **zink** 档。
-          3. 启动游戏并**进入一个存档世界**（本探针在进世界后才开始摄取）。
-          4. 进入世界后等待约 30 秒（摄取窗口 20s 起步 + 验证）。
+          3. 启动游戏并**进入一个存档世界**（本探针在进世界后才开始摄取），在世界内停留约 30–40 秒（v0.3 全量排空 600 区块约 19s + 验证窗口）。
+          4. 报告完成后（游戏内 log 出现 `[scene] shutdown`）即可退出世界；S6 使用缓存相机位置，退出后完成也不受影响。
 
           ## 产出
           - 游戏目录生成 `scene_ingestion_report.txt` —— **请整份回传**
@@ -98,7 +101,8 @@ jobs:
           | SCENE_EMPTY | 摄取窗口内无就绪 BLAS（未进世界/区块 mesh 始终为空） |
           | REFLECT_FAIL | S3 反射符号解析失败（报告逐符号定位——MC 版本不符的指纹） |
           | NATIVE_FAIL | 原生段 FATAL/异常 |
-          | NATIVE_MISMATCH | BLAS 就绪但 ray 全 miss（相机悬空或 TLAS 变换疑点，需回报） |
+          | NATIVE_MISMATCH | BLAS 就绪且相机可读但 ray 全 miss（相机悬空或残留疑点，需回报） |
+          | CAMERA_FAIL | 相机不可读且无缓存（几何已摄取但未发射 ray；需回报） |
           | LOAD_FAIL / EXTRACT_FAIL | 投送通道受阻（同 2.0） |
 
           ## 报告段
@@ -113,11 +117,11 @@ jobs:
           - 顶点在 BLAS 内存 chunk-local 坐标（recentring），TLAS instance transform = translate(origin)。
           EOF
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" scene-ingestion-0.2.0.jar --clobber
+            gh release upload "$TAG" scene-ingestion-0.3.0.jar --clobber
           else
-            gh release create "$TAG" scene-ingestion-0.2.0.jar \
+            gh release create "$TAG" scene-ingestion-0.3.0.jar \
               --prerelease --target main \
-              --title "scene-ingestion v0.2 — MC world chunks into Metal BLAS/TLAS (S3 audit fix)" \
+              --title "scene-ingestion v0.3 — MC world chunks into Metal BLAS/TLAS (TLAS layout + S6 + drain fixes)" \
               --notes-file "$NOTES_FILE"
           fi
 
@@ -128,7 +132,7 @@ jobs:
             echo "## Chapter 2 — scene-ingestion build (macos-26)"
             echo "- Native dylib: iphoneos arm64, 3 key JNI exports verified"
             echo "- metallib: scene_trace kernel (metal3 std cascade)"
-            echo "- Artifact: scene-ingestion-0.2.0.jar (dylib + metallib + msl embedded)"
-            echo "- Release: scene-ingestion-v0.2 (prerelease, idempotent upload)"
-            echo "- v0.2 fix: World/class_1937 registered in S3 audit; cls() no longer silently degrades to Object.class"
+            echo "- Artifact: scene-ingestion-0.3.0.jar (dylib + metallib + msl embedded)"
+            echo "- Release: scene-ingestion-v0.3 (prerelease, idempotent upload)"
+            echo "- v0.3 fixes: TLAS instance matrix layout (simd column-major, translation at flat[3]/[7]/[11]); Vec3d fields audited + res() loud; never-ingested backlog drain (8->16 per poll)"
           } >> "$GITHUB_STEP_SUMMARY"

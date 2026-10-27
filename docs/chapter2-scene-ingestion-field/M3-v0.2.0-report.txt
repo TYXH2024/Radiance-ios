@@ -1,0 +1,119 @@
+==============================================================
+场景摄取探针 (scene-ingestion 0.2.0) —— Radiance 移植第二章 2.1
+时间: Tue Oct 27 16:55:18 CST 2026
+报告文件: /var/mobile/Containers/Data/Application/132BB6A9-CD8E-40EA-8202-AA41493AF270/Documents/instances/default/versions/fabric-loader-0.20.1-1.21.4/game/scene_ingestion_report.txt
+用户操作: 进入存档后原地转半分钟再退出游戏
+==============================================================
+
+[INFO ] 触发方式: CLIENT_STARTED
+
+---- S0 环境快照 ----
+[INFO ] java.version  = 21.0.8-internal
+[INFO ] java.vm.name  = OpenJDK 64-Bit Server VM
+[INFO ] os.name       = Mac OS X / aarch64
+[INFO ] user.dir      = /var/mobile/Containers/Data/Application/132BB6A9-CD8E-40EA-8202-AA41493AF270/Documents/instances/default/versions/fabric-loader-0.20.1-1.21.4/game
+[INFO ] AMETHYST_RENDERER = libOSMesa.8.dylib
+[INFO ] GALLIUM_DRIVER     = null
+[INFO ] pojav.lwjgl.version = 333
+[INFO ] org.lwjgl.opengl.libname = libOSMesa.8.dylib
+[INFO ] org.lwjgl.vulkan.libname = MoltenVK
+
+---- S1 解包原生资产（JAR -> game 目录） ----
+[PASS ] 解包完成: .../game/sceneingest/libradiance_scene.dylib (93936 B)
+[INFO ] metallib: .../game/sceneingest/scene_trace.metallib (5560 B)
+
+---- S2 System.load 装载 dylib（投送通道验证） ----
+[PASS ] dylib 装载成功（与 2.0 相同的受信装载链）
+
+---- S3 反射符号审计（intermediary 符号表逐项解析） ----
+[PASS ] 全部 57 项通过（22 类含 class_1937 + 16 字段 + 17 方法 + 2 构造，
+        含 v0.2 修复的 method_39969）
+[PASS ] 符号表全量解析通过（57 项）
+
+---- S4/S5 网格发现与摄取（轮询 500ms，等待进入世界） ----
+[INFO ] 等待进入世界（mc.world == null）…
+[PASS ] 已进入世界，开始网格发现
+[scene] device=Apple M3 GPU raytracing=YES
+[scene] slot grid initialized: 600 chunks
+[scene] ray_query pipeline ready (threadsPerThreadgroup=1024)
+[PASS ] 网格初始化: 600 槽位 (sizeX=5 sizeY=24 sizeZ=5)
+[rebuild] index=0 origin=(0,-64,0) layers=1 verts=1024 tris=512 (blas 10.13 ms, total builds=1)
+[INFO ] rebuild #1: index=0 origin=(0,-64,0) layers=1 verts=1024 (49.3 ms)
+[rebuild] index=1 origin=(16,-64,0) layers=1 verts=1024 tris=512 (blas 0.85 ms, total builds=2)
+[INFO ] rebuild #2: index=1 origin=(16,-64,0) layers=1 verts=1024 (3.1 ms)
+[rebuild] index=2 origin=(32,-64,0) layers=1 verts=1024 tris=512 (blas 0.88 ms, total builds=3)
+[INFO ] rebuild #3: index=2 origin=(32,-64,0) layers=1 verts=1024 (4.8 ms)
+[rebuild] index=3 origin=(48,-64,0) layers=1 verts=1024 tris=512 (blas 0.77 ms, total builds=4)
+[INFO ] rebuild #4: index=3 origin=(48,-64,0) layers=1 verts=1024 (3.8 ms)
+[rebuild] index=4 origin=(-16,-64,0) layers=1 verts=1024 tris=512 (blas 0.87 ms, total builds=5)
+[INFO ] rebuild #5: index=4 origin=(-16,-64,0) layers=1 verts=1024 (4.2 ms)
+[rebuild] index=6 origin=(16,-48,0) layers=1 verts=68 tris=34 (blas 1.21 ms, total builds=6)
+[INFO ] rebuild #6: index=6 origin=(16,-48,0) layers=1 verts=68 (2.8 ms)
+[rebuild] index=13 origin=(48,-32,0) layers=1 verts=8 tris=4 (blas 0.70 ms, total builds=7)
+[INFO ] rebuild #7: index=13 origin=(48,-32,0) layers=1 verts=8 (2.5 ms)
+[rebuild] index=18 origin=(48,-16,0) layers=2 verts=3768 tris=1884 (blas 3.20 ms, total builds=8)
+[INFO ] rebuild #8: index=18 origin=(48,-16,0) layers=2 verts=3768 (24.8 ms)
+[tlas] rebuilt in 3.08 ms (instances=8, as=2000 B, total=1 builds)
+[rebuild] index=40 origin=(0,64,0) layers=2 verts=476 tris=238 (blas 0.82 ms, total builds=9)
+[INFO ] rebuild #9: index=40 origin=(0,64,0) layers=2 verts=476 (1.8 ms)
+[rebuild] index=57 origin=(32,112,0) layers=1 verts=2520 tris=1260 (blas 1.14 ms, total builds=10)
+[INFO ] rebuild #10: index=57 origin=(32,112,0) layers=1 verts=2520 (1.8 ms)
+[rebuild] index=155 origin=(0,48,16) layers=3 verts=3168 tris=1584 (blas 0.95 ms, total builds=11)
+[INFO ] rebuild #11: index=155 origin=(0,48,16) layers=3 verts=3168 (2.6 ms)
+[rebuild] index=177 origin=(32,112,16) layers=1 verts=116 tris=58 (blas 0.67 ms, total builds=12)
+[INFO ] rebuild #12: index=177 origin=(32,112,16) layers=1 verts=116 (0.9 ms)
+[rebuild] index=275 origin=(0,48,32) layers=2 verts=2832 tris=1416 (blas 1.05 ms, total builds=13)
+[INFO ] rebuild #13: index=275 origin=(0,48,32) layers=2 verts=2832 (2.8 ms)
+[rebuild] index=279 origin=(-16,48,32) layers=4 verts=3576 tris=1788 (blas 1.62 ms, total builds=14)
+[INFO ] rebuild #14: index=279 origin=(-16,48,32) layers=4 verts=3576 (3.6 ms)
+[rebuild] index=537 origin=(32,112,-16) layers=1 verts=5728 tris=2864 (blas 1245.60 ms, total builds=15)
+[INFO ] rebuild #15: index=537 origin=(32,112,-16) layers=1 verts=5728 (1246.7 ms)
+[retired] releasing 2 deferred objects
+[tlas] rebuilt in 0.66 ms (instances=15, as=3520 B, total=2 builds)
+[rebuild] index=35 origin=(0,48,0) layers=4 verts=4400 tris=2200 (blas 2.44 ms, total builds=16)
+[INFO ] rebuild #16: index=35 origin=(0,48,0) layers=4 verts=4400 (5.0 ms)
+[rebuild] index=39 origin=(-16,48,0) layers=2 verts=2216 tris=1108 (blas 1.52 ms, total builds=17)
+[INFO ] rebuild #17: index=39 origin=(-16,48,0) layers=2 verts=2216 (3.2 ms)
+[rebuild] index=159 origin=(-16,48,16) layers=3 verts=4116 tris=2058 (blas 3.39 ms, total builds=18)
+[INFO ] rebuild #18: index=159 origin=(-16,48,16) layers=3 verts=4116 (5.8 ms)
+[rebuild] index=164 origin=(-16,64,16) layers=2 verts=1460 tris=730 (blas 2.23 ms, total builds=19)
+[INFO ] rebuild #19: index=164 origin=(-16,64,16) layers=2 verts=1460 (2.8 ms)
+[rebuild] index=284 origin=(-16,64,32) layers=2 verts=4896 tris=2448 (blas 2.84 ms, total builds=20)
+[INFO ] rebuild #20: index=284 origin=(-16,64,32) layers=2 verts=4896 (3.9 ms)
+[rebuild] index=519 origin=(-16,48,-16) layers=4 verts=6472 tris=3236 (blas 3.96 ms, total builds=21)
+[rebuild] index=524 origin=(-16,64,-16) layers=3 verts=2072 tris=1036 (blas 0.97 ms, total builds=22)
+[retired] releasing 2 deferred objects
+[tlas] rebuilt in 0.43 ms (instances=22, as=5040 B, total=3 builds)
+[rebuild] index=399 origin=(-16,48,-32) layers=4 verts=5176 tris=2588 (blas 3.04 ms, total builds=23)
+[rebuild] index=404 origin=(-16,64,-32) layers=2 verts=4128 tris=2064 (blas 2.72 ms, total builds=24)
+[rebuild] index=409 origin=(-16,80,-32) layers=2 verts=1852 tris=926 (blas 1.15 ms, total builds=25)
+[rebuild] index=410 origin=(0,96,-32) layers=3 verts=4536 tris=2268 (blas 2.69 ms, total builds=26)
+[rebuild] index=414 origin=(-16,96,-32) layers=3 verts=152 tris=76 (blas 0.97 ms, total builds=27)
+[rebuild] index=536 origin=(16,112,-16) layers=1 verts=828 tris=414 (blas 0.83 ms, total builds=28)
+[rebuild] index=415 origin=(0,112,-32) layers=1 verts=852 tris=426 (blas 1.14 ms, total builds=29)
+[retired] releasing 2 deferred objects
+[tlas] rebuilt in 0.71 ms (instances=29, as=6560 B, total=4 builds)
+[rebuild] index=416 origin=(16,112,-32) layers=1 verts=2576 tris=1288 (blas 0.94 ms, total builds=30)
+[retired] releasing 2 deferred objects
+[tlas] rebuilt in 1.41 ms (instances=30, as=6768 B, total=5 builds)
+[PASS ] 摄取窗口完成（30 次重建 / 600 非空区块 / 25.4s）
+
+---- S5 统计汇总 ----
+[INFO ] Java 侧: polls=47 rebuilds=30 invalidations=11 relocations=0 非空区块=600
+[INFO ] Native 侧: readyBLAS=30 BLAS构建=30 TLAS重建=5
+[INFO ] 几何: 三角形=36556 顶点=73112 顶点缓冲=1142.4 KB 索引缓冲=428.4 KB TLAS=6.6 KB
+
+---- S6 场景求交验证（相机位置 6 向 ray，maxDist 512） ----
+[FAIL ] 相机位置读取失败（反射） → java.lang.IllegalStateException: field read field_1352
+        at knot//net.prisma.sceneingest.Mappings.get(Mappings.java:281)
+        at knot//net.prisma.sceneingest.SceneIngestionMod.cameraPos(SceneIngestionMod.java:211)
+        at knot//net.prisma.sceneingest.SceneIngestionMod.runAll(SceneIngestionMod.java:146)
+        at knot//net.prisma.sceneingest.FabricClientEntry.lambda$startIngestion$1(FabricClientEntry.java:44)
+        at java.base/java.lang.Thread.run(Unknown Source)
+[INFO ] 相机不可读（未进世界？）——跳过 S6
+
+==============================================================
+最终判定: NATIVE_MISMATCH
+BLAS 就绪且三角形非零，但 6 向 ray 全 miss（相机悬空/虚空世界？若确认站在地面则需回报排查 TLAS instance 变换）。ready BLAS=30，三角形=36556。
+==============================================================
+[scene] shutdown — all GPU resources released

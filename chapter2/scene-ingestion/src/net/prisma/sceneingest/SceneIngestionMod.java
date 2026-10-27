@@ -39,7 +39,7 @@ public final class SceneIngestionMod {
             return;
         }
         ProbeReport r = new ProbeReport("scene_ingestion_report.txt");
-        r.header("场景摄取探针 (scene-ingestion 0.2.0)");
+        r.header("场景摄取探针 (scene-ingestion 0.3.0)");
         r.info("触发方式: " + triggerSource);
 
         if (isDisabled()) {
@@ -141,15 +141,24 @@ public final class SceneIngestionMod {
                 tlasBytes / 1024.0));
 
         r.stage("S6 场景求交验证（相机位置 6 向 ray，maxDist 512）");
-        float[] cam;
+        float[] cam = null;
         try {
             cam = cameraPos();
         } catch (Throwable t) {
-            r.fail("相机位置读取失败（反射）", t);
-            cam = null;
+            r.info("直读相机失败（" + t.getMessage() + "）——改用摄取期缓存位置");
+        }
+        if (cam == null) {
+            // v0.3：回退到摄取期每轮刷新的缓存（用户可能在窗口结束后立即
+            // 退出世界；ray 验证为纯 native 操作不依赖 MC 存活）
+            cam = proxy.lastCameraPos;
+            if (cam != null) {
+                r.pass(String.format("使用缓存相机位置: (%.2f, %.2f, %.2f)",
+                        cam[0], cam[1], cam[2]));
+            }
         }
         int hits = 0;
-        if (cam != null && tlasBuilds > 0) {
+        boolean cameraOk = cam != null;
+        if (cameraOk && tlasBuilds > 0) {
             r.pass(String.format("相机位置: (%.2f, %.2f, %.2f)", cam[0], cam[1], cam[2]));
             float[][] dirs = {
                 {1, 0, 0}, {-1, 0, 0}, {0, 1, 0}, {0, -1, 0}, {0, 0, 1}, {0, 0, -1},
@@ -170,8 +179,8 @@ public final class SceneIngestionMod {
                     r.fail("castRay " + names[i] + " 异常: " + t);
                 }
             }
-        } else if (cam == null) {
-            r.info("相机不可读（未进世界？）——跳过 S6");
+        } else if (!cameraOk) {
+            r.fail("相机不可读（直读与缓存均失败）——S6 未执行（注意：本次未发射任何 ray）");
         } else {
             r.info("TLAS 尚未构建（无就绪几何）——跳过 S6");
         }
@@ -179,15 +188,22 @@ public final class SceneIngestionMod {
         // ---- 判定 ----
         String verdict;
         String message;
-        if (readyBlas >= 1 && totalTris > 0 && hits >= 1) {
+        if (!cameraOk) {
+            verdict = "CAMERA_FAIL";
+            message = "相机位置不可读（直读与摄取期缓存均失败）但几何已摄取："
+                    + "ready BLAS=" + readyBlas + "，三角形=" + totalTris
+                    + "。本次未发射任何 ray（与 NATIVE_MISMATCH 的全 miss 不同）。"
+                    + "请回报。";
+        } else if (readyBlas >= 1 && totalTris > 0 && hits >= 1) {
             verdict = "SCENE_INGEST_OK";
             message = "真实世界几何已进入 Metal 加速结构且可求交：ready BLAS=" + readyBlas
                     + "，三角形=" + totalTris + "，命中 ray " + hits + "/6。"
                     + "2.1 场景摄取成立 —— 2.2 路径追踪引擎绿灯。";
         } else if (readyBlas >= 1 && totalTris > 0) {
             verdict = "NATIVE_MISMATCH";
-            message = "BLAS 就绪且三角形非零，但 6 向 ray 全 miss（相机悬空/虚空世界？"
-                    + "若确认站在地面则需回报排查 TLAS instance 变换）。"
+            message = "BLAS 就绪且三角形非零，但 6 向 ray 全 miss。v0.3 已修复"
+                    + " TLAS 实例矩阵布局（simd_float3x4 列主序，平移在 flat[3]/[7]/[11]）"
+                    + "——若此判定复现，需回报排查（相机悬空/虚空世界亦可能）。"
                     + "ready BLAS=" + readyBlas + "，三角形=" + totalTris + "。";
         } else {
             verdict = "SCENE_EMPTY";

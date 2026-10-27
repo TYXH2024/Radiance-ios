@@ -27,12 +27,16 @@ final class SceneProxy {
 
     /** 轮询间隔（ms）。 */
     private static final long POLL_MS = 500L;
-    /** 每轮最大重建区块数（验证版节流）。 */
-    private static final int MAX_REBUILD_PER_POLL = 8;
-    /** 摄取运行下限（ms）——S6 验证前的最短积累窗口。 */
-    private static final long MIN_INGEST_MS = 20_000L;
+    /** 每轮最大重建区块数（v0.3：8→16，全量 600 槽位排空约 19s）。 */
+    private static final int MAX_REBUILD_PER_POLL = 16;
+    /** 摄取运行下限（ms）——S6 验证前的最短积累窗口（v0.3：20s→15s）。 */
+    private static final long MIN_INGEST_MS = 15_000L;
     /** 摄取运行上限（ms）——超时强制进入 S6（SCENE_EMPTY 候选）。 */
     private static final long MAX_INGEST_MS = 150_000L;
+    /** 强制收口时间（ms）——积压未排空也进入 S6（v0.3 新增，防毒丸阻塞）。 */
+    private static final long FORCE_READY_MS = 35_000L;
+    /** 静置阈值（ms）——重建活动停止后视为已收敛（v0.3 新增）。 */
+    private static final long IDLE_SETTLE_MS = 6_000L;
     /** TLAS tick 节流（ms）。 */
     private static final long TLAS_TICK_MS = 1000L;
 
@@ -43,6 +47,10 @@ final class SceneProxy {
     private volatile boolean running = true;
     private volatile boolean gridInited = false;
 
+    /** v0.3：摄取期相机位置缓存（每轮刷新；S6 容错——用户可能在窗口结束后
+     * 立即退出世界，此时直读相机可能拿到重置后的 Camera）。 */
+    volatile float[] lastCameraPos;
+
     // 统计
     int polls = 0;
     int rebuilds = 0;
@@ -50,6 +58,7 @@ final class SceneProxy {
     int relocations = 0;
     int nonEmptyChunks = 0;
     long firstReadyMs = -1;
+    long lastActivityMs = 0;
     private final long startNs = System.nanoTime();
     private final AtomicLong generation = new AtomicLong(1);
 
@@ -102,6 +111,13 @@ final class SceneProxy {
                 announced = false;
             }
 
+            // v0.3：相机位置缓存（S6 容错；失败不影响摄取）
+            try {
+                lastCameraPos = readCameraPos();
+            } catch (Throwable ignored) {
+                // 相机尚不可读（菜单/加载中）——下轮重试
+            }
+
             // WorldRenderer → BuiltChunkStorage
             Object worldRenderer = Mappings.get(world, Mappings.C_CLIENT_WORLD,
                     Mappings.F_CW_WORLD_RENDERER);
@@ -128,9 +144,10 @@ final class SceneProxy {
                 firstGridInit(chunks.length, storage);
             }
 
-            // 扫描脏区块（data 引用变化 / sectionPos 变化）
+            // 扫描脏区块（data 引用变化 / sectionPos 变化 / 从未摄取）
             int nonEmpty = 0;
             int rebuiltThisPoll = 0;
+            int pendingDirty = 0;
 
             for (Object builtChunk : chunks) {
                 if (builtChunk == null) {
@@ -148,6 +165,11 @@ final class SceneProxy {
                 SlotState st = slots.computeIfAbsent(index, k -> new SlotState());
                 boolean dataChanged = chunkData != st.lastDataRef;
                 boolean moved = sectionPos != st.lastSectionPos;
+                // v0.3：从未摄取（generation==0）的槽位永远视为脏——v0.2 的
+                // 根因是首轮扫描把全部 600 个 data 引用快照进 lastDataRef，
+                // 每轮 8 个 cap 截流后其余 592 个被标记为“干净”永不摄取
+                //（真机实测 30/600 的机制）。
+                boolean neverIngested = st.generation == 0;
                 st.lastDataRef = chunkData;
                 st.lastSectionPos = sectionPos;
 
@@ -160,13 +182,19 @@ final class SceneProxy {
                     relocations++;
                 }
 
-                if ((dataChanged || moved) && chunkData != null
-                        && rebuiltThisPoll < MAX_REBUILD_PER_POLL) {
+                boolean dirty = (dataChanged || moved || neverIngested) && chunkData != null;
+                if (dirty) {
+                    pendingDirty++;
+                }
+
+                if (dirty && rebuiltThisPoll < MAX_REBUILD_PER_POLL) {
                     if (rebuild(builtChunk, index)) {
                         rebuiltThisPoll++;
+                        lastActivityMs = elapsedMs();
                     }
-                } else if ((dataChanged || moved) && chunkData == null && st.generation > 0) {
+                } else if (dataChanged && chunkData == null && st.generation > 0) {
                     invalidate(builtChunk, index);
+                    lastActivityMs = elapsedMs();
                 }
             }
             if (nonEmpty != this.nonEmptyChunks) {
@@ -184,13 +212,16 @@ final class SceneProxy {
                 }
             }
 
-            // ready 判据（提前收口）
-            if (firstReadyMs < 0 && rebuilds >= 8 && elapsedMs >= MIN_INGEST_MS) {
+            // ready 判据（v0.3：积压排空 / 静置 / 强制 三条件之一 + 最短窗口）
+            boolean settled = pendingDirty == 0
+                    || (elapsedMs - lastActivityMs) > IDLE_SETTLE_MS
+                    || elapsedMs >= FORCE_READY_MS;
+            if (firstReadyMs < 0 && rebuilds >= 8 && elapsedMs >= MIN_INGEST_MS && settled) {
                 firstReadyMs = elapsedMs;
             }
-            if (firstReadyMs >= 0 && elapsedMs - firstReadyMs > 5000L) {
-                r.pass(String.format("摄取窗口完成（%d 次重建 / %d 非空区块 / %.1fs）",
-                        rebuilds, nonEmpty, elapsedMs / 1000.0));
+            if (firstReadyMs >= 0 && elapsedMs - firstReadyMs > 4000L) {
+                r.pass(String.format("摄取窗口完成（%d 次重建 / %d 非空区块 / 积压 %d / %.1fs）",
+                        rebuilds, nonEmpty, pendingDirty, elapsedMs / 1000.0));
                 return;
             }
             if (elapsedMs > MAX_INGEST_MS) {
@@ -379,6 +410,20 @@ final class SceneProxy {
             arr[i] = list.get(i);
         }
         return arr;
+    }
+
+    /** v0.3：相机位置读取（与 SceneIngestionMod.cameraPos 同链路；全部符号
+     * 已入 S3 审计）。失败由调用方吞掉（缓存下轮重试）。 */
+    private float[] readCameraPos() {
+        Object mc = Mappings.call(null, Mappings.C_MC, Mappings.M_MC_GET_INSTANCE);
+        Object gameRenderer = Mappings.get(mc, Mappings.C_MC, Mappings.F_MC_GAME_RENDERER);
+        Object camera = Mappings.get(gameRenderer, Mappings.C_GAME_RENDERER,
+                Mappings.F_CAMERA_POS);
+        Object pos = Mappings.call(camera, Mappings.C_CAMERA, Mappings.M_CAMERA_GET_POS);
+        float x = ((Double) Mappings.get(pos, Mappings.C_VEC3D, Mappings.F_VEC3D_X)).floatValue();
+        float y = ((Double) Mappings.get(pos, Mappings.C_VEC3D, Mappings.F_VEC3D_Y)).floatValue();
+        float z = ((Double) Mappings.get(pos, Mappings.C_VEC3D, Mappings.F_VEC3D_Z)).floatValue();
+        return new float[] {x, y, z};
     }
 
     private long elapsedMs() {

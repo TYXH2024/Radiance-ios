@@ -171,7 +171,19 @@ static void rebuild_tlas(void) {
         return;
     }
 
-    // Instance descriptors: transform = translate(origin) — row-major 4x3.
+    // Instance descriptors: transform = translate(origin).
+    // v0.3 布局修正（v0.2 定时炸弹，被 S6 相机 NPE 掩盖）：
+    //   transformationMatrix 是 matrix_float3x4 = simd_float3x4 —— Apple 文档
+    //   定义为“3 列 × 4 行”，columns 为三个 simd_float4；Metal 实例矩阵默认
+    //   MTLMatrixLayoutColumnMajor。12 个 float 的内存语义（行向量约定
+    //   p' = [x y z 1]·M(4x3)）：
+    //     col0 = (r00, r10, r20, tx)  → flat[0..3]
+    //     col1 = (r01, r11, r21, ty)  → flat[4..7]
+    //     col2 = (r02, r12, r22, tz)  → flat[8..11]
+    //   即单位阵+平移 = [1,0,0,tx, 0,1,0,ty, 0,0,1,tz]（平移在 flat[3]/[7]/[11]，
+    //   各列的 .w）。v0.2 误按“4 行×3 列行主序”写（平移在 flat[9..11]），Metal
+    //   解码出剪切型垃圾矩阵（p'y=x 等）——真机 ray 会全 miss。2.0 探针用单位
+    //   变换故从未暴露。
     const uint32_t n = (uint32_t)ready.count;
     size_t instBytes = n * sizeof(MTLAccelerationStructureInstanceDescriptor);
     MTLAccelerationStructureInstanceDescriptor *instances =
@@ -182,12 +194,9 @@ static void rebuild_tlas(void) {
     for (uint32_t i = 0; i < n; i++) {
         SceneSlot *s = ready[i];
         float *m = (float *)&instances[i].transformationMatrix;
-        m[0] = 1; m[1] = 0; m[2] = 0;      // row 0
-        m[3] = 0; m[4] = 1; m[5] = 0;      // row 1
-        m[6] = 0; m[7] = 0; m[8] = 1;      // row 2
-        m[9] = (float)s.ox;                // row 3 = translation
-        m[10] = (float)s.oy;
-        m[11] = (float)s.oz;
+        m[0] = 1; m[1] = 0; m[2] = 0; m[3] = (float)s.ox;   // col0 = (r00,r10,r20,tx)
+        m[4] = 0; m[5] = 1; m[6] = 0; m[7] = (float)s.oy;   // col1 = (r01,r11,r21,ty)
+        m[8] = 0; m[9] = 0; m[10] = 1; m[11] = (float)s.oz; // col2 = (r02,r12,r22,tz)
         instances[i].options = MTLAccelerationStructureInstanceOptionNone;
         instances[i].mask = 0xFFFFFFFFu;
         instances[i].intersectionFunctionTableOffset = 0;

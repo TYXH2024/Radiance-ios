@@ -46,6 +46,9 @@ import java.util.Map;
  *   BlockBufferAllocatorStorage class_750  (无参构造)
  *   Camera                    class_4184   .getPos() method_19326 (Vec3d)
  *   Vec3d                     class_243    .x/.y/.z field_1352/1351/1350
+ *                                          （v0.3 入审计：cameraPos 运行时
+ *                                          使用但 v0.2 漏审计 → res() 静默
+ *                                          null → NPE，S6 被跳过）
  *   GameRenderer              class_757    .camera field_18765
  */
 final class Mappings {
@@ -162,6 +165,7 @@ final class Mappings {
         Class<?> vs = cls(C_VERTEX_SORTER);
         Class<?> cam = cls(C_CAMERA);
         Class<?> gr = cls(C_GAME_RENDERER);
+        Class<?> v3d = cls(C_VEC3D); // Vec3d（cameraPos 读 x/y/z）
         Class<?> world = cls(C_WORLD); // World (RegionBuilder.build 首参)
 
         // 字段
@@ -181,6 +185,10 @@ final class Mappings {
         field(r, rd, F_RD_BUFFERS);
         field(r, vs, "field_43360");
         field(r, gr, F_CAMERA_POS);
+        // v0.3：Vec3d x/y/z 入审计（cameraPos 运行时依赖；v0.2 缺席导致 S6 NPE）
+        field(r, v3d, F_VEC3D_X);
+        field(r, v3d, F_VEC3D_Y);
+        field(r, v3d, F_VEC3D_Z);
 
         // 方法
         method(r, mc, M_MC_GET_INSTANCE);
@@ -243,7 +251,15 @@ final class Mappings {
 
     @SuppressWarnings("unchecked")
     static <T> T res(String key) {
-        return (T) RESOLVED.get(key);
+        Object v = RESOLVED.get(key);
+        if (v == null) {
+            // v0.3 修复：v0.2 此处静默返回 null，下游 f.get()/m.invoke() 抛裸
+            // NPE，真实原因（符号未审计）被掩盖（同家族：v0.1 的 cls() 静默降级
+            // Object.class）。现在显式报错——运行时使用的每个符号必须在
+            // resolveAll 审计列表内。
+            throw new IllegalStateException("符号未解析（不在 S3 审计列表）: " + key);
+        }
+        return (T) v;
     }
 
     private static void field(ProbeReport r, Class<?> owner, String name) {
