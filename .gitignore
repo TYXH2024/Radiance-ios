@@ -126,6 +126,5 @@ include/
 shaders/
 libxess*
 
-# Docs / Markdown
-*.md
-*.markdown
+# Docs / Markdown — 2026-10-28 移除该忽略：*.md 曾两次静默吞掉现场 README（f782ecd 补救过一次、
+# pathtrace v0.1.1 又复发一次）；本仓库文档全部入库跟踪。
