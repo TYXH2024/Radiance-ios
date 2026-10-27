@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "id": "metalprobe",
+  "version": "0.1.0",
+  "name": "Metal RT Probe (Radiance iOS Chapter 2)",
+  "description": "In-process Metal ray tracing probe: mod-bundled arm64 dylib + metallib, BLAS/TLAS + MSL ray_query verification. Delivery-vehicle and hardware-RT acceptance for the Radiance iOS port chapter 2.",
+  "authors": ["Radiance iOS Port"],
+  "license": "MIT",
+  "environment": "client",
+  "entrypoints": {
+    "main": ["net.prisma.metalprobe.FabricEntry"],
+    "client": ["net.prisma.metalprobe.FabricClientEntry"]
+  },
+  "suggests": {
+    "fabric-lifecycle-events-v1": "*"
+  }
+}

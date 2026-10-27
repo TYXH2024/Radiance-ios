@@ -84,3 +84,31 @@ Stage Summary:
 - 闪退悬案闭环：三版崩溃同源（渲染档混合态），探针全线清白；v1.2 的价值反而被本次实测确证（延迟执行=天然归因对照）
 - 用户下一步两步指引：①渲染器切回常规 GL 档 ②保留 v1.2 探针复跑，回传 rt_probe_report.txt（预期判 C 复现 + 游戏存活到标题屏）
 - 待办：①等用户常规档复测报告 ②第二章启动：KosmicKrisp/honeykrisp ICD 调研与改包方案（主线）③Prisma 启动器 hook 点接入说明回收（并行）
+
+---
+
+## 2026-10-27（四）· 第二章启动：路线裁决 Metal 直连 + 2.0 探针交付
+
+Task: 用户确认（判 C + zink 档 M3 稳定进游戏）→ 驱动生态调研 + 启动器源码侦察 → 第二章路线裁决 → metal-rt-probe 2.0 交付
+
+Work Log:
+- 用户反馈落档：第一章判 C 维持；zink 渲染档（libOSMesa.8.dylib + GALLIUM_DRIVER=zink）下 M3 真机可稳定进游戏 —— 第二章所需稳定宿主环境成立
+- 驱动生态调研（详见 docs/chapter2-route-decision.md §2）：
+  - MoltenVK：RT 无资金无实现（issue #427），维护模式，新特性全走 KosmicKrisp
+  - KosmicKrisp：Vulkan 1.4 conformant / Mesa 26.0 / SDK 内可分发；但 RT 仅为路线图项（XDC 2025 "potentially ray tracing"，2026-10 v1.4 公告新增扩展无 RT）；最新版要求 Metal 4（iOS 26+，用户 M3 在 iOS 18.3.2 覆盖不到）；iOS 官方口径实验性未开分发 → 降级为跟踪项
+  - HoneyKrisp：真身为 Asahi Linux 的 AGX 逆向驱动（Linux-only，不经 Metal）→ 与 iOS 无关，排除
+  - 结论：当前时点不存在可直接投放 iOS 的 Vulkan RT 驱动，"改包换 ICD"路线无米下锅
+- 启动器源码侦察（Prisma-Minecraft-iOS-Launcher2，重新克隆后定向挖掘）：
+  - 渲染器档位全表：zink=libOSMesa.8.dylib / MobileGL=libMobileGL.dylib(链接期硬依赖 @rpath/libMoltenVK.dylib) / Vulkan=libMoltenVK.dylib(LWJGL libname 直载) / virgl 等，utils.h 常量实锤
+  - zink 档的 Vulkan 解析：libOSMesa 未定义符号 vkGetInstanceProcAddr/vkGetDeviceProcAddr 由 dyld 对已加载 libMoltenVK 解析；启动器 fishhook(ZinkStrideFix) 仅做 stride 修补透传
+  - 免改包投送通道实锤：main_hook.m hooked_dlopen 对 home/tmp 目录 dylib 做 PLPatchMachOPlatformForFile 平台修补；LWJGL natives 即 JAR 解包 → tmp → dlopen 的同款链路（Task193 重绑 libjvm _dlopen 槽使 System.load 进 hook）→ mod JAR 内置 dylib 投送通道成立
+- 第二章路线裁决（docs/chapter2-route-decision.md）：**Metal 直连 RT 核**为主路线 —— mod JAR 内置 arm64 原生核（MTLAccelerationStructure BLAS/TLAS + MSL ray_query compute），Java 侧 Fabric 延迟入口 + 解包 + System.load + JNI；与 zink/MoltenVK 渲染主链同进程双引擎零干扰；不依赖任何 Vulkan RT 驱动、不改包、不动启动器。KosmicKrisp RT 落地后同架构可平移
+- 2.0 交付 metal-rt-probe（chapter2/metal-rt-probe/）：Java 五类（FabricEntry watchdog / FabricClientEntry CLIENT_STARTED 反射+Proxy / MetalProbeMod 主流程+解包+判定 / Native JNI 声明 / ProbeReport 增量落盘）+ 原生 metal_probe.m（chapter1 CLI 探针 JNI 化，报告增量写、判定码回传、含运行时 MSL 编译数据点与 Mrays/s 吞吐行）+ trace_kernel.metal（chapter1 同源）+ build.sh（macOS 全链：交叉编译 iphoneos arm64 dylib + metallib -std 级联 + ad-hoc 签名 + ecj/javac + JAR 组装，资产内嵌）
+- 设计红线继承：延迟执行 / 零共享自建 MTLDevice / 增量落盘 / -Dmetalprobe.disabled 归因开关
+- 本地冒烟：ecj 编译 Java 侧零错误（exit=0，5 个 class 产出）；原生部分仅 CI 可编译
+- CI 产线 .github/workflows/chapter2-metal-probe.yml：macos-26 构建全链 → nm 验证 JNI 导出 → artifact → 幂等发预发布 Release metal-rt-probe-v0.1（gh CLI + GITHUB_TOKEN，contents:write）
+
+Stage Summary:
+- 第二章路线定案：Metal 直连（不等驱动生态）；ICD 替换降级为 KosmicKrisp 跟踪项
+- metal-rt-probe 2.0 源码 + CI 产线入库，Release 由 CI 幂等发布
+- 用户下一步：从 Release 下载 metal-rt-probe-0.1.0.jar 放 mods/（zink 档）→ 回传 metal_rt_probe_report.txt（预期 METAL_RT_OK = 2.1 场景摄取绿灯）

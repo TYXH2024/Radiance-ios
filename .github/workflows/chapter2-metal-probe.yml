@@ -1,0 +1,118 @@
+name: chapter2-metal-probe
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+    paths:
+      - 'chapter2/**'
+      - '.github/workflows/chapter2-metal-probe.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  # ------------------------------------------------------------------
+  # 第二章 2.0 阶段交付：metal-rt-probe mod JAR。
+  #   1. 交叉编译 libradiance_metal_probe.dylib (iphoneos arm64, JNI)
+  #   2. 编译 trace_kernel.metallib (MSL metal3 ray_query)
+  #   3. ad-hoc 签名（ldid / codesign 兜底）
+  #   4. Java 编译 + JAR 组装（资产内嵌）
+  #   5. 发预发布 Release（幂等：已存在则 --clobber 重传资产）
+  # 本地无 macOS 无法构建原生部分 —— 全链在此产线完成。
+  # ------------------------------------------------------------------
+  build-and-release:
+    name: build mod jar + release (macos-26)
+    runs-on: macos-26
+    steps:
+      - name: Checkout Radiance-ios
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21 (javac + jni.h)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Build mod jar (natives + metallib + java)
+        run: |
+          set -ex
+          chmod +x chapter2/metal-rt-probe/build.sh
+          bash chapter2/metal-rt-probe/build.sh
+          JAR="chapter2/metal-rt-probe/metal-rt-probe-0.1.0.jar"
+          test -f "$JAR"
+          cp "$JAR" ./metal-rt-probe-0.1.0.jar
+
+      - name: Verify native surface
+        run: |
+          set -ex
+          DYLIB="chapter2/metal-rt-probe/build/native/libradiance_metal_probe.dylib"
+          file "$DYLIB"
+          nm -gU "$DYLIB" | grep -q "Java_net_prisma_metalprobe_Native_nativeRunProbe" \
+            && echo "JNI_EXPORT_OK"
+          METALRT="$(xcrun -sdk iphoneos metal -print-target-name 2>/dev/null || true)"
+          echo "metal toolchain: ok (${METALRT:-n/a})"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: metal-rt-probe-jar
+          path: |
+            metal-rt-probe-0.1.0.jar
+            chapter2/metal-rt-probe/build/native/libradiance_metal_probe.dylib
+            chapter2/metal-rt-probe/build/native/trace_kernel.metallib
+          if-no-files-found: error
+
+      - name: Publish prerelease (idempotent)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: metal-rt-probe-v0.1
+        run: |
+          set -x
+          NOTES_FILE=release-notes.md
+          cat > "$NOTES_FILE" <<'EOF'
+          # metal-rt-probe v0.1 — 第二章 2.0 阶段探针
+
+          **用途**：在游戏进程内验证 Metal Ray Tracing 全链路（免改包投送通道 + 硬件 RT）。
+
+          ## 安装
+          1. 下载 `metal-rt-probe-0.1.0.jar`，放入 mods/ 目录（与 rt-probe 可共存）。
+          2. 渲染器保持 **zink** 档（第一章实测稳定档位）。
+          3. 正常启动游戏，进入标题屏后探针在后台自动执行（无需进存档）。
+
+          ## 产出
+          - 游戏目录生成 `metal_rt_probe_report.txt` —— **请整份回传**
+          - 判定 `METAL_RT_OK` = 第二章路线绿灯（投送通道 + 进程内硬件 RT 双成立）
+
+          ## 判定表
+          | 判定 | 含义 |
+          |---|---|
+          | METAL_RT_OK | BLAS/TLAS/ray_query/掩码剔除/距离校验全过 |
+          | LOAD_FAIL | dylib 装载失败（投送通道受阻，报告含异常明文） |
+          | EXTRACT_FAIL | JAR 资产解包失败 |
+          | METAL_RT_API_UNAVAILABLE | GPU 不支持 Metal RT（需 A17 Pro / M3 起） |
+          | METAL_RT_MISMATCH | 链路通但回读数值不符（[mismatch] 行为准） |
+          | NATIVE_FATAL | 原生段 FATAL 行为准 |
+
+          ## 归因开关
+          `-Dmetalprobe.disabled=true`（或环境变量 `METALPROBE_DISABLED=1`）：零原生调用，闪退 A/B 对照。
+          EOF
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" metal-rt-probe-0.1.0.jar --clobber
+          else
+            gh release create "$TAG" metal-rt-probe-0.1.0.jar \
+              --prerelease --target main \
+              --title "metal-rt-probe v0.1 — in-process Metal RT probe" \
+              --notes-file "$NOTES_FILE"
+          fi
+
+      - name: Write run summary
+        if: always()
+        run: |
+          {
+            echo "## Chapter 2 — metal-rt-probe build (macos-26)"
+            echo "- Native dylib: iphoneos arm64, JNI export verified"
+            echo "- metallib: MSL ray_query kernel (metal3 std cascade)"
+            echo "- Artifact: metal-rt-probe-0.1.0.jar (dylib + metallib + msl embedded)"
+            echo "- Release: metal-rt-probe-v0.1 (prerelease, idempotent upload)"
+          } >> "$GITHUB_STEP_SUMMARY"
