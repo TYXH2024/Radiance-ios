@@ -1269,6 +1269,80 @@ Java_net_prisma_pathtrace_Native_sceneAuditNative(
                    n - 1, pos[n - 1].x, pos[n - 1].y, pos[n - 1].z);
             }
         }
+        // (b2) v0.3: COLOR readback — the albedo chain's missing evidence
+        // line. MC bakes tint×shade into the COLOR element (grass green,
+        // water blue, bare face shade for stone) — these bytes ARE the path
+        // tracer's albedo input. The v0.2 field frame was a plausible but
+        // structureless bluish field; this line settles whether the extracted
+        // colors carry real variation (2.3 decides atlas-UV sampling vs
+        // vertex-color on THIS evidence, not on guesses).
+        {
+            const uint8_t *col = (const uint8_t *)cam.colorBuffer.contents;
+            const uint32_t n = cam.vertexCount;
+            if (col != NULL && n >= 4 && cam.hasColor) {
+                uint32_t statN = n > 4096 ? 4096 : n;
+                uint32_t cmin[3] = {255, 255, 255}, cmax[3] = {0, 0, 0};
+                double csum[3] = {0, 0, 0};
+                uint32_t white = 0, greenish = 0;
+                for (uint32_t v = 0; v < statN; v++) {
+                    const uint8_t *c = col + (size_t)v * 4;
+                    for (int k = 0; k < 3; k++) {
+                        if (c[k] < cmin[k]) { cmin[k] = c[k]; }
+                        if (c[k] > cmax[k]) { cmax[k] = c[k]; }
+                        csum[k] += c[k];
+                    }
+                    if (c[0] >= 250 && c[1] >= 250 && c[2] >= 250) { white++; }
+                    if (c[1] > c[0] && c[1] > c[2]) { greenish++; }
+                }
+                // exact-distinct colors over the prefix (O(n²), n ≤ 4096)
+                uint32_t distinct = 0;
+                for (uint32_t v = 0; v < statN; v++) {
+                    const uint8_t *c = col + (size_t)v * 4;
+                    BOOL dup = NO;
+                    for (uint32_t u = 0; u < v; u++) {
+                        const uint8_t *d = col + (size_t)u * 4;
+                        if (c[0] == d[0] && c[1] == d[1] && c[2] == d[2]) {
+                            dup = YES;
+                            break;
+                        }
+                    }
+                    if (!dup) { distinct++; }
+                }
+                rp("[audit] camera slot COLOR readback: v0=(%u,%u,%u) "
+                   "v1=(%u,%u,%u) v2=(%u,%u,%u) v3=(%u,%u,%u) — 顶点色=albedo 输入",
+                   col[0], col[1], col[2], col[4], col[5], col[6],
+                   col[8], col[9], col[10], col[12], col[13], col[14]);
+                rp("[audit] COLOR stats over %u/%u verts: R[%u..%u] G[%u..%u] "
+                   "B[%u..%u] mean=(%.0f,%.0f,%.0f) distinct=%u white=%u "
+                   "greenish=%u — distinct 偏低/全白 ⇒ albedo 通路缺陷（2.3 "
+                   "换 atlas 采样）；有绿有方差 ⇒ 通路健康",
+                   statN, n, cmin[0], cmax[0], cmin[1], cmax[1], cmin[2],
+                   cmax[2], csum[0] / statN, csum[1] / statN, csum[2] / statN,
+                   distinct, white, greenish);
+            } else {
+                rp("[audit] camera slot COLOR buffer unavailable "
+                   "(hasColor=%d) — albedo 白色回退", cam.hasColor);
+            }
+        }
+        // (b3) v0.3: shading-pool entry readback — the exact bytes the
+        // kernel's barycentric albedo fetch reads for this slot's triangles
+        // (closes the chain: vertex COLOR → pool entry → kernel fetch).
+        if (g_triColorPool != nil && cam.indexCount >= 3) {
+            const uint32_t base = slot_pool_base(cam);
+            const uint32_t tris = cam.indexCount / 3;
+            const uint8_t *pool = (const uint8_t *)g_triColorPool.contents;
+            if (pool != NULL && tris > 0 && base + tris <= g_poolTris) {
+                const uint32_t samples[3] = {0, tris / 2, tris - 1};
+                for (int s = 0; s < 3; s++) {
+                    const uint32_t t = base + samples[s];
+                    const uint8_t *p = pool + (size_t)t * 12;
+                    rp("[audit] pool tri #%u (slot tri %u): "
+                       "(%u,%u,%u) (%u,%u,%u) (%u,%u,%u)",
+                       t, samples[s],
+                       p[0], p[1], p[2], p[4], p[5], p[6], p[8], p[9], p[10]);
+                }
+            }
+        }
         // (c) live TLAS instance matrix readback for this slot's instance.
         if (g_instOrigins != NULL && g_instanceBuffer != nil) {
             int idx = -1;
@@ -1295,8 +1369,12 @@ Java_net_prisma_pathtrace_Native_sceneAuditNative(
         const float dirs[6][3] = {
             {1, 0, 0}, {-1, 0, 0}, {0, 1, 0}, {0, -1, 0}, {0, 0, 1}, {0, 0, -1},
         };
-        const char *names[6] = {"+X", "-X", "+Y", "+Y(上)", "-Y(下)", "-Z"};
-        const char *nm2[6] = {"+X", "-X", "+Y", "+Y(up)", "-Y(down)", "-Z"};
+        // v0.3 label fix: the v0.2 build mislabeled dir[3]=(0,-1,0) as
+        // "+Y(上)" and dir[4]=(0,0,1) as "-Y(下)" — the report's physical
+        // hitPoints were always right (y decreased by 1.62), only the labels
+        // lied. Labels now match the vectors 1:1.
+        const char *names[6] = {"+X", "-X", "+Y(上)", "-Y(下)", "+Z", "-Z"};
+        const char *nm2[6] = {"+X", "-X", "+Y(up)", "-Y(down)", "+Z", "-Z"};
         for (int i = 0; i < 6; i++) {
             // live
             uint32_t lh = 0; float ld = -1.0f; uint32_t li = 0xFFFFFFFFu;
@@ -1314,24 +1392,43 @@ Java_net_prisma_pathtrace_Native_sceneAuditNative(
                           simd_make_float3(dirs[i][0], dirs[i][1], dirs[i][2]),
                           512.0f, &ih, &idist, &ii);
             }
-            if (ih) {
-                out[3]++;
-                float px = cx + idist * dirs[i][0];
-                float py = cy + idist * dirs[i][1];
-                float pz = cz + idist * dirs[i][2];
-                int gx = fabsf(px - roundf(px)) < 0.02f;
-                int gy = fabsf(py - roundf(py)) < 0.02f;
-                int gz = fabsf(pz - roundf(pz)) < 0.02f;
+            if (ih) { out[3]++; }
+            // v0.3: LIVE side now echoes dist/hitPoint too — side-by-side
+            // geometry agreement is direct field evidence (v0.2 only printed
+            // LIVE HIT/MISS with the details on the ISO side). Labels were
+            // also fixed to match the direction vectors 1:1.
+            if (ih || lh) {
+                float ipx = cx + idist * dirs[i][0];
+                float ipy = cy + idist * dirs[i][1];
+                float ipz = cz + idist * dirs[i][2];
+                int gx = ih && fabsf(ipx - roundf(ipx)) < 0.02f;
+                int gy = ih && fabsf(ipy - roundf(ipy)) < 0.02f;
+                int gz = ih && fabsf(ipz - roundf(ipz)) < 0.02f;
                 if (gx || gy || gz) { out[4]++; }
-                if (i == 3) { out[5] = 1; }
-                rp("[audit] ISO %s: HIT dist=%.2f hitPoint=(%.2f, %.2f, %.2f)"
-                   "%s%s%s  |  LIVE %s: %s",
-                   nm2[i], idist, px, py, pz,
-                   gx ? " (grid-x)" : "", gy ? " (grid-y)" : "", gz ? " (grid-z)" : "",
-                   nm2[i], lh ? "HIT" : "MISS");
+                if (i == 3 && ih) { out[5] = 1; }
+                char isoDetail[160];
+                if (ih) {
+                    snprintf(isoDetail, sizeof(isoDetail),
+                             "HIT dist=%.2f hitPoint=(%.2f, %.2f, %.2f)%s%s%s",
+                             idist, ipx, ipy, ipz,
+                             gx ? " (grid-x)" : "", gy ? " (grid-y)" : "",
+                             gz ? " (grid-z)" : "");
+                } else {
+                    snprintf(isoDetail, sizeof(isoDetail), "MISS");
+                }
+                char liveDetail[160];
+                if (lh) {
+                    snprintf(liveDetail, sizeof(liveDetail),
+                             "HIT dist=%.2f hitPoint=(%.2f, %.2f, %.2f)",
+                             ld, cx + ld * dirs[i][0], cy + ld * dirs[i][1],
+                             cz + ld * dirs[i][2]);
+                } else {
+                    snprintf(liveDetail, sizeof(liveDetail), "MISS");
+                }
+                rp("[audit] ISO %s: %s  |  LIVE %s: %s",
+                   nm2[i], isoDetail, nm2[i], liveDetail);
             } else {
-                rp("[audit] ISO %s: MISS  |  LIVE %s: %s",
-                   nm2[i], nm2[i], lh ? "HIT" : "MISS");
+                rp("[audit] ISO %s: MISS  |  LIVE %s: MISS", nm2[i], nm2[i]);
             }
             (void)names;
         }
@@ -1349,6 +1446,58 @@ Java_net_prisma_pathtrace_Native_sceneAuditNative(
     jintArray result = (*env)->NewIntArray(env, 8);
     if (result != NULL) { (*env)->SetIntArrayRegion(env, result, 0, 8, out); }
     return result;
+}
+
+// v0.3: force a full TLAS rebuild (instances + shading pools) on the CALLING
+// thread. Empirical instrument-fix — the evidence chain across three field
+// runs (all on Apple M3, same save):
+//   2.1 v0.5   every ray battery ran right after setPlacementModeNative +
+//              frameTickNative (i.e. a TLAS rebuild on the probe thread,
+//              between the sentinel and the rays): 9/14 hit.
+//   2.2 v0.1/2  S6 cast the same six axis rays against the ingestion-era TLAS
+//              with NO intervening AS build on the probe thread: 0/6, twice,
+//              deterministically — while the sentinel (own fresh TLAS build
+//              right before its rays) hit 3/3 in the same process.
+//   2.2 v0.2   the audit battery cast the SAME rays against the SAME g_tlas
+//              right after build_iso_tlas (an AS build on the probe thread):
+//              3/6 hit with exactly the v0.5 hitPoints (27.00/91.00/6.00);
+//              the isolated render likewise measured 57%+ camera-ray hits.
+// The discriminating variable is a fresh acceleration-structure build
+// enqueued on the calling thread between ingestion and the ray dispatches.
+// The mechanism is driver-level (AS traversal residency/binding after
+// ingestion-era builds — same thread, same TLAS object, same trace_ray code
+// path, byte-identical to 2.1) and is NOT reproducible offline; this call
+// replicates the proven working pattern instead of guessing further at the
+// driver. PathtraceMod's A/B re-battery turns the fix itself into an
+// on-device proof: round 1 miss + round 2 (after this call) hit = mechanism
+// confirmed in the report; both miss = S6.5 audit discriminates as before.
+JNIEXPORT void JNICALL
+Java_net_prisma_pathtrace_Native_refreshTlasNative(JNIEnv *env, jclass cls) {
+    (void)env; (void)cls;
+    if (g_slots == nil) {
+        rp("[refresh] no slot grid — skip");
+        return;
+    }
+    uint32_t ready = 0;
+    for (SceneSlot *s in g_slots) {
+        if (s.ready && s.blas != nil) { ready++; }
+    }
+    if (ready == 0 || g_device == nil || g_queue == nil) {
+        rp("[refresh] no ready BLAS / device — skip");
+        return;
+    }
+    const uint64_t before = g_stats[3];
+    g_tlasDirty = YES;
+    rebuild_tlas();
+    if (g_stats[3] > before && g_tlas != nil) {
+        rp("[refresh] TLAS re-anchored on probe thread (instances=%u, "
+           "tlas builds=%llu)",
+           g_instOriginCount, (unsigned long long)g_stats[3]);
+    } else {
+        rp("[refresh] TLAS rebuild did not advance (builds=%llu) — "
+           "see [tlas]/FATAL lines above",
+           (unsigned long long)g_stats[3]);
+    }
 }
 
 // S6.4: origin of the slot behind a TLAS instance index (hit attribution).
@@ -1439,14 +1588,19 @@ static jintArray pt_render_core(JNIEnv *env,
     id<MTLBuffer> imageBuf =
         [g_device newBufferWithLength:(NSUInteger)((uint64_t)width * height * 4)
                               options:MTLResourceStorageModeShared];
+    // v0.3: two atomics in one buffer — [0] total path-segment queries
+    // (the measured Mray/s), [1] camera-ray hits (b==0 segments that hit).
+    // camHit% instantly distinguishes "all-sky frame" (camera basis or
+    // traversal defect) from "wall/terrain point-blank" (legitimate
+    // composition) — the exact ambiguity the v0.2 ISO frame left open.
     id<MTLBuffer> rayBuf =
-        [g_device newBufferWithLength:sizeof(uint32_t)
+        [g_device newBufferWithLength:2 * sizeof(uint32_t)
                               options:MTLResourceStorageModeShared];
     if (ub == nil || imageBuf == nil || rayBuf == nil) {
         rp("FATAL: render buffer allocation failed");
         return NULL;
     }
-    memset(rayBuf.contents, 0, sizeof(uint32_t));
+    memset(rayBuf.contents, 0, 2 * sizeof(uint32_t));
 
     id<MTLCommandBuffer> cmd = [g_queue commandBuffer];
     id<MTLComputeCommandEncoder> enc = [cmd computeCommandEncoder];
@@ -1475,12 +1629,16 @@ static jintArray pt_render_core(JNIEnv *env,
            cmd.error.localizedDescription.UTF8String);
         return NULL;
     }
-    const uint32_t rays = *(const uint32_t *)rayBuf.contents;
+    const uint32_t *stats = (const uint32_t *)rayBuf.contents;
+    const uint32_t rays = stats[0];
+    const uint32_t camHits = stats[1];
     g_ptRays = rays;
+    const double samples = (double)width * (double)height * (double)spp;
     rp("[render] %s: %dx%d spp=%d bounces=%d -> %.1f ms, queries=%llu "
-       "(%.2f Mray/s measured)",
+       "(camHit=%.1f%%, %.2f Mray/s measured)",
        tag, width, height, spp, bounces, ms,
-       (unsigned long long)rays, ms > 0.0 ? rays / (ms * 1000.0) : 0.0);
+       (unsigned long long)rays, camHits * 100.0 / samples,
+       ms > 0.0 ? rays / (ms * 1000.0) : 0.0);
 
     // ---- readback -> jint ARGB ----
     const uint8_t *px = (const uint8_t *)imageBuf.contents;

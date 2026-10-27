@@ -32,3 +32,46 @@
 - latest.log 无新增崩溃路径（01:08:56 Task251 为正常自退出看门狗）；
   fatal_trace 中 10-27 14:35/14:36 两次 abort 为 libmobileglues glGetError
   已知启动器固有崩溃（第一章 v1.2 已定案归因），与本探针无关。
+
+## M3 / pathtrace v0.2.0 — 2026-10-28 02:23（判 PLACEMENT_FAIL；仪器定谳：场景与渲染链正确，S6 探针通道自身缺陷）
+
+**报告**: `M3-v0.2.0-report.txt`（同目录）· **首帧**: `M3-v0.2.0-frame.png`（480×270/24spp/2bounce ISO 诊断帧）
+
+### 事实
+- S0–S5 全绿：66 符号、600 槽位、**174 重建 / 157 BLAS / 168,982 三角 / TLAS×10**
+  ——v0.2 覆盖修复实证生效（y=-64..112 全 12 层，与 2.1 v0.5 同覆盖量）。
+- 哨兵 3/3 PASS。COLOR 全量提取（每次 rebuild color=yes）。
+- **S6 六向全 miss（0/6）**→ PLACEMENT_FAIL → 隔离渲染通道出图。
+- **S6.5 四台仪器定谳**：raw AABB=SECTION-LOCAL（2.1 契约成立）；相机区块
+  顶点回读=真实地形；live 实例矩阵 flat[9..11]=(16,80,0) 正确；**ISO 与 LIVE
+  电池完全一致——3/6 命中、3 条整数格线、脚下地板 1.62**（hitPoint
+  27.00/91.00/6.00 与 2.1 v0.5 完全一致）。⇒ **LIVE TLAS/BLAS/矩阵/摆放全部
+  正确，S6 的 0/6 是探针通道自身缺陷，PLACEMENT_FAIL 为误报。**
+- S7 ISO 渲染：106.8ms / 6,665,304 queries / **62.40 Mray/s 实测**；图像统计
+  mean=0.627、range 0.594..0.672（旧门槛 FAIL——但 ISO 门槛不适用，见判读）。
+
+### 离线判读（零粉饰）
+1. **S6 vs S6.5 矛盾的归因**：同一 `trace_ray`（与 2.1 逐字节一致，离线 diff
+   证实）、同一 g_tlas、同一原点同一方向——经 JNI `castRayNative` 调用全 miss
+   （v0.1/v0.2 两轮确定性复现），同进程内 C 直调（审计电池，前面有
+   build_iso_tlas）3/6 命中。对照 2.1 v0.5：其 ray 电池前总有
+   `setPlacementModeNative+frameTickNative`（探测线程上的 TLAS 现场重建）→
+   9/14 命中。**判别变量 = 探测线程上是否有新鲜 AS build**（驱动层行为，
+   离线不可复现）。⇒ **v0.3：refreshTlasNative（探测线程重锚）+ A/B 复测
+   自证（首轮 miss → 重锚 → 复测，两轮行都在报告里）+ live 渲染前同样重锚**
+   （renderPathtraceNative 直查 g_tlas，与 S6 同通道——不重锚会渲染出纯天空帧）。
+2. **首帧 PNG 判读**（离线像素级分析）：370 精确色（非 6 色——4-bit 量化才
+   是 6）、纵向单调微梯度、±1 nibble 噪声场——与"天空渐变 + 底缘地板 +
+   spp 抖动"一致；且 queries=6.67M/3.11M 采样=2.14 段/采样 ⇒ **≥57% 相机
+   ray 命中**（配合审计证据：+X 0.5 格处有方块面——相机贴着山坡仰视 21°）。
+   ⇒ **渲染链（相机 ray→TLAS→shading→tonemap→PNG）全链健康**；无绿无结构
+   的疑点指向 albedo 内容（COLOR 元素究竟带了什么字节）——**v0.3 加 COLOR
+   回读仪器 + camHit% 计数器**，2.3 的 atlas 采样决策看这一行证据。
+3. **审计电池标签缺陷**（已修）：dir[3]=(0,-1,0) 曾误标 "+Y(上)"、dir[4]=(0,0,1)
+   误标 "-Y(下)"——报告里 "+Y(up): HIT dist=1.62 hitPoint y=91.00" 物理上是
+   -Y 向下命中地板（与 v0.5 一致），标签说谎但物理证据一直正确。
+
+### 结论
+场景摄取、BLAS/TLAS 组装、矩阵摆放、渲染管线——**全部真机验证正确**。
+距"第一束光线"只差：v0.3 重锚修复让 S6 复测命中 → 摆放 PASS → 全场景
+渲染跑起来（PATHTRACE_OK）。

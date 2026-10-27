@@ -274,3 +274,20 @@ Stage Summary:
 - v0.2 = 仪器版：一次真机运行必出定谳证据（四台仪器互相交叉判别），同时携带覆盖修复
 - 隔离渲染通道若成图 → 渲染链全链健康 + 用户看到第一帧光（相机区块真实路径追踪画面）
 - 待办：CI 过绿 + Release pathtrace-v0.2 → 真机复跑 → 按 [audit] 行定谳 → v0.3 定点修复
+
+## 2026-10-28（十四）· pathtrace v0.2 真机回收判读：四台仪器定谳（场景/渲染链全部正确，S6 探针通道自身缺陷）→ v0.3 探测线程重锚 + A/B 复测自证 + albedo 回读仪器
+
+Task: 回收 v0.2 真机报告 + 首帧 PNG（PLACEMENT_FAIL + ISO 帧）→ 仪器判读定谳 → v0.3
+
+Work Log:
+- 真机报告/首帧存证 docs/chapter2-pathtrace-field/（M3-v0.2.0-report.txt + M3-v0.2.0-frame.png + README 判读）：摄取链全健康（174 重建/600 区块/157 BLAS/168,982 三角/TLAS×10——v0.2 覆盖修复实证生效，y=-64..112 全 12 层；COLOR 全量提取）；哨兵 3/3 PASS；S6 六向全 miss → PLACEMENT_FAIL → 隔离通道出图（106.8ms / 6,665,304 queries / 62.40 Mray/s）
+- **S6.5 四台仪器定谳**：raw AABB=SECTION-LOCAL（2.1 契约成立）；相机区块顶点回读=真实地形；live 矩阵 flat[9..11]=(16,80,0) 正确；**ISO 与 LIVE 电池完全一致**（3/6 命中、3 条整数格线、脚下地板 1.62——hitPoint 27.00/91.00/6.00 与 2.1 v0.5 完全一致）⇒ LIVE TLAS/BLAS/矩阵/摆放全部正确，S6 的 0/6 是探针通道自身缺陷，PLACEMENT_FAIL 为误报
+- S6 矛盾归因（离线穷尽）：castRayNative/trace_ray/normalize_dir 与 2.1 逐字节 diff 一致（排除代码缺陷）；JNI 声明 8×float 对位（排除签名炸弹）；SceneProxy.run() 内联调用（排除跨线程竞态）；PNG 像素级分析（370 精确色/纵向单调微梯度/±1 nibble 噪声）+ queries=6.67M/3.11M 采样=2.14 段/采样 ⇒ **≥57% 相机 ray 命中**——渲染链全链健康。三轮真机铁律：2.1 v0.5 电池前总有探测线程 TLAS 重建（setPlacementMode+frameTick）→ 9/14 命中；2.2 v0.1/v0.2 直查摄取期 TLAS → 0/6 ×2（确定性）；v0.2 审计（前面有 build_iso_tlas）→ 3/6。**判别变量 = 探测线程上是否刚有 AS build（驱动层，离线不可复现）**
+- v0.3 实现：①refreshTlasNative（探测线程强制重建 TLAS+pools，复刻 2.1 已验证模式）②S6 A/B 复测自证（首轮全 miss → 重锚 → 复测，两轮行都在报告——机制当场坐实或证伪）③placementOk 分支入口重锚（中心 ray 交叉验证 + live 渲染全部走重锚后状态——renderPathtraceNative 直查 g_tlas，与 S6 同通道，不重锚会渲染出纯天空帧）④sceneAuditNative 新增 COLOR 回读（相机区块顶点色 min/max/mean/distinct/white/greenish）+ 池条目回读（顶点色→池→kernel 读取链闭环——2.3 atlas 采样决策的证据行）⑤pathtrace_kernel 双 atomic（rayStats[0]=queries、[1]=相机段命中）→ [render] 行新增 camHit% ⑥审计电池标签修正（dir[3]=-Y 曾误标 "+Y(上)"、dir[4]=+Z 误标 "-Y(下)"——物理 hitPoint 一直正确，标签说谎）+ LIVE 距离回显 ⑦analyzeImage 分带亮度 + ISO 诊断档门槛（单区块+任意视角可合法近平场；结构门槛仅对全场景帧生效——那才是交付物）
+- 冒烟 smoke_pathtrace_v03.sh：ecj 8 类零错误（/home/z/my-project/scripts/）；ObjC/MSL 括号平衡；JNI 15 入口对位；双 atomic 一致性；YAML+heredoc bash -n 解析验证
+- 版本链 bump 0.3.0（build.sh/fabric.mod.json/报告头/README）；workflow → pathtrace-v0.3（+refreshTlasNative 导出验证）；field README v0.2 判读存档
+
+Stage Summary:
+- **2.2 契约真机闭环**：摄取（600 区块/169k 三角/COLOR 提取）+ 摆放（ISO=LIVE 一致、整数格线、脚下地板）+ 渲染链（57%+ 相机命中、62.4 Mray/s）全部验证正确——距 PATHTRACE_OK 只差 S6 通道重锚
+- v0.3 = 实证修复（非盲改）：重锚复刻三轮真机归纳的判别变量，A/B 复测让修复自带现场证明；albedo 疑点（无绿无结构）交给 COLOR 回读仪器，2.3 决策看证据
+- 待办：①CI 过绿 + Release pathtrace-v0.3 ②真机复跑预期：首轮全 miss → [refresh] → 复测 3/6（27.00/91.00/6.00）→ 摆放 PASS → 全场景渲染 → PATHTRACE_OK + 第一帧光 ③若复测仍全 miss：审计判别照常，回报 [refresh]/[audit] 行 ④albedo 证据行回收 → 2.3 方向决策（顶点色 vs atlas UV）

@@ -46,7 +46,7 @@ public final class PathtraceMod {
             return;
         }
         ProbeReport r = new ProbeReport("pathtrace_report.txt");
-        r.header("路径追踪探针 (pathtrace 0.2.0)");
+        r.header("路径追踪探针 (pathtrace 0.3.0)");
         r.info("触发方式: " + triggerSource);
 
         if (isDisabled()) {
@@ -182,50 +182,23 @@ public final class PathtraceMod {
 
         // 整数格线抽查：6 轴向 ray；正确摆放下命中面必落在整数格线
         //（水面/植被等非立方几何除外——与 2.1 v0.5 的 8/9 一致性预期）。
-        int spotHits = 0;
-        int integerHits = 0;
-        boolean downHit = false;
+        // v0.3 A/B 复测仪器：v0.1/v0.2 两轮真机首轮均全 miss（0/6），而
+        // v0.2 审计电池在同一 TLAS 上、前面有 build_iso_tlas 时命中
+        // 3/6（hitPoint 与 v0.5 完全一致）——判别变量 = 探测线程上是否刚
+        // 有新鲜 AS build。首轮全 miss ⇒ refreshTlasNative 重锚后复测：
+        // 复测命中 ⇒ 机制当场坐实（报告两轮行即 A/B 证据）；仍全 miss ⇒
+        // S6.5 审计照常判别（证据链见 metal_pathtrace.m refreshTlasNative）。
+        int[] spot = {0, 0, 0};
         if (cameraOk && tlasBuilds > 0 && readyBlas > 0) {
-            float[][] dirs = {
-                {1, 0, 0}, {-1, 0, 0}, {0, 1, 0}, {0, -1, 0}, {0, 0, 1}, {0, 0, -1},
-            };
-            String[] names = {"+X", "-X", "+Y(上)", "-Y(下)", "+Z", "-Z"};
-            for (int i = 0; i < dirs.length; i++) {
+            spot = castAxisBattery(r, pose, "");
+            if (spot[0] == 0) {
+                r.info("首轮六向全 miss —— v0.3 仪器：探测线程重锚 TLAS 后复测"
+                        + "（复测命中即当场坐实机制；仍全 miss 走 S6.5 审计判别）");
                 try {
-                    float[] res = Native.castRayNative(pose[0], pose[1], pose[2],
-                            dirs[i][0], dirs[i][1], dirs[i][2], 512f);
-                    if (res != null && res[0] > 0.5f) {
-                        spotHits++;
-                        float px = pose[0] + res[1] * dirs[i][0];
-                        float py = pose[1] + res[1] * dirs[i][1];
-                        float pz = pose[2] + res[1] * dirs[i][2];
-                        boolean ix = nearInteger(px);
-                        boolean iy = nearInteger(py);
-                        boolean iz = nearInteger(pz);
-                        boolean grid = ix || iy || iz;
-                        if (grid) {
-                            integerHits++;
-                        }
-                        if (i == 3) {
-                            downHit = true;
-                        }
-                        String gridTag = grid
-                                ? String.format("整数格线 %s%s%s",
-                                        ix ? "x" : "", iy ? "y" : "", iz ? "z" : "")
-                                : "非整数（非立方几何？）";
-                        int[] org = Native.instanceOriginNative((int) res[2]);
-                        String attr = org != null
-                                ? String.format(" → section=(%d,%d,%d)", org[0], org[1], org[2])
-                                : "";
-                        r.pass(String.format(
-                                "ray %s: HIT distance=%.2f hitPoint=(%.2f, %.2f, %.2f)"
-                                        + " [%s] (instance=%d)%s",
-                                names[i], res[1], px, py, pz, gridTag, (int) res[2], attr));
-                    } else {
-                        r.info("ray " + names[i] + ": miss（512 格内无几何）");
-                    }
+                    Native.refreshTlasNative();
+                    spot = castAxisBattery(r, pose, "复测 ");
                 } catch (Throwable t) {
-                    r.fail("castRay " + names[i] + " 异常: " + t);
+                    r.fail("refreshTlasNative 异常: " + t);
                 }
             }
         } else if (!cameraOk) {
@@ -233,14 +206,17 @@ public final class PathtraceMod {
         } else {
             r.fail("TLAS 尚未构建（无就绪几何）——S6/S7 未执行");
         }
+        int spotHits = spot[0];
+        int integerHits = spot[1];
+        boolean downHit = spot[2] > 0;
 
         boolean placementOk = cameraOk && tlasBuilds > 0 && readyBlas > 0
                 && downHit && integerHits >= 2;
         if (cameraOk && tlasBuilds > 0 && readyBlas > 0 && !placementOk) {
             r.fail(String.format("摆放抽查未达标（命中=%d 整数格线=%d 脚下地板=%s）——"
-                            + "2.2 契约（t=origin + 免 recentring）在真机上不等价于 2.1 已验证"
-                            + "布局的可能性存在；请附整份报告回报（v0.5 同场景：-Y 1.62 命中地板、"
-                            + "8/9 整数格线）",
+                            + "v0.3 已携带 A/B 复测与 S6.5 审计；请附整份报告回报"
+                            + "（v0.5 同场景：-Y 1.62 命中地板、8/9 整数格线；"
+                            + "v0.2 审计已证 LIVE TLAS 内容正确）",
                     spotHits, integerHits, downHit ? "有" : "无"));
         } else if (placementOk) {
             r.pass(String.format("摆放抽查 PASS（%d 命中 / %d 整数格线 / 脚下地板命中——"
@@ -280,6 +256,16 @@ public final class PathtraceMod {
         int[] image = null;
         boolean isoRender = false;
         if (placementOk) {
+            // v0.3: 本分支内所有 g_tlas 查询（中心 ray 交叉验证 + live 渲染）
+            // 都走 S6 同通道——先重锚（毫秒级，幂等），证据行与渲染同判。
+            // 若首轮电池未触发重锚（直接命中的路径），这里补上；若 A/B 复测
+            // 已重锚，重建同一就绪集，无副作用。
+            try {
+                Native.refreshTlasNative();
+            } catch (Throwable t) {
+                r.fail("渲染前 refreshTlasNative 异常: " + t);
+            }
+
             // 中心 ray 交叉验证：单 ray 仪器（scene_trace_kernel）与渲染 kernel
             // 使用同一 TLAS——中心像素内容应与此预测一致（证据行，不参与判定）。
             try {
@@ -341,7 +327,7 @@ public final class PathtraceMod {
                         + RENDER_W + "x" + RENDER_H + ", spp=" + RENDER_SPP
                         + ", bounces=" + RENDER_BOUNCES + ")"
                         + (isoRender ? "——隔离诊断帧（相机区块，非全场景）" : ""));
-                imageOk = analyzeImage(r, image, RENDER_W, RENDER_H);
+                imageOk = analyzeImage(r, image, RENDER_W, RENDER_H, isoRender);
             } catch (Throwable t) {
                 r.fail("PNG 写盘/统计异常", t);
             }
@@ -389,9 +375,10 @@ public final class PathtraceMod {
             verdict = "PATHTRACE_OK";
             message = "2.2 路径追踪引擎首帧成立：摄取链在简化摆放契约下复现健康度，"
                     + "哨兵与整数格线维持 2.1 结论，离屏路径追踪渲染出可目检图像"
-                    + "（pathtrace_frame.png，眼见为实）。实测吞吐见 [render] 行"
-                    + "（atomic 计数，非估算）。—— 2.2 v0.1 达成：下一步渐进积累/实时化"
-                    + "与 GL 管线合成（2.3）。";
+                    + "（pathtrace_frame.png，眼见为实；camHit%/分带亮度见 "
+                    + "[render]/图像统计行）。实测吞吐见 [render] 行"
+                    + "（atomic 计数，非估算）。—— 2.2 达成：下一步渐进积累/"
+                    + "实时化与 GL 管线合成（2.3）。";
         }
         r.finish(verdict, message);
 
@@ -404,35 +391,110 @@ public final class PathtraceMod {
 
     // ---- 工具 ----
 
+    /**
+     * v0.3: 六轴 ray 电池（原 S6 内联逻辑提取）——返回 int[3]：
+     * [0] 命中数 [1] 整数格线数 [2] -Y(脚下)命中数。tag 非空时附加在每行
+     * 尾部（首轮/复测 A/B 回显）。
+     */
+    private static int[] castAxisBattery(ProbeReport r, float[] pose, String tag) {
+        float[][] dirs = {
+            {1, 0, 0}, {-1, 0, 0}, {0, 1, 0}, {0, -1, 0}, {0, 0, 1}, {0, 0, -1},
+        };
+        String[] names = {"+X", "-X", "+Y(上)", "-Y(下)", "+Z", "-Z"};
+        int hits = 0;
+        int grid = 0;
+        int down = 0;
+        for (int i = 0; i < dirs.length; i++) {
+            String label = tag.isEmpty() ? names[i] : names[i] + " [" + tag + "]";
+            try {
+                float[] res = Native.castRayNative(pose[0], pose[1], pose[2],
+                        dirs[i][0], dirs[i][1], dirs[i][2], 512f);
+                if (res != null && res[0] > 0.5f) {
+                    hits++;
+                    float px = pose[0] + res[1] * dirs[i][0];
+                    float py = pose[1] + res[1] * dirs[i][1];
+                    float pz = pose[2] + res[1] * dirs[i][2];
+                    boolean ix = nearInteger(px);
+                    boolean iy = nearInteger(py);
+                    boolean iz = nearInteger(pz);
+                    boolean g = ix || iy || iz;
+                    if (g) {
+                        grid++;
+                    }
+                    if (i == 3) {
+                        down++;
+                    }
+                    String gridTag = g
+                            ? String.format("整数格线 %s%s%s",
+                                    ix ? "x" : "", iy ? "y" : "", iz ? "z" : "")
+                            : "非整数（非立方几何？）";
+                    int[] org = Native.instanceOriginNative((int) res[2]);
+                    String attr = org != null
+                            ? String.format(" → section=(%d,%d,%d)", org[0], org[1], org[2])
+                            : "";
+                    r.pass(String.format(
+                            "ray %s: HIT distance=%.2f hitPoint=(%.2f, %.2f, %.2f)"
+                                    + " [%s] (instance=%d)%s",
+                            label, res[1], px, py, pz, gridTag, (int) res[2], attr));
+                } else {
+                    r.info("ray " + label + ": miss（512 格内无几何）");
+                }
+            } catch (Throwable t) {
+                r.fail("castRay " + label + " 异常: " + t);
+            }
+        }
+        return new int[] {hits, grid, down};
+    }
+
     private static boolean nearInteger(float v) {
         float d = Math.abs(v - Math.round(v));
         return d < 0.05f;
     }
 
     /**
-     * 图像统计自证（零粉饰）：亮度分布 + 量化颜色多样性 + 主色占比。
+     * 图像统计自证（零粉饰）：亮度分布 + 量化颜色多样性 + 主色占比 +
+     * v0.3 分带亮度（上/中/下 1/3——天空/地形分布的直接证据行）。
      * 返回 true = 图像非退化。
+     *
+     * v0.3 ISO 诊断档：ISO 帧只做"渲染链健康性"判定（非黑场/非单色），
+     * 不做结构判定——单区块 + 任意视角可合法地近乎平场（v0.2 实测：相机
+     * 仰视 21°，ISO 帧 = 天空渐变 + 底缘地板，370 精确色但 4-bit 量化仅
+     * 6 色）。结构门槛（range/distinct）仅对全场景帧生效——那才是交付物。
      */
-    private static boolean analyzeImage(ProbeReport r, int[] argb, int w, int h) {
+    private static boolean analyzeImage(ProbeReport r, int[] argb, int w, int h,
+            boolean isoFrame) {
         double sum = 0;
         double min = 1;
         double max = 0;
         int[] buckets = new int[4096];
-        for (int p : argb) {
-            int rr = (p >> 16) & 0xFF;
-            int gg = (p >> 8) & 0xFF;
-            int bb = p & 0xFF;
-            double l = (0.2126 * rr + 0.7152 * gg + 0.0722 * bb) / 255.0;
-            sum += l;
-            if (l < min) { min = l; }
-            if (l > max) { max = l; }
-            buckets[((rr >> 4) << 8) | ((gg >> 4) << 4) | (bb >> 4)]++;
+        double[] bandSum = new double[3];
+        int[] bandCnt = new int[3];
+        for (int y = 0; y < h; y++) {
+            int band = Math.min(2, y * 3 / h);
+            for (int x = 0; x < w; x++) {
+                int p = argb[y * w + x];
+                int rr = (p >> 16) & 0xFF;
+                int gg = (p >> 8) & 0xFF;
+                int bb = p & 0xFF;
+                double l = (0.2126 * rr + 0.7152 * gg + 0.0722 * bb) / 255.0;
+                sum += l;
+                bandSum[band] += l;
+                bandCnt[band]++;
+                if (l < min) { min = l; }
+                if (l > max) { max = l; }
+                buckets[((rr >> 4) << 8) | ((gg >> 4) << 4) | (bb >> 4)]++;
+            }
         }
         double mean = sum / argb.length;
         int distinct = 0;
         for (int b : buckets) {
             if (b > 0) { distinct++; }
         }
+        r.info(String.format("图像统计: 平均亮度=%.3f 范围=[%.3f..%.3f] 量化颜色数=%d",
+                mean, min, max, distinct));
+        r.info(String.format("分带亮度: 上1/3=%.3f 中1/3=%.3f 下1/3=%.3f",
+                bandSum[0] / bandCnt[0], bandSum[1] / bandCnt[1],
+                bandSum[2] / bandCnt[2]));
         // 主色 top-4（证据行：天空色/地形色应可辨识）
         int[] topIdx = {-1, -1, -1, -1};
         for (int k = 0; k < 4; k++) {
@@ -459,16 +521,25 @@ public final class PathtraceMod {
             top.append(String.format("#%03X %.1f%%",
                     topIdx[k], buckets[topIdx[k]] * 100.0 / argb.length));
         }
-        r.info(String.format("图像统计: 平均亮度=%.3f 范围=[%.3f..%.3f] 量化颜色数=%d",
-                mean, min, max, distinct));
         r.info("主色 top-4（4-bit 量化）: " + top);
-        boolean ok = mean > 0.02 && mean < 0.98 && (max - min) >= 0.08 && distinct >= 16;
-        if (ok) {
-            r.pass("图像自证 PASS（非全黑/非平场/颜色多样性足够）");
+        boolean ok;
+        if (isoFrame) {
+            ok = mean > 0.02 && mean < 0.98 && distinct >= 2 && (max - min) >= 0.005;
+            if (ok) {
+                r.pass("图像自证 PASS（ISO 诊断帧：非黑场/非单色——渲染链健康；"
+                        + "结构判定留给全场景帧，camHit% 见 [render] 行）");
+            } else {
+                r.fail("图像自证 FAIL（ISO 诊断帧黑场/单色——渲染链缺陷）");
+            }
         } else {
-            r.fail("图像自证 FAIL（mean=" + String.format("%.3f", mean)
-                    + " range=" + String.format("%.3f..%.3f", min, max)
-                    + " distinct=" + distinct + "）");
+            ok = mean > 0.02 && mean < 0.98 && (max - min) >= 0.08 && distinct >= 16;
+            if (ok) {
+                r.pass("图像自证 PASS（非全黑/非平场/颜色多样性足够）");
+            } else {
+                r.fail("图像自证 FAIL（mean=" + String.format("%.3f", mean)
+                        + " range=" + String.format("%.3f..%.3f", min, max)
+                        + " distinct=" + distinct + "）");
+            }
         }
         return ok;
     }

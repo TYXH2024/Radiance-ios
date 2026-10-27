@@ -28,9 +28,11 @@
 //                              API risk, exact agreement by construction).
 //    buffer(5): instTriBase — uint per instance: index of that instance's
 //                              first triangle in the pools.
-//    buffer(6): rayCount    — single atomic_uint; every issued intersection
-//                              query increments it — the report's Mray/s is a
-//                              MEASURED number, not an estimate.
+//    buffer(6): rayStats    — TWO atomic_uints: [0] every issued intersection
+//                              query (the report's Mray/s is a MEASURED
+//                              number); [1] camera-segment hits (v0.3 — the
+//                              camHit% line that separates "all-sky frame"
+//                              from "terrain point-blank").
 //
 //  MSL raytracing API surface (triangle_data queries):
 //    proven in 2.0/2.1: get_committed_intersection_type / _distance /
@@ -174,7 +176,7 @@ kernel void pathtrace_kernel(
     device const uchar4 *triColors [[buffer(3)]],
     device const packed_float3 *triNormals [[buffer(4)]],
     device const uint *instTriBase [[buffer(5)]],
-    device atomic_uint *rayCount [[buffer(6)]],
+    device atomic_uint *rayStats [[buffer(6)]],
     uint2 gid [[thread_position_in_grid]])
 {
     if (gid.x >= u.width || gid.y >= u.height) { return; }
@@ -203,7 +205,7 @@ kernel void pathtrace_kernel(
             raytracing::intersection_query<raytracing::instancing, raytracing::triangle_data> q;
             q.reset(raytracing::ray(origin, dir, 0.001f, 1024.0f),
                     scene, 0xFFFFFFFFu, params);
-            atomic_fetch_add_explicit(rayCount, 1u, memory_order_relaxed);
+            atomic_fetch_add_explicit(rayStats, 1u, memory_order_relaxed);
             while (q.next()) {
                 q.commit_triangle_intersection();
             }
@@ -211,6 +213,11 @@ kernel void pathtrace_kernel(
                     != raytracing::intersection_type::triangle) {
                 radiance += throughput * skyRadiance(dir);
                 break;
+            }
+            if (b == 0) {
+                // v0.3: camera-segment hit — the render's placement heartbeat.
+                atomic_fetch_add_explicit(rayStats + 1, 1u,
+                                          memory_order_relaxed);
             }
 
             const float dist = q.get_committed_distance();

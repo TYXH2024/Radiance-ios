@@ -2,20 +2,21 @@
 
 > 设计文档：`docs/chapter2-pathtrace-design.md`
 > 前置：2.1 `scene-ingestion` v0.5 真机判定 SCENE_INGEST_OK——摄取契约已盖章。
-> **v0.1 真机回收（2026-10-28 01:08）：判 PLACEMENT_FAIL**（六向全 miss、哨兵 3/3、相机区块已摄取且 verts=2344 与 2.1 一致）——离线逐函数比对确认 fork 与 2.1 数学等价，v0.2 按零粉饰纪律装判别仪器（不盲改）。现场记录：`docs/chapter2-pathtrace-field/`
+> **v0.1 真机回收（2026-10-28 01:08）：判 PLACEMENT_FAIL**（六向全 miss、哨兵 3/3、相机区块已摄取且 verts=2344 与 2.1 一致）——离线逐函数比对确认 fork 与 2.1 数学等价，v0.2 按零粉饰纪律装判别仪器（不盲改）。
+> **v0.2 真机回收（2026-10-28 02:23）：仍判 PLACEMENT_FAIL，但仪器已定谳**——LIVE TLAS/BLAS/矩阵/摆放全部正确（ISO=LIVE 一致，3/6 命中、脚下地板 1.62、hitPoint 与 v0.5 完全一致），S6 全 miss 是探针通道自身缺陷；隔离渲染出图 + 62.40 Mray/s。**v0.3：探测线程重锚 + A/B 复测自证 + albedo 回读仪器。**现场记录：`docs/chapter2-pathtrace-field/`
 
 ## 取成品（两个通道，内容相同）
 
 | 通道 | 位置 | 说明 |
 |---|---|---|
-| **A · 工作流运行页成品文件** | Actions → `chapter2-pathtrace` → 任意绿勾运行 → 页面底部 **Artifacts** 区 → `pathtrace-jar` | v0.1.1 起每次绿勾必有；zip 内含 `pathtrace-0.1.0.jar` + dylib + metallib。**运行中途被取消的运行没有 artifact**（也不会发布 Release——可能遗留草稿） |
-| **B · GitHub Release（正式交付）** | https://github.com/TYXH2024/Radiance-ios/releases/tag/pathtrace-v0.1 → `pathtrace-0.1.0.jar` | 幂等 `--clobber` 重传；若 Releases 页看不到，先检查页面底部"Drafts"区（被取消的运行可能遗留未发布草稿） |
+| **A · 工作流运行页成品文件** | Actions → `chapter2-pathtrace` → 任意绿勾运行 → 页面底部 **Artifacts** 区 → `pathtrace-jar` | 每次绿勾必有；zip 内含 `pathtrace-0.3.0.jar` + dylib + metallib。**运行中途被取消的运行没有 artifact**（也不会发布 Release——可能遗留草稿） |
+| **B · GitHub Release（正式交付）** | https://github.com/TYXH2024/Radiance-ios/releases/tag/pathtrace-v0.3 → `pathtrace-0.3.0.jar` | 幂等 `--clobber` 重传；若 Releases 页看不到，先检查页面底部"Drafts"区（被取消的运行可能遗留未发布草稿） |
 
 > v0.1 首发 workflow 遗漏了 artifact 上传步骤（2.0/2.1 均有）——导致"绿勾了但运行页看不到 jar"。v0.1.1 已补齐：**以后看绿勾运行页最下方的 Artifacts 即可直接下载**。
 
 ## 使用
 
-1. 删除 `mods/` 内旧探针 JAR（scene-ingestion / metal-rt-probe / rt-probe），放入 `pathtrace-0.1.0.jar`——同存档、同启动器档位（Vulkan/MoltenVK 档，OSMesa 宿主实测兼容）。
+1. 删除 `mods/` 内旧探针 JAR（scene-ingestion / metal-rt-probe / rt-probe / 旧版 pathtrace），放入 `pathtrace-0.3.0.jar`——同存档、同启动器档位（Vulkan/MoltenVK 档，OSMesa 宿主实测兼容）。
 2. 进入世界后停留 **30–40s**（600 槽位全量摄取约 19s + 静置收口；报告出现 `[scene] shutdown — all GPU resources released` 后即可退出）。
 3. 回报 game 目录下两个文件：**`pathtrace_report.txt`**（全量报告）+ **`pathtrace_frame.png`**（480×270 / 24 spp / 2 bounces 首帧，眼见为实）。
 
@@ -43,6 +44,17 @@
 
 归因开关：`-Dpathtrace.disabled=true` 或 `PATHTRACE_DISABLED=1` → 只写环境快照、零原生调用（闪退 A/B 对照用）。
 
+## v0.3 实证修复 + 证据补齐（基于 v0.2 仪器定谳）
+
+| 变更 | 依据 |
+|---|---|
+| **refreshTlasNative（探测线程重锚）** | 三轮真机铁律：2.1 v0.5 每次电池前总有探测线程 TLAS 重建（setPlacementMode+frameTick）→ 9/14 命中；2.2 v0.1/v0.2 直查摄取期 TLAS → 0/6 ×2（确定性）；v0.2 审计在同一 g_tlas 上、前面有 build_iso_tlas → 3/6 命中。判别变量 = 探测线程上是否刚有 AS build（驱动层，离线不可复现；trace_ray 等已逐字节 diff 排除代码缺陷） |
+| **A/B 复测自证** | 首轮全 miss → 重锚 → 复测：两轮行都在报告里——复测命中 = 机制当场坐实；仍 miss = 审计照常判别（零粉饰） |
+| **live 渲染前同样重锚** | renderPathtraceNative 直查 g_tlas（与 S6 同通道）——不重锚会渲染出纯天空帧 |
+| **COLOR/albedo 回读仪器** | v0.2 帧 ≥57% 相机命中但无绿无结构——顶点色+池条目直接回读，2.3 的 atlas 采样决策看这行证据 |
+| **camHit% 相机命中率**（第二 atomic） | 一眼区分"全天空帧"与"贴脸山坡"（v0.2 靠 queries 反推的量，v0.3 直接测） |
+| 审计电池标签修正 + LIVE 距离回显 + 分带亮度 + ISO 诊断档门槛 | dir[3]=-Y 曾误标 +Y(上)；ISO 帧（单区块+任意视角）可合法近平场，结构门槛仅对全场景帧生效 |
+
 ## v0.2 判别仪器（S6.5，PLACEMENT_FAIL 根因分离）
 
 | 仪器 | 判什么 |
@@ -53,7 +65,7 @@
 | 隔离 TLAS 对照电池 | 同一 BLAS 同一 trace_ray，ISO vs LIVE 并排打同一组 ray：ISO 命中+LIVE miss ⇒ live TLAS 组装缺陷；ISO 也 miss ⇒ BLAS 内容缺陷 |
 | 隔离渲染通道 | live 未过时用相机区块单实例 TLAS 渲染同一帧——成图即渲染链健康（即第一帧光） |
 
-另含摄取覆盖修复：v0.1 真机实测 36/157 覆盖塔缩（低 y 层首轮空试后永不再试）；v0.2 空试槽位窗口内每 2s 重试（上限 6 次）。
+另含摄取覆盖修复：v0.1 真机实测 36/157 覆盖塔缩（低 y 层首轮空试后永不再试）；v0.2 空试槽位窗口内每 2s 重试（上限 6 次）。**v0.2 真机实证：174 重建/157 BLAS/168,982 三角，y=-64..112 全 12 层——覆盖修复生效。**
 
 ## 架构
 

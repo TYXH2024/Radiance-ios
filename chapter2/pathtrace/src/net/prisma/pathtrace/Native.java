@@ -46,6 +46,20 @@ final class Native {
     /** TLAS 脏时重建（含 2.2 shading pools：逐三角颜色/法线/实例基址）。 */
     static native void frameTickNative();
 
+    /**
+     * v0.3 仪器修复：在调用（探测）线程上强制重建 TLAS + shading pools。
+     *
+     * 实证链（三轮真机，同一存档）：2.1 v0.5 的每次 ray 电池前总有探测线程上的
+     * TLAS 重建（setPlacementMode+frameTick）→ 9/14 命中；2.2 v0.1/v0.2 的 S6
+     * 直查摄取期 TLAS（探测线程上无新鲜 AS build）→ 0/6 × 两次（确定性）；
+     * v0.2 审计电池在同一 g_tlas 上、前面有 build_iso_tlas → 3/6 命中
+     * （hitPoint 27.00/91.00/6.00 与 v0.5 完全一致）。判别变量 = 探测线程上
+     * 是否刚有 AS build——机制为驱动层（同线程同 TLAS 同代码，离线不可复现），
+     * 本调用复刻已验证模式。trace_ray/castRayNative/normalize_dir 与 2.1
+     * 逐字节一致已由离线 diff 排除代码层缺陷。
+     */
+    static native void refreshTlasNative();
+
     /** 槽位是否持有就绪 BLAS。 */
     static native boolean isChunkReady(long index);
 
