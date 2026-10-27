@@ -135,3 +135,26 @@ Stage Summary:
 - Release metal-rt-probe-v0.1 更新：body 追加实测结论，上传现场判读资产
 - 2.1 场景摄取开工：摄取拓扑沿用上游 proxy/world 设计，下游从 Vulkan buffer 换 Metal 加速结构（动态 BLAS/TLAS + 增量重建）
 - 待办：①MC 1.21.4 mesh 摄取点侦察（client jar + mojmap 对准 SectionRenderDispatcher/MeshData 真实类名与 mixin 挂点）②2.1 架构设计落库 ③chapter2/scene-ingestion 首批代码 + CI + Release
+
+---
+
+## 2026-10-27（六）· 2.1 场景摄取首批交付：scene-ingestion 0.1.0（代码 + CI + Release 产线）
+
+Task: 2.0 判定 METAL_RT_OK 后按路线推进 2.1 —— 上游摄取协议解剖 → 架构设计落库 → scene-ingestion mod 全量实现 → CI 产线 → 发 Release
+
+Work Log:
+- 上游 Radiance 摄取协议解剖（本仓 src/main/java/com/radiance/，MC 1.21.4/yarn 1.21.4+build.8 与真机一致）：ChunkProxy（1766 行）链路 = BuiltChunkStorage.createChunks/scheduleRebuild mixin 事件 → 后台线程 ChunkRendererRegionBuilder.build → SectionBuilder.build(自有 ThreadLocal BlockBufferAllocatorStorage) → Map<RenderLayer,BuiltBuffer> → 裸指针数组 rebuildSingleNative(origin,index,generation,...)；上游必须自建 mesh（MC 官方 BufferAllocator 归 GL 上传路径所有）；上游 native 核为外置二进制（core.dll/libcore.so）→ iOS 移植 = 重写 native 下游，Java 协议降维复刻
+- 设计落库 docs/chapter2-scene-ingestion-design.md：与上游三个刻意差异——①轮询驱动（500ms 扫 BuiltChunkStorage，比对 BuiltChunk.data 引用/sectionPos 变化）替代 mixin 事件（延续 2.0 零 mixin/refmap/Loom 哲学，ecj 零 MC classpath）②SectionBuilder.build + 同步拷贝后即 close（免 takeChunk 所有权手术）③仅区块 BLAS/TLAS + 单线程限量（实体/远景/调度属 2.2+）；关键正确性决策：顶点 recentring（world-absolute float32 → chunk-local，TLAS instance transform=translate(origin)，float32 大坐标精度纪律）；generation 协议继承（防轮询乱序）
+- intermediary 符号表离线校验：下载 yarn 1.21.4+build.8 v2 tiny（tools/yarn-mappings），python 解析（修复 v2 javadoc 注释行 \tc 误判类声明的解析 bug）→ 全量符号（21 类 + 19 字段 + 20 方法 + 2 构造）：ChunkBuilder=class_846/BuiltChunk=class_846$class_851/SectionBuilder=class_9810/RenderData.buffers=field_52168/SectionBuilder.build=method_60904/WorldRenderer.chunks=field_4112/ClientWorld.worldRenderer=field_17780/Vec3i.getX=method_10263 等，硬编码进 Mappings.java 并做 S3 运行时逐项审计（解析失败→REFLECT_FAIL 逐符号定位）
+- Java 七类实现（chapter2/scene-ingestion/src/）：SceneIngestionMod（S0→S6 报告流水线+判定表 SCENE_INGEST_OK/SCENE_EMPTY/REFLECT_FAIL/NATIVE_FAIL/NATIVE_MISMATCH/LOAD_FAIL/EXTRACT_FAIL）/ SceneProxy（轮询+重建调度+每轮≤8+TLAS 1s 节流）/ Mappings（符号表+审计）/ Native（JNI 声明：initNative/rebuildSingleNative/invalidate/relocate/frameTick/isChunkReady/sceneStats/castRay/shutdown）/ ProbeReport（增量落盘）/ FabricEntry+FabricClientEntry（2.0 同款 watchdog + CLIENT_STARTED 反射+Proxy）
+- native 实现 metal_scene.m（~560 行）：SceneSlot 槽位类（blas/vertexBuffer/indexBuffer/origin/generation/ready）+ 槽位网格；rebuildSingleNative（顶点拼接 recentred float3 + QUADS→uint32 索引展开 + 三角 BLAS + GetDirectBufferAddress 直读）+ 退役资源延迟释放协议（旧 BLAS/buffers 进 retired 列表，新 TLAS build 完成后才 release——防在途引用悬垂）+ TLAS 动态重建（instance transform=translate(origin) 行主序 4x3）+ castRayNative（scene_trace_kernel 单 ray dispatch）+ generation 拒写过期
+- scene_trace.metal：2.0 已验证的 intersection_query API + get_committed_instance_id（instance 归因）
+- build.sh + CI（.github/workflows/chapter2-scene-ingestion.yml）：macos-26 全链构建 → JNI 三导出 nm 验证 → 幂等发预发布 Release scene-ingestion-v0.1
+- 本地 ecj 冒烟：Java 侧零错误（9 class 产出；修复 Mappings.call/get 签名 String 化 + ProbeReport fail(String,Throwable) 重载两处编译错）
+- 勘误补漏：上条目 959c5b9 提交时 docs/chapter2-metal-rt-probe-field/README.md 被 .gitignore *.md 拦截未入库（第一章 fc9b9d8 同款坑）——本次 git add -f 补齐
+- Release 更新（metal-rt-probe-v0.1）：body 追加真机实测结论段 + FIELD-REPORT-v0.1-20261027.md 资产上传（幂等脚本 scripts/update_metal_probe_release.py）
+
+Stage Summary:
+- 2.1 首批交付完整入库：设计文档 + Java 七类 + native 场景管理 + MSL kernel + build.sh + CI 产线（Release 由 CI 幂等发布 scene-ingestion-v0.1）
+- 与 2.0 的关系：同一投送通道（JAR 内置 dylib→解包→System.load）、同一 Metal 直连架构（自建 MTLDevice）；新增真实世界几何摄取与动态 BLAS/TLAS
+- 待办：①CI 过绿 + Release 资产确认 ②用户真机实测（zink 档 + 进世界 + 等 30s）回传 scene_ingestion_report.txt ③判 SCENE_INGEST_OK → 2.2 路径追踪引擎（MSL path tracer + 光照回传 + GL 纹理呈现）④若 REFLECT_FAIL 按报告逐符号修符号表 ⑤若 NATIVE_MISMATCH 排查 TLAS 变换/相机位置

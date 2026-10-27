@@ -1,0 +1,243 @@
+package net.prisma.sceneingest;
+
+import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
+import java.util.concurrent.atomic.AtomicBoolean;
+
+/**
+ * 场景摄取主控 —— Radiance 移植第二章 2.1 阶段交付物。
+ *
+ * 验证问题（docs/chapter2-scene-ingestion-design.md §6）：
+ *   Q1 真实 MC 世界几何能否进入 Metal 加速结构（BLAS/TLAS 动态重建）？
+ *   Q2 摄取计数与 GL 侧 mesh 是否一致（区块/三角形量级合理性）？
+ *   Q3 场景求交是否命中（TLAS instance + ray_query 全链路正确性）？
+ *
+ * 执行序（报告 S 段）：
+ *   S0 环境快照 → S1 解包 dylib/metallib → S2 System.load →
+ *   S3 反射符号审计（轮询路线防错段）→ S4 网格发现 → S5 摄取与构建 →
+ *   S6 场景求交验证 → VERDICT。
+ *
+ * 归因开关：-Dsceneingest.disabled=true / SCENEINGEST_DISABLED=1
+ * → 只写环境快照，零原生调用（闪退 A/B 对照）。
+ *
+ * 与 2.0 的关键差异：本阶段在**进入世界后**持续运行（轮询摄取），因此
+ * CLIENT_STARTED 只是启动等待线程；真正的摄取在 mc.world != null 后开始。
+ */
+public final class SceneIngestionMod {
+
+    public static void main(String[] args) {
+        runAll("standalone-main");
+    }
+
+    private static final AtomicBoolean STARTED = new AtomicBoolean(false);
+
+    static void runAll(String triggerSource) {
+        if (!STARTED.compareAndSet(false, true)) {
+            return;
+        }
+        ProbeReport r = new ProbeReport("scene_ingestion_report.txt");
+        r.header("场景摄取探针 (scene-ingestion 0.1.0)");
+        r.info("触发方式: " + triggerSource);
+
+        if (isDisabled()) {
+            r.stage("S0 环境快照（探针已禁用: sceneingest.disabled）");
+            envSnapshot(r);
+            r.finish("-", "探针被 sceneingest.disabled 禁用，本次未解包/未装载/未执行任何原生调用。"
+                    + "用途：闪退归因对照。");
+            return;
+        }
+
+        r.stage("S0 环境快照");
+        envSnapshot(r);
+
+        // ---- S1 解包 ----
+        r.stage("S1 解包原生资产（JAR -> game 目录）");
+        Path dir = Paths.get(System.getProperty("user.dir", "."), "sceneingest");
+        Path dylib;
+        Path metallib;
+        try {
+            Files.createDirectories(dir);
+            dylib = extract("/sceneingest/libradiance_scene.dylib", dir);
+            metallib = extract("/sceneingest/scene_trace.metallib", dir);
+            r.pass("解包完成: " + dylib + " (" + Files.size(dylib) + " B)");
+            r.info("metallib: " + metallib + " (" + Files.size(metallib) + " B)");
+        } catch (Throwable t) {
+            r.fail("S1 解包失败（JAR 资产缺失或目录不可写）", t);
+            r.finish("EXTRACT_FAIL", "原生资产解包失败。附整份报告回报。");
+            return;
+        }
+
+        // ---- S2 装载 ----
+        r.stage("S2 System.load 装载 dylib（投送通道验证）");
+        try {
+            System.load(dylib.toAbsolutePath().toString());
+            r.pass("dylib 装载成功（与 2.0 相同的受信装载链）");
+        } catch (Throwable t) {
+            r.fail("S2 dylib 装载失败", t);
+            r.finish("LOAD_FAIL", "System.load 失败。附整份报告回报。");
+            return;
+        }
+
+        // ---- S3 反射符号审计 ----
+        r.stage("S3 反射符号审计（intermediary 符号表逐项解析）");
+        boolean symbolsOk;
+        try {
+            symbolsOk = Mappings.resolveAll(r);
+        } catch (Throwable t) {
+            r.fail("S3 符号审计异常", t);
+            symbolsOk = false;
+        }
+        if (!symbolsOk) {
+            r.finish("REFLECT_FAIL", "存在未解析符号（共 " + Mappings.FAILURES.size()
+                    + " 个，报告已逐项列出）。原因：yarn 1.21.4+build.8 符号表与真机"
+                    + "运行时不一致，或 MC 版本非 1.21.4。附整份报告回报。");
+            return;
+        }
+        r.pass("符号表全量解析通过（" + Mappings.RESOLVED.size() + " 项）");
+
+        // ---- S4/S5 网格发现 + 摄取（SceneProxy 主循环阻塞运行）----
+        r.stage("S4/S5 网格发现与摄取（轮询 500ms，等待进入世界）");
+        SceneProxy proxy = new SceneProxy(r, metallib.toAbsolutePath().toString());
+        try {
+            proxy.run();
+        } catch (Throwable t) {
+            r.fail("摄取主循环异常", t);
+            r.finish("NATIVE_FAIL", "摄取循环异常终止。附整份报告回报。");
+            return;
+        }
+
+        // ---- 统计与 S6 ----
+        r.stage("S5 统计汇总");
+        long[] stats;
+        try {
+            stats = Native.sceneStatsNative();
+        } catch (Throwable t) {
+            r.fail("sceneStatsNative 异常", t);
+            r.finish("NATIVE_FAIL", "场景统计读取失败。附整份报告回报。");
+            return;
+        }
+        long readyBlas = stats[0];
+        long totalTris = stats[1];
+        long totalVerts = stats[2];
+        long tlasBuilds = stats[3];
+        long blasBuilds = stats[4];
+        long vertexBytes = stats[5];
+        long indexBytes = stats[6];
+        long tlasBytes = stats[7];
+        r.info(String.format("Java 侧: polls=%d rebuilds=%d invalidations=%d relocations=%d "
+                        + "非空区块=%d",
+                proxy.polls, proxy.rebuilds, proxy.invalidations, proxy.relocations,
+                proxy.nonEmptyChunks));
+        r.info(String.format("Native 侧: readyBLAS=%d BLAS构建=%d TLAS重建=%d",
+                readyBlas, blasBuilds, tlasBuilds));
+        r.info(String.format("几何: 三角形=%d 顶点=%d 顶点缓冲=%.1f KB 索引缓冲=%.1f KB "
+                        + "TLAS=%.1f KB",
+                totalTris, totalVerts, vertexBytes / 1024.0, indexBytes / 1024.0,
+                tlasBytes / 1024.0));
+
+        r.stage("S6 场景求交验证（相机位置 6 向 ray，maxDist 512）");
+        float[] cam;
+        try {
+            cam = cameraPos();
+        } catch (Throwable t) {
+            r.fail("相机位置读取失败（反射）", t);
+            cam = null;
+        }
+        int hits = 0;
+        if (cam != null && tlasBuilds > 0) {
+            r.pass(String.format("相机位置: (%.2f, %.2f, %.2f)", cam[0], cam[1], cam[2]));
+            float[][] dirs = {
+                {1, 0, 0}, {-1, 0, 0}, {0, 1, 0}, {0, -1, 0}, {0, 0, 1}, {0, 0, -1},
+            };
+            String[] names = {"+X", "-X", "+Y(上)", "-Y(下)", "+Z", "-Z"};
+            for (int i = 0; i < dirs.length; i++) {
+                try {
+                    float[] res = Native.castRayNative(
+                            cam[0], cam[1], cam[2], dirs[i][0], dirs[i][1], dirs[i][2], 512f);
+                    if (res != null && res[0] > 0.5f) {
+                        hits++;
+                        r.pass(String.format("ray %s: HIT distance=%.2f (instance=%d)",
+                                names[i], res[1], (int) res[2]));
+                    } else {
+                        r.info("ray " + names[i] + ": miss（512 格内无几何）");
+                    }
+                } catch (Throwable t) {
+                    r.fail("castRay " + names[i] + " 异常: " + t);
+                }
+            }
+        } else if (cam == null) {
+            r.info("相机不可读（未进世界？）——跳过 S6");
+        } else {
+            r.info("TLAS 尚未构建（无就绪几何）——跳过 S6");
+        }
+
+        // ---- 判定 ----
+        String verdict;
+        String message;
+        if (readyBlas >= 1 && totalTris > 0 && hits >= 1) {
+            verdict = "SCENE_INGEST_OK";
+            message = "真实世界几何已进入 Metal 加速结构且可求交：ready BLAS=" + readyBlas
+                    + "，三角形=" + totalTris + "，命中 ray " + hits + "/6。"
+                    + "2.1 场景摄取成立 —— 2.2 路径追踪引擎绿灯。";
+        } else if (readyBlas >= 1 && totalTris > 0) {
+            verdict = "NATIVE_MISMATCH";
+            message = "BLAS 就绪且三角形非零，但 6 向 ray 全 miss（相机悬空/虚空世界？"
+                    + "若确认站在地面则需回报排查 TLAS instance 变换）。"
+                    + "ready BLAS=" + readyBlas + "，三角形=" + totalTris + "。";
+        } else {
+            verdict = "SCENE_EMPTY";
+            message = "摄取窗口内无就绪 BLAS（未进入世界，或区块 mesh 始终为空）。"
+                    + "请进入存档后重试并等待 30 秒。";
+        }
+        r.finish(verdict, message);
+
+        // ---- 收尾释放 ----
+        try {
+            Native.shutdownNative();
+        } catch (Throwable ignored) {
+        }
+    }
+
+    private static float[] cameraPos() throws Exception {
+        Object mc = Mappings.call(null, Mappings.C_MC, Mappings.M_MC_GET_INSTANCE);
+        Object gameRenderer = Mappings.get(mc, Mappings.C_MC, Mappings.F_MC_GAME_RENDERER);
+        Object camera = Mappings.get(gameRenderer, Mappings.C_GAME_RENDERER, Mappings.F_CAMERA_POS);
+        Object pos = Mappings.call(camera, Mappings.C_CAMERA, Mappings.M_CAMERA_GET_POS);
+        float x = ((Double) Mappings.get(pos, Mappings.C_VEC3D, Mappings.F_VEC3D_X)).floatValue();
+        float y = ((Double) Mappings.get(pos, Mappings.C_VEC3D, Mappings.F_VEC3D_Y)).floatValue();
+        float z = ((Double) Mappings.get(pos, Mappings.C_VEC3D, Mappings.F_VEC3D_Z)).floatValue();
+        return new float[] {x, y, z};
+    }
+
+    private static boolean isDisabled() {
+        return Boolean.getBoolean("sceneingest.disabled")
+                || "1".equals(System.getenv("SCENEINGEST_DISABLED"));
+    }
+
+    private static void envSnapshot(ProbeReport r) {
+        r.info("java.version  = " + System.getProperty("java.version"));
+        r.info("java.vm.name  = " + System.getProperty("java.vm.name"));
+        r.info("os.name       = " + System.getProperty("os.name") + " / "
+                + System.getProperty("os.arch"));
+        r.info("user.dir      = " + System.getProperty("user.dir"));
+        r.info("AMETHYST_RENDERER = " + System.getenv("AMETHYST_RENDERER"));
+        r.info("GALLIUM_DRIVER     = " + System.getenv("GALLIUM_DRIVER"));
+        r.info("pojav.lwjgl.version = " + System.getProperty("pojav.lwjgl.version"));
+        r.info("org.lwjgl.opengl.libname = " + System.getProperty("org.lwjgl.opengl.libname"));
+        r.info("org.lwjgl.vulkan.libname = " + System.getProperty("org.lwjgl.vulkan.libname"));
+    }
+
+    private static Path extract(String resource, Path dir) throws Exception {
+        Path out = dir.resolve(Paths.get(resource).getFileName());
+        try (InputStream in = SceneIngestionMod.class.getResourceAsStream(resource)) {
+            if (in == null) {
+                throw new IllegalStateException("JAR 资产缺失: " + resource);
+            }
+            Files.copy(in, out, StandardCopyOption.REPLACE_EXISTING);
+        }
+        return out;
+    }
+}

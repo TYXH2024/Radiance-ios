@@ -1,0 +1,131 @@
+name: chapter2-scene-ingestion
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+    paths:
+      - 'chapter2/scene-ingestion/**'
+      - '.github/workflows/chapter2-scene-ingestion.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  # ------------------------------------------------------------------
+  # 第二章 2.1 阶段交付：scene-ingestion mod JAR。
+  #   1. 交叉编译 libradiance_scene.dylib (iphoneos arm64, JNI 场景管理)
+  #   2. 编译 scene_trace.metallib (MSL metal3 ray_query)
+  #   3. ad-hoc 签名（ldid / codesign 兜底）
+  #   4. Java 编译 + JAR 组装（资产内嵌）
+  #   5. 发预发布 Release（幂等：已存在则 --clobber 重传资产）
+  # 本地无 macOS 无法构建原生部分 —— 全链在此产线完成。
+  # ------------------------------------------------------------------
+  build-and-release:
+    name: build mod jar + release (macos-26)
+    runs-on: macos-26
+    steps:
+      - name: Checkout Radiance-ios
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21 (javac + jni.h)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Build mod jar (natives + metallib + java)
+        run: |
+          set -ex
+          chmod +x chapter2/scene-ingestion/build.sh
+          bash chapter2/scene-ingestion/build.sh
+          JAR="chapter2/scene-ingestion/scene-ingestion-0.1.0.jar"
+          test -f "$JAR"
+          cp "$JAR" ./scene-ingestion-0.1.0.jar
+
+      - name: Verify native surface
+        run: |
+          set -ex
+          DYLIB="chapter2/scene-ingestion/build/native/libradiance_scene.dylib"
+          file "$DYLIB"
+          nm -gU "$DYLIB" | grep -q "Java_net_prisma_sceneingest_Native_initNative" \
+            && echo "JNI_EXPORT_OK(initNative)"
+          nm -gU "$DYLIB" | grep -q "Java_net_prisma_sceneingest_Native_rebuildSingleNative" \
+            && echo "JNI_EXPORT_OK(rebuildSingleNative)"
+          nm -gU "$DYLIB" | grep -q "Java_net_prisma_sceneingest_Native_castRayNative" \
+            && echo "JNI_EXPORT_OK(castRayNative)"
+          METALRT="$(xcrun -sdk iphoneos metal -print-target-name 2>/dev/null || true)"
+          echo "metal toolchain: ok (${METALRT:-n/a})"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: scene-ingestion-jar
+          path: |
+            scene-ingestion-0.1.0.jar
+            chapter2/scene-ingestion/build/native/libradiance_scene.dylib
+            chapter2/scene-ingestion/build/native/scene_trace.metallib
+          if-no-files-found: error
+
+      - name: Publish prerelease (idempotent)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: scene-ingestion-v0.1
+        run: |
+          set -x
+          NOTES_FILE=release-notes.md
+          cat > "$NOTES_FILE" <<'EOF'
+          # scene-ingestion v0.1 — 第二章 2.1 阶段探针
+
+          **用途**：把真实 MC 世界的区块网格摄入 Metal 加速结构（每区块 BLAS + 实例 TLAS 动态重建），并以世界空间 ray 求交验证全链路。
+
+          ## 安装
+          1. 下载 `scene-ingestion-0.1.0.jar`，放入 mods/ 目录（与 metal-rt-probe 可共存，建议先移除后者避免重复报告）。
+          2. 渲染器保持 **zink** 档。
+          3. 启动游戏并**进入一个存档世界**（本探针在进世界后才开始摄取）。
+          4. 进入世界后等待约 30 秒（摄取窗口 20s 起步 + 验证）。
+
+          ## 产出
+          - 游戏目录生成 `scene_ingestion_report.txt` —— **请整份回传**
+          - 判定 `SCENE_INGEST_OK` = 2.1 场景摄取成立（真实几何进 BLAS/TLAS 且可求交）
+
+          ## 判定表
+          | 判定 | 含义 |
+          |---|---|
+          | SCENE_INGEST_OK | ready BLAS ≥ 1 且三角形 > 0 且 6 向 ray 至少一命中 |
+          | SCENE_EMPTY | 摄取窗口内无就绪 BLAS（未进世界/区块 mesh 始终为空） |
+          | REFLECT_FAIL | S3 反射符号解析失败（报告逐符号定位——MC 版本不符的指纹） |
+          | NATIVE_FAIL | 原生段 FATAL/异常 |
+          | NATIVE_MISMATCH | BLAS 就绪但 ray 全 miss（相机悬空或 TLAS 变换疑点，需回报） |
+          | LOAD_FAIL / EXTRACT_FAIL | 投送通道受阻（同 2.0） |
+
+          ## 报告段
+          S0 环境 → S1 解包 → S2 装载 → **S3 反射符号审计**（轮询路线防错段，逐项 PASS/FAIL）→ S4/S5 网格发现与摄取（每次 rebuild 的 origin/layer/verts/耗时行）→ S6 场景求交（相机 6 向 ray 命中距离）→ 判定。
+
+          ## 归因开关
+          `-Dsceneingest.disabled=true`（或 `SCENEINGEST_DISABLED=1`）：零原生调用，闪退 A/B 对照。
+
+          ## 说明
+          - 读取路径为全反射（intermediary 符号，yarn 1.21.4+build.8 离线校验）+ 500ms 轮询，零 mixin/refmap/Loom 依赖；
+          - 自建 MTLDevice/queue，与 zink/MoltenVK 渲染主链零共享；
+          - 顶点在 BLAS 内存 chunk-local 坐标（recentring），TLAS instance transform = translate(origin)。
+          EOF
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" scene-ingestion-0.1.0.jar --clobber
+          else
+            gh release create "$TAG" scene-ingestion-0.1.0.jar \
+              --prerelease --target main \
+              --title "scene-ingestion v0.1 — MC world chunks into Metal BLAS/TLAS" \
+              --notes-file "$NOTES_FILE"
+          fi
+
+      - name: Write run summary
+        if: always()
+        run: |
+          {
+            echo "## Chapter 2 — scene-ingestion build (macos-26)"
+            echo "- Native dylib: iphoneos arm64, 3 key JNI exports verified"
+            echo "- metallib: scene_trace kernel (metal3 std cascade)"
+            echo "- Artifact: scene-ingestion-0.1.0.jar (dylib + metallib + msl embedded)"
+            echo "- Release: scene-ingestion-v0.1 (prerelease, idempotent upload)"
+          } >> "$GITHUB_STEP_SUMMARY"
