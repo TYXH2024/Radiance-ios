@@ -197,3 +197,63 @@ Stage Summary:
 - **2.1 核心已真机验证**：真实 MC 世界几何 → Metal BLAS/TLAS 动态重建链路成立（Q1/Q2 有答案）；剩余 S6 世界空间求交（Q3）待 v0.3 修复后闭环
 - v0.3.0 三修复：TLAS 布局（关键正确性）/ S6 相机（审计+缓存）/ 积压排空（全量摄取）
 - 待办：①CI 过绿 + Release scene-ingestion-v0.3 确认 ②用户真机复测（进存档停留 30–40s，报告出现 shutdown 后可退出）③判 SCENE_INGEST_OK → 2.2 路径追踪引擎 ④若 NATIVE_MISMATCH 复现（布局已修）→ 排查相机悬空/虚空世界或回报 ⑤若 CAMERA_FAIL → 回报（理论不应出现）
+
+## 2026-10-27（九）· v0.3 真机回收 NATIVE_MISMATCH 六向全 miss → 根因定谳：v0.3 自身把矩阵平移搬错位置（二次回归）→ v0.4.0 诊断矩阵发布
+
+Task: 回收 v0.3.0 真机报告（六向 ray 全 miss + 哨兵位码 4）→ 定位 v0.3"修复"实为回归 → v0.4.0
+
+Work Log:
+- 真机报告存证 docs/chapter2-scene-ingestion-field/M3-v0.3.0-report.txt：S3 全过、摄取链健康（157 BLAS/36k 三角），但 S6 六向全 miss 且哨兵位码 4（单位+平移实例均 miss）→ 指向实例矩阵编码而非场景数据
+- 根因定谳（Apple 文档 + 数学推导）：`MTLPackedFloat4x3` = 4×4 前三行、**列主序**、平移在 **flat[9..11]**；v0.3 把 simd_float3x4 行主序误读当定谳，把平移写到 flat[3]/[7]/[11]——把 v0.2 修掉的炸弹换了引信再埋回去；v0.2 的原始错误才是行主序 flat[3]/[7]/[11]，v0.3 应恢复的是 v0.1 时代的 flat[9..11]
+- v0.4.0：encode_instance_matrix 恢复 `[1,0,0, 0,1,0, 0,0,1, tx,ty,tz]`；新增顶点空间诊断矩阵（S6.0 相机回显 → S6.1 哨兵隔离 TLAS（单位/平移/阴性对照三实例）→ S6.2 raw-AABB 审计（ABS 票 vs 局部族票）→ S6.3 双假设锦标赛（ABS t=origin vs MEASURED t=2·origin−R）→ S6.4 自动选优 + 14 ray 终验带命中归因）；新判定 SENTINEL_FAIL / EXTRACTION_GARBAGE；ecj 冒烟 smoke_sceneingest_v04.sh 9 类零错误；Release scene-ingestion-v0.4
+- 真机回收（M3-v0.4.0-report.txt）：raw AABB 全 ≈[0..16]、ABS 票=0/局部族票=80/garbage=0 → **顶点为 section 局部坐标定谳**；MEASURED 胜出（5/6），终验 13/14 判 SCENE_INGEST_OK；但哨兵 FAIL（位码 4）与 R 修正 y 偏置两处未闭环——用户指令零粉饰，继续追
+
+Stage Summary:
+- 实例矩阵布局终定谳 flat[9..11]（v0.4 真机 13/14 反证）；顶点空间终定谳 section-local
+- 未决：哨兵 FAIL（高置信=仪器缺陷）与 MEASURED R 的 −2.1 y 偏置 → v0.5
+
+## 2026-10-27（十）· v0.4 两处缺陷离线定谳（哨兵 fixture stride 失配 + R 中位数估计器偏置）→ v0.5.0 仪器修复 → 真机 SCENE_INGEST_OK，2.1 闭环
+
+Task: 零粉饰追哨兵 FAIL 与 R y 偏置 → v0.5.0 → 真机复验收口 2.1
+
+Work Log:
+- 哨兵 FAIL 根因：v0.4 哨兵顶点按 `float[3][3]` 打包（实际 stride 12 B）而几何描述符声明 `vertexStride=sizeof(simd_float3)=16 B`——顶点 1 读成 (0,0,0)、顶点 2 越界 → BLAS 编码出退化三角形 → 两阳 ray 必 miss；真实场景路径不受影响（顶点缓冲恒为精确 simd_float3 数组——终验 13/14 即实例机制的实证），纯仪器缺陷
+- R y 偏置根因：v0.4 用远槽 e=rawCenter−8 的**中位数**估 R，实测 (0,−2.07,0)——但部分高度 section 的 rawCenter 拖低中位数；整数面证据（扣除偏移后 +Y 93.07→91.00、−Y 19.07→17.00，X/Z 本就精确）+ 眼高交叉验证 92.62=91.00+1.62 → 真实 R=(0,0,0)
+- v0.5.0 三修：①哨兵 fixture 改 `simd_float3[3]`（48 B stride 匹配）+ GPU 读回回显行自证字节 ②R 估计改**包围盒判定**（全局 raw AABB ⊆ [−1..17]³ → SECTION-LOCAL，R=(0,0,0) 精确；中位数仅回退）③每条命中 ray 回显 hitPoint 世界坐标（整数格线 = 零系统偏移自证）；判定语义零放宽（OK 仅来自真实 ray 命中，哨兵独立上报）
+- 真机回收（M3-v0.5.0-report.txt）：哨兵 3/3 PASS（vert readback 48 B/stride 16 自证）、包围盒判定 SECTION-LOCAL R=(0,0,0) 精确、hitPoint 落整数格线（27.00/91.00/6.00）、终验 9/14 → **SCENE_INGEST_OK，2.1 正式闭环，2.2 绿灯**
+- 9/14 vs v0.4 13/14 非回退：v0.4 的 −2.07 y 偏置曾把本应 miss 的方向（−X/+Y/+Z 等）错报为命中；v0.5 零偏置后 miss 方向与相机所在 section (16,80,0) 的开放侧几何自洽
+
+Stage Summary:
+- 2.1 全部验证问题闭环；2.2 契约盖章：顶点 section-local 原样入库 + TLAS instance = translate(origin)（免 recentring 等价简化）
+- 交付：Release scene-ingestion-v0.5（scene-ingestion-0.5.0.jar）
+
+## 2026-10-27（十一）· 2.2 pathtrace v0.1 首发：摄取链 fork + 顶点色 albedo + 全链路径追踪 + 离屏 PNG + CI 三修
+
+Task: 2.2 第一版——路径追踪引擎首帧
+
+Work Log:
+- 摄取链 fork 自 2.1 四连真机验证骨架，三处外科手术：①顶点 COLOR 提取（VertexFormat.getOffset(COLOR) 动态解析，MC 方块染色烘进顶点色 = path tracer albedo）②摆放简化（section-local 原样 + t=origin）③TLAS 随建 shading pools（逐三角 3 色 + CPU 法线 + 实例基址表）
+- pathtrace_kernel（MSL metal3 ray_query）：相机 ray → TLAS → 重心插值 albedo → 太阳直射 + 阴影 ray → cosine 加权漫反射弹射 → spp 累积 → Reinhard + gamma → RGBA8；atomic 计数器回读吞吐（实测非估算）
+- S6 摆放抽查（哨兵 + 相机 + 整数格线）+ S7 离屏渲染 480×270/24spp/2bounces + PngWriter 手写零依赖编码器 + 图像统计自证；七档判定 PATHTRACE_OK/PLACEMENT_FAIL/RENDER_FAIL/IMAGE_DEGENERATE/SENTINEL_FAIL/SCENE_EMPTY/CAMERA_FAIL；归因开关 -Dpathtrace.disabled
+- CI 三修（logs 取证）：heredoc 缩进必须对齐 YAML block-scalar / simd_sub 无 float3 重载（vsub 助手）/ intersection_query API 名 clang 纠正为 get_committed_triangle_barycentric_coord
+- 交付：Release pathtrace-v0.1（pathtrace-0.1.0.jar）
+- 待办：真机首跑回收（pathtrace_report.txt + pathtrace_frame.png）
+
+Stage Summary:
+- 2.2 代码全量进仓 + Release 产线走通；真机验证待回收
+
+## 2026-10-28（十二）· 交付通道事故归因（pathtrace workflow 漏 artifact 步骤 + 取消运行遗留草稿）→ v0.1.1 补齐成品文件交付
+
+Task: 用户手动 dispatch chapter2-pathtrace 绿勾但运行页找不到 jar（"绿勾了没看见哪里有 0.1"）→ 取证归因 → 修复交付通道
+
+Work Log:
+- 取证（GitHub API + 运行日志）：①14:37 push 运行被取消时 `gh release create` 已建**草稿**未挂资产未发布——Releases 页不可见（草稿区不显眼），且 `gh release view` 查不到草稿 ②用户 15:13 手动 dispatch 又取消；16:20 再 dispatch 绿勾——运行日志实证 release 步骤走 view 失败→create 成功路径，16:21:23 发布 pathtrace-v0.1 + jar（下载计数 0——用户没找到）③根因：chapter2-pathtrace.yml **遗漏 Upload artifacts 步骤**（2.0 metal-probe / 2.1 scene-ingestion 均有：metal-rt-probe-jar / scene-ingestion-jar）——绿勾运行页 Artifacts 区为空
+- 修复：chapter2-pathtrace.yml 对齐 2.0/2.1 模式补 `actions/upload-artifact@v4`（name: pathtrace-jar；jar + dylib + metallib；if-no-files-found: error）——每次绿勾运行页必有成品就地可下；Release 仍为正式交付（双轨）；Release 步骤加草稿自愈注释（create 分支已被 16:21 日志实证可自愈）
+- 补 chapter2/pathtrace/README.md（首发漏写）：双通道取件说明（运行页 Artifacts / Release 页）+ 使用 + 判定表 + 架构
+- WORKLOG 断更回填（九~十一，v0.4.0 / v0.5.0 / pathtrace v0.1 三段）
+- 注意：本次推送触发 chapter2-pathtrace（自身 yml + pathtrace/**）与 chapter2-metal-probe（chapter2/** 通配）两条产线，均为幂等 clobber 重传
+
+Stage Summary:
+- 交付通道修复：绿勾 = 运行页 Artifacts 区可直接下载 pathtrace-jar（zip 含 jar/dylib/metallib）；jar 亦在 https://github.com/TYXH2024/Radiance-ios/releases/tag/pathtrace-v0.1
+- 事故链定谳：取消运行 → 草稿不可见 + 漏 artifact 步骤 → 运行页无成品；两者均已处置
+- 待办：①新运行过绿 + Artifacts 区确认 ②用户下载 pathtrace-0.1.0.jar 真机首跑 → 回收报告 + 首帧 PNG

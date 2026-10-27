@@ -20,7 +20,9 @@ jobs:
   #      + pathtrace_kernel 全链路径追踪)
   #   3. ad-hoc 签名（ldid / codesign 兜底）
   #   4. Java 编译 + JAR 组装（资产内嵌）
-  #   5. 发预发布 Release（幂等：已存在则 --clobber 重传资产）
+  #   5. 运行页上传成品 artifact（jar + dylib + metallib）—— 绿勾即可就地下载
+  #      （v0.1 首发遗漏此步致运行页无成品，v0.1.1 补齐对齐 2.0/2.1 模式）
+  #   6. 发预发布 Release（幂等：已存在则 --clobber 重传资产）
   # 本地无 macOS 无法构建原生部分 —— 全链在此产线完成。
   # ------------------------------------------------------------------
   build-and-release:
@@ -44,6 +46,16 @@ jobs:
           JAR="chapter2/pathtrace/pathtrace-0.1.0.jar"
           test -f "$JAR"
           cp "$JAR" ./pathtrace-0.1.0.jar
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: pathtrace-jar
+          path: |
+            pathtrace-0.1.0.jar
+            chapter2/pathtrace/build/native/libradiance_pathtrace.dylib
+            chapter2/pathtrace/build/native/pathtrace.metallib
+          if-no-files-found: error
 
       - name: Verify native surface
         run: |
@@ -76,6 +88,9 @@ jobs:
           file "$METALLIB"
           test -s "$METALLIB"
 
+      # 注意：中途被取消的运行可能遗留未发布的草稿 Release（gh release view
+      # 对草稿不可见）；下方 create 分支可自愈（2026-10-27 16:21 运行日志实证）。
+      # 运行页 artifact（上一步）不受此影响——绿勾必有成品。
       - name: Release (pathtrace-v0.1, prerelease)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
