@@ -391,3 +391,22 @@ Stage Summary:
 - v0.4.4 判读定谳：黑屏修复闭环（四件套全胜）；毒化=时间级（新建 AS ~2s 内被原地打坏，线程无关）+ 稳定部分态（相机本地一小片幸存）；S8.7 未触发=阈值 bug 而非条件错
 - v0.4.5 交付：pathtrace-v0.4.5——普查/审计/健康监视器三仪 + 自愈阈值修复；下一轮真机判读焦点：[tlas-health] 死亡时刻与事件关联、[census] 幸存地图模式、[audit] 共享侧 vs GPU 私有侧、[S8.7] 自愈周期、三轮二分（默认/atlas=false/compose=false）存活分流
 - 待办：①CI 过绿 + Release pathtrace-v0.4.5 ②用户三轮 60s 真机（同存档同姿态）③据 [census]/[audit]/二分结果定 v0.4.6 定点修复（若 atlas 链坐实→修采集；若 GPU 私有侧→考虑分配隔离/驱动层绕行）④M3 复测一轮对照（设备特异性排查）
+
+## 2026-10-29（二十）· pathtrace v0.4.5 六份真机回收判读：相机段被数组序饿死（同根因三症状定谳）→ v0.4.6 摄取优先级重写
+
+Task: 回收 v0.4.5 真机产物（归档.zip：A20 Pro×3 + M3×3 六份 report/log/快照，用户观察"视角附近四五格的方块不渲染，难道就是之前检测不到脚底的原因？"）→ 判读 → v0.4.6
+
+Work Log:
+- **v0.4.5 CI/Release 遗留闭环**：workflow 40694441254 success；pathtrace-v0.4.5 Release 资产 pathtrace-0.4.5.jar（111911 B）已上传 ✓
+- **M3_1 无 report**：日志终于 00:20:37 GL_INVALID_ENUM（OSMesa 已知噪声）+ fatal_trace exit(0) backtrace=用户未进世界即手动关闭；有效报告 5 份（A20×3 + M3×2）。设备命名本轮准确（[scene] 行 device=Apple A20 Pro GPU / Apple M3 GPU 各自验证）
+- **三症状同根因定谳**：①用户"眼前四五格不渲染" ②v0.4.4 起"检测不到脚底" ③[tlas-health] t=0.01s 死亡（-Y 金丝雀 miss）——同源：**相机自己所在的区块段从未进入 TLAS**。证据链：相机 pos=(2.50,81.62,-5.50)→相机段 (0,80,-16)，六份报告全部 `camera section (0,80,-16) not ready — nearest ready origin=(0,80,0) @ 16.0 blocks`（M3 相机 (8.50,77.62,-5.50)→(0,64,-16) 同样 not ready）；探针电池 +Z 命中点 (2.41,81.62,1.00) 恰踩缺失条带边界 z=0（相机 z=-5.41，眼前 5.4 格 void 与用户"四五格"精确吻合）；-Y 脚下地板在 (0,64..80,-16) 段内永不命中
+- **z 覆盖铁证**：五份报告 rebuild origin 的 z 值全部 ≥0（0/16/32/…/96 随运行时长外扩），**零负 z**；x 却对称覆盖 -128..+128——不对称性指向 vanilla 槽位布局而非世界内容
+- **槽位布局反推（index↔origin 拟合）**：1.21.4 BuiltChunkStorage 实测 index = relZ·408 + relY·17 + relX（z 为最外层轴！），relX/relZ 均为 floorMod 回绕（slot 0..8=center+0..+8，slot 9..16=center-8..-1——负半轴排行尾）。存储中心 z=0 而相机 chunk z=-1 ⇒ 相机段落 relZ=16=**整个数组最后 408 槽**（x=0 对称纯属相机恰好居中 x）
+- **饿死机制**：SceneProxy 按数组序扫描、每轮取前 16 个 dirty（含沿途 mesh 空区块）；真机 meshing 实测吞吐 ~5-6 段/s，35s FORCE_READY 收口时积压 5648-6667（六份"摄取窗口完成"行），推进仅到 index≈1300（z=+96 行）——relZ 9..16 行（z=-128..-16，含相机段/脚下段）永不摄取。旧判读修正：v0.4.4"残存 camHit 0.6%=相机本地幸存带"其实是反的——**幸存的是远处带，死的是相机带**
+- **v0.4.6 修复（SceneProxy 摄取选择重写）**：扫描阶段只收集 dirty 候选（保序=数组序回退），选择阶段按【相机到 section AABB [origin,origin+16) 的 clamp 距离】近先排序（相机自身段=0 必然首轮入选、26 邻居次之、远处按距离补齐；对 vanilla 中心漂移/回绕布局免疫）；origin 带 index 级缓存（sectionPos 变化即失效，首轮 ~30ms 后近零开销）；预算按成功数计（空试不占名额）；新增证据行 [camera-first]（相机段摄取即回显，真机直接验证）
+- 冒烟：ecj 14 类零错误（-source 8 与产线一致）/ 剥离注释字符串后括号平衡 101:101、313:313 / workflow 引用全 0.4.6 零残留；版本链 bump 0.4.6（fabric.mod.json/build.sh/报告头/workflow TAG+jar 名+release notes）；现场归档 A20Pro-v0.4.5-run{1,2,3} + M3-v0.4.5-run{2,3}
+
+Stage Summary:
+- v0.4.5 判读定谳：相机段饿死（数组序+回绕布局+35s 窗口三件套）；"眼前 void/脚底检测不到/tlas-health t=0 死亡"三症状同根因；[census]/[audit] 毒化追凶仪器的既望结论需按此重读（"幸存带"方向修正）
+- v0.4.6 交付：pathtrace-v0.4.6——摄取相机距离近先；预期真机：[camera-first] 行出现、S6 `camera section not ready` 消失、-Y 金丝雀命中、眼前 void 消失、camHit 稳定不归零
+- 待办：①CI 过绿 + Release pathtrace-v0.4.6 ②用户同存档同姿态 60s 真机回报（重点 [camera-first]/[tlas-health]/[live] camHit）③毒化判读若仍现（camHit 归零），用 v0.4.5 三仪在**修复后的相机带**上重新定谳 ④2.4 事件驱动摄取（mixin 化 SceneProxy——TLAS 冻结于摄取窗口的架构限制一并解除）

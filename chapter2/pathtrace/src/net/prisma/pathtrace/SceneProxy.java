@@ -22,6 +22,18 @@ import java.util.concurrent.atomic.AtomicLong;
  *
  * 与上游的刻意差异（设计 §2）：轮询 vs mixin 事件；同步拷贝后即 close vs
  * takeChunk 所有权转移；单线程限量 vs 双池重要度调度。
+ *
+ * v0.4.6 根因修复（v0.4.5 六份真机日志定谳）：摄取选择从【数组序】改为
+ * 【相机距离近先】。vanilla BuiltChunkStorage 的槽位索引是 floorMod 回绕
+ * 布局（实测 1.21.4：index = relZ*408 + relY*17 + relX，relX/relZ 各自把
+ * 负半轴排在行尾）——相机在 z=-5.5（section z=-16）而存储中心 z=0 时，
+ * 相机段落在 relZ=16 即整个数组的最后 408 槽。旧逻辑按数组序每轮取前
+ * 16 个 dirty，真机 35s 窗口只推进到 index≈1300（z=+96 行）：相机段 /
+ * 脚下段（(0,80,-16)/(0,64,-16)）永不摄取 ⇒ 眼前 z∈[-16,0) void（用户
+ * 实测“眼前四五格不渲染”＝相机 z=-5.41 到条带边界 z=0 的 5.4 格）、-Y
+ * 金丝雀 miss（“检测不到脚底”）、[tlas-health] t=0.01s 死亡——三者同源。
+ * 修复后按 origin 的 AABB-clamp 距离排序，相机段距离 0 必然首轮入库，
+ * 周围 26 邻居次之，远处按距离补齐（对 vanilla 中心漂移/回绕免疫）。
  */
 final class SceneProxy {
 
@@ -50,6 +62,13 @@ final class SceneProxy {
     /** v0.3：摄取期相机位置缓存（每轮刷新；S6 容错——用户可能在窗口结束后
      * 立即退出世界，此时直读相机可能拿到重置后的 Camera）。 */
     volatile float[] lastCameraPos;
+
+    /** v0.4.6：距离优先策略回显（一次）。 */
+    private boolean priorityEchoed = false;
+    /** v0.4.6：相机段首次摄取回显（一次）。 */
+    private boolean cameraSectionEchoed = false;
+    /** v0.4.6：槽位 origin 缓存（index → {ox,oy,oz}；sectionPos 变化时失效）。 */
+    private final Map<Integer, int[]> originCache = new java.util.concurrent.ConcurrentHashMap<>();
 
     // 统计
     int polls = 0;
@@ -152,10 +171,13 @@ final class SceneProxy {
                 firstGridInit(chunks.length, storage);
             }
 
-            // 扫描脏区块（data 引用变化 / sectionPos 变化 / 从未摄取）
+            // 扫描脏区块（data 引用变化 / sectionPos 变化 / 从未摄取）。
+            // v0.4.6：先全量收集 dirty 候选（保序＝数组序，相机不可读时的
+            // 回退路径），再按相机距离近先挑选——见类头注释。
             int nonEmpty = 0;
             int rebuiltThisPoll = 0;
             int pendingDirty = 0;
+            List<Candidate> candidates = new ArrayList<>(64);
 
             for (Object builtChunk : chunks) {
                 if (builtChunk == null) {
@@ -191,6 +213,12 @@ final class SceneProxy {
                     nonEmpty++;
                 }
 
+                if (moved) {
+                    // v0.4.6：重定位即失效 origin 缓存（不论世代——未摄取的
+                    // 候选也可能在两轮之间移动，距离排序需新鲜 origin）
+                    originCache.remove(index);
+                }
+
                 if (moved && st.generation > 0) {
                     // 重定位（网格平移）：首版直接按重建处理（rebuild 更新 origin）
                     relocations++;
@@ -200,16 +228,46 @@ final class SceneProxy {
                         && chunkData != null;
                 if (dirty) {
                     pendingDirty++;
-                }
-
-                if (dirty && rebuiltThisPoll < MAX_REBUILD_PER_POLL) {
-                    if (rebuild(builtChunk, index)) {
-                        rebuiltThisPoll++;
-                        lastActivityMs = elapsedMs();
-                    }
+                    candidates.add(new Candidate(builtChunk, index));
                 } else if (dataChanged && chunkData == null && st.generation > 0) {
                     invalidate(builtChunk, index);
                     lastActivityMs = elapsedMs();
+                }
+            }
+
+            // v0.4.6：候选按相机距离近先挑选（相机段距离 0 必然首轮入选）。
+            float[] cam = lastCameraPos;
+            if (cam != null && !candidates.isEmpty()) {
+                resolveOrigins(candidates, cam);
+                if (!priorityEchoed) {
+                    priorityEchoed = true;
+                    r.info("v0.4.6 摄取优先级：相机距离近先（数组序把相机段饿死"
+                            + "在 relZ 尾行的根因修复；本轮候选 " + candidates.size() + "）");
+                }
+                if (candidates.size() > MAX_REBUILD_PER_POLL) {
+                    candidates.sort(CANDIDATE_ORDER);
+                }
+            }
+            // v0.4.6：预算按成功数计（空试不占名额——与 v0.4.5 语义一致，
+            // 近处空区块跳过后名额顺延给更远候选）
+            for (int ci = 0; ci < candidates.size()
+                    && rebuiltThisPoll < MAX_REBUILD_PER_POLL; ci++) {
+                Candidate c = candidates.get(ci);
+                if (rebuild(c.chunk, c.index)) {
+                    rebuiltThisPoll++;
+                    lastActivityMs = elapsedMs();
+                    if (!cameraSectionEchoed && cam != null && c.hasOrigin) {
+                        int tx = (int) Math.floor(cam[0] / 16.0) * 16;
+                        int ty = (int) Math.floor(cam[1] / 16.0) * 16;
+                        int tz = (int) Math.floor(cam[2] / 16.0) * 16;
+                        if (c.ox == tx && c.oy == ty && c.oz == tz) {
+                            cameraSectionEchoed = true;
+                            r.pass(String.format(
+                                    "[camera-first] 相机段 (%d,%d,%d) 已摄取（rebuild #%d）"
+                                    + "——近景几何与 -Y 脚下金丝雀从此有据可依",
+                                    c.ox, c.oy, c.oz, rebuilds));
+                        }
+                    }
                 }
             }
             if (nonEmpty != this.nonEmptyChunks) {
@@ -446,6 +504,73 @@ final class SceneProxy {
             Throwable c = t.getCause() != null ? t.getCause() : t;
             r.fail(String.format("rebuild 异常 @ index=%d: %s", index, c));
             return false;
+        }
+    }
+
+    /** v0.4.6：dirty 候选（chunk 引用 + 槽位号；相机可读时附 origin 与距离²）。 */
+    private static final class Candidate {
+        final Object chunk;
+        final int index;
+        int ox;
+        int oy;
+        int oz;
+        boolean hasOrigin;
+        double d2;
+
+        Candidate(Object chunk, int index) {
+            this.chunk = chunk;
+            this.index = index;
+        }
+    }
+
+    /** 距离²近先；同距按槽位号（确定性，等价数组序平局裁决）。 */
+    private static final java.util.Comparator<Candidate> CANDIDATE_ORDER = (a, b) -> {
+        int c = Double.compare(a.d2, b.d2);
+        return c != 0 ? c : Integer.compare(a.index, b.index);
+    };
+
+    /**
+     * v0.4.6：解析候选 origin（带 index 级缓存；getOrigin 为已审计符号），
+     * 并计算相机到 section AABB [origin, origin+16) 的 clamp 距离²
+     * （相机自身段为 0，脚下段 ≈ 眼高 1.62——天然最优先级）。
+     */
+    private void resolveOrigins(List<Candidate> list, float[] cam) {
+        for (Candidate c : list) {
+            int[] o = originCache.get(c.index);
+            if (o == null) {
+                o = readOrigin(c.chunk);
+                if (o != null) {
+                    originCache.put(c.index, o);
+                }
+            }
+            if (o == null) {
+                c.hasOrigin = false;
+                c.d2 = Double.MAX_VALUE;
+                continue;
+            }
+            c.ox = o[0];
+            c.oy = o[1];
+            c.oz = o[2];
+            c.hasOrigin = true;
+            double dx = Math.max(o[0], Math.min(cam[0], o[0] + 16.0)) - cam[0];
+            double dy = Math.max(o[1], Math.min(cam[1], o[1] + 16.0)) - cam[1];
+            double dz = Math.max(o[2], Math.min(cam[2], o[2] + 16.0)) - cam[2];
+            c.d2 = dx * dx + dy * dy + dz * dz;
+        }
+    }
+
+    /** BuiltChunk.getOrigin → {ox, oy, oz}（反射失败返回 null）。 */
+    private static int[] readOrigin(Object builtChunk) {
+        try {
+            Object origin = Mappings.call(builtChunk, Mappings.C_BUILT_CHUNK,
+                    Mappings.M_BC_GET_ORIGIN);
+            return new int[] {
+                    (Integer) Mappings.call(origin, Mappings.C_VEC3I, Mappings.M_VEC3I_GET_X),
+                    (Integer) Mappings.call(origin, Mappings.C_VEC3I, Mappings.M_VEC3I_GET_Y),
+                    (Integer) Mappings.call(origin, Mappings.C_VEC3I, Mappings.M_VEC3I_GET_Z)
+            };
+        } catch (Throwable t) {
+            return null;
         }
     }
 

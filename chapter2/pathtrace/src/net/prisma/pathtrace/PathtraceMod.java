@@ -78,7 +78,7 @@ public final class PathtraceMod {
             return;
         }
         ProbeReport r = new ProbeReport("pathtrace_report.txt");
-        r.header("路径追踪探针 (pathtrace 0.4.5)");
+        r.header("路径追踪探针 (pathtrace 0.4.6)");
         r.info("触发方式: " + triggerSource);
 
         if (isDisabled()) {

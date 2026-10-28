@@ -1,0 +1,624 @@
+==============================================================
+路径追踪探针 (pathtrace 0.4.5) —— Radiance 移植第二章 2.2
+时间: Thu Oct 29 00:17:53 CST 2026
+报告文件: /var/mobile/Containers/Data/Application/8BCCCFC1-5C33-44BA-811F-FC58EE9FCC6E/Documents/instances/default/versions/fabric-loader-0.20.1-1.21.4/game/pathtrace_report.txt
+==============================================================
+
+[INFO ] 触发方式: CLIENT_STARTED
+
+---- S0 环境快照 ----
+[INFO ] java.version  = 21.0.8-internal
+[INFO ] java.vm.name  = OpenJDK 64-Bit Server VM
+[INFO ] os.name       = Mac OS X / aarch64
+[INFO ] user.dir      = /var/mobile/Containers/Data/Application/8BCCCFC1-5C33-44BA-811F-FC58EE9FCC6E/Documents/instances/default/versions/fabric-loader-0.20.1-1.21.4/game
+[INFO ] AMETHYST_RENDERER = libOSMesa.8.dylib
+[INFO ] GALLIUM_DRIVER     = null
+[INFO ] pojav.lwjgl.version = 333
+[INFO ] org.lwjgl.opengl.libname = libOSMesa.8.dylib
+[INFO ] org.lwjgl.vulkan.libname = MoltenVK
+
+---- S1 解包原生资产（JAR -> game 目录） ----
+[PASS ] 解包完成: /var/mobile/Containers/Data/Application/8BCCCFC1-5C33-44BA-811F-FC58EE9FCC6E/Documents/instances/default/versions/fabric-loader-0.20.1-1.21.4/game/pathtrace/libradiance_pathtrace.dylib (151824 B)
+[INFO ] metallib: /var/mobile/Containers/Data/Application/8BCCCFC1-5C33-44BA-811F-FC58EE9FCC6E/Documents/instances/default/versions/fabric-loader-0.20.1-1.21.4/game/pathtrace/pathtrace.metallib (21682 B)
+
+---- S2 System.load 装载 dylib（投送通道验证） ----
+[PASS ] dylib 装载成功（与 2.0/2.1 相同的受信装载链）
+
+---- S3 反射符号审计（intermediary 符号表逐项解析） ----
+[PASS ] class net.minecraft.class_310
+[PASS ] class net.minecraft.class_761
+[PASS ] class net.minecraft.class_769
+[PASS ] class net.minecraft.class_846
+[PASS ] class net.minecraft.class_846$class_851
+[PASS ] class net.minecraft.class_2382
+[PASS ] class net.minecraft.class_2338
+[PASS ] class net.minecraft.class_4076
+[PASS ] class net.minecraft.class_6850
+[PASS ] class net.minecraft.class_853
+[PASS ] class net.minecraft.class_9810
+[PASS ] class net.minecraft.class_9810$class_9811
+[PASS ] class net.minecraft.class_9801
+[PASS ] class net.minecraft.class_9801$class_4574
+[PASS ] class net.minecraft.class_293
+[PASS ] class net.minecraft.class_296
+[PASS ] class net.minecraft.class_8251
+[PASS ] class net.minecraft.class_750
+[PASS ] class net.minecraft.class_4184
+[PASS ] class net.minecraft.class_243
+[PASS ] class net.minecraft.class_757
+[PASS ] class net.minecraft.class_638
+[PASS ] class net.minecraft.class_1937
+[PASS ] field net.minecraft.class_310#field_1687
+[PASS ] field net.minecraft.class_310#field_1773
+[PASS ] field net.minecraft.class_638#field_17780
+[PASS ] field net.minecraft.class_761#field_4112
+[PASS ] field net.minecraft.class_761#field_45614
+[PASS ] field net.minecraft.class_769#field_4150
+[PASS ] field net.minecraft.class_769#field_4148
+[PASS ] field net.minecraft.class_769#field_4149
+[PASS ] field net.minecraft.class_769#field_4147
+[PASS ] field net.minecraft.class_846#field_52171
+[PASS ] field net.minecraft.class_846$class_851#field_29641
+[PASS ] field net.minecraft.class_846$class_851#field_4467
+[PASS ] field net.minecraft.class_846$class_851#field_4459
+[PASS ] field net.minecraft.class_9810$class_9811#field_52168
+[PASS ] field net.minecraft.class_8251#field_43360
+[PASS ] field net.minecraft.class_757#field_18765
+[PASS ] field net.minecraft.class_243#field_1352
+[PASS ] field net.minecraft.class_243#field_1351
+[PASS ] field net.minecraft.class_243#field_1350
+[PASS ] method net.minecraft.class_310#method_1551
+[PASS ] method net.minecraft.class_846$class_851#method_3670
+[PASS ] method net.minecraft.class_846$class_851#method_62975
+[PASS ] method net.minecraft.class_2382#method_10263
+[PASS ] method net.minecraft.class_2382#method_10264
+[PASS ] method net.minecraft.class_2382#method_10260
+[PASS ] method net.minecraft.class_4076#method_18682
+[PASS ] method net.minecraft.class_6850#method_39969
+[PASS ] method net.minecraft.class_9810#method_60904
+[PASS ] method net.minecraft.class_9810$class_9811#method_60905
+[PASS ] method net.minecraft.class_9801#method_60818
+[PASS ] method net.minecraft.class_9801#method_60822
+[PASS ] method net.minecraft.class_9801$class_4574#comp_749
+[PASS ] method net.minecraft.class_9801$class_4574#comp_750
+[PASS ] method net.minecraft.class_9801$class_4574#comp_752
+[PASS ] method net.minecraft.class_293#method_1362
+[PASS ] method net.minecraft.class_293#method_60835
+[PASS ] method net.minecraft.class_293#method_60836
+[PASS ] field net.minecraft.class_296#field_52108
+[PASS ] method net.minecraft.class_4184#method_19326
+[PASS ] method net.minecraft.class_4184#method_19330
+[PASS ] method net.minecraft.class_4184#method_19329
+[PASS ] ctor net.minecraft.class_750()
+[PASS ] ctor net.minecraft.class_6850()
+[INFO ] [S8soft] class net.minecraft.class_1041 解析成功
+[INFO ] [S8soft] class net.minecraft.class_2960 解析成功
+[INFO ] [S8soft] class net.minecraft.class_1060 解析成功
+[INFO ] [S8soft] class net.minecraft.class_1044 解析成功
+[INFO ] [S8soft] method net.minecraft.class_1041#method_4489 解析成功
+[INFO ] [S8soft] method net.minecraft.class_1041#method_4506 解析成功
+[INFO ] [S8soft] method net.minecraft.class_2960#method_60655 解析成功
+[INFO ] [S8soft] method net.minecraft.class_1060#method_4619 解析成功
+[INFO ] [S8soft] field net.minecraft.class_1044#field_5204 解析成功
+[INFO ] [S8soft] method net.minecraft.class_310#method_1531 解析成功
+[INFO ] [S8soft] method net.minecraft.class_310#method_22683 解析成功
+[INFO ] [S8soft] field net.minecraft.class_296#field_52109 解析成功
+[PASS ] 符号表全量解析通过（78 项）
+
+---- S4/S5 网格发现与摄取（轮询 500ms，等待进入世界；顶点+COLOR 双提取） ----
+[INFO ] 等待进入世界（mc.world == null）…
+[PASS ] 已进入世界，开始网格发现
+[scene] device=Apple A20 Pro GPU raytracing=YES
+[scene] slot grid initialized: 6936 chunks
+[scene] ray_query pipeline ready (threadsPerThreadgroup=1024)
+[scene] pathtrace pipeline ready (threadsPerThreadgroup=1024)
+[PASS ] 网格初始化: 6936 槽位 (sizeX=17 sizeY=24 sizeZ=17)
+[INFO ] 顶点格式取证: layer0(stride=32 colorOff=12 uvOff=16)（COLOR/UV0 元素偏移由 VertexFormat.getOffset 动态解析——2.2 albedo 通路 + 2.3 atlas 采样通路）
+[rebuild] index=0 origin=(0,-64,0) layers=1 verts=2188 tris=1094 color=yes uv=yes (blas 14.68 ms, total builds=1)
+[INFO ] rebuild #1: index=0 origin=(0,-64,0) layers=1 verts=2188 (69.5 ms)
+[rebuild] index=1 origin=(16,-64,0) layers=1 verts=1832 tris=916 color=yes uv=yes (blas 2.60 ms, total builds=2)
+[INFO ] rebuild #2: index=1 origin=(16,-64,0) layers=1 verts=1832 (24.0 ms)
+[rebuild] index=2 origin=(32,-64,0) layers=1 verts=2048 tris=1024 color=yes uv=yes (blas 0.81 ms, total builds=3)
+[INFO ] rebuild #3: index=2 origin=(32,-64,0) layers=1 verts=2048 (13.7 ms)
+[rebuild] index=15 origin=(-32,-64,0) layers=1 verts=2048 tris=1024 color=yes uv=yes (blas 2.43 ms, total builds=4)
+[INFO ] rebuild #4: index=15 origin=(-32,-64,0) layers=1 verts=2048 (14.2 ms)
+[rebuild] index=16 origin=(-16,-64,0) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 0.45 ms, total builds=5)
+[INFO ] rebuild #5: index=16 origin=(-16,-64,0) layers=1 verts=1024 (18.5 ms)
+[rebuild] index=17 origin=(0,-48,0) layers=1 verts=92 tris=46 color=yes uv=yes (blas 0.81 ms, total builds=6)
+[INFO ] rebuild #6: index=17 origin=(0,-48,0) layers=1 verts=92 (20.8 ms)
+[rebuild] index=18 origin=(16,-48,0) layers=1 verts=1316 tris=658 color=yes uv=yes (blas 0.88 ms, total builds=7)
+[INFO ] rebuild #7: index=18 origin=(16,-48,0) layers=1 verts=1316 (21.6 ms)
+[rebuild] index=19 origin=(32,-48,0) layers=1 verts=1432 tris=716 color=yes uv=yes (blas 5.03 ms, total builds=8)
+[INFO ] rebuild #8: index=19 origin=(32,-48,0) layers=1 verts=1432 (13.9 ms)
+[rebuild] index=32 origin=(-32,-48,0) layers=2 verts=3116 tris=1558 color=yes uv=yes (blas 3.48 ms, total builds=9)
+[INFO ] rebuild #9: index=32 origin=(-32,-48,0) layers=2 verts=3116 (32.2 ms)
+[rebuild] index=33 origin=(-16,-48,0) layers=1 verts=392 tris=196 color=yes uv=yes (blas 3.00 ms, total builds=10)
+[INFO ] rebuild #10: index=33 origin=(-16,-48,0) layers=1 verts=392 (25.1 ms)
+[rebuild] index=35 origin=(16,-32,0) layers=1 verts=1308 tris=654 color=yes uv=yes (blas 1.65 ms, total builds=11)
+[INFO ] rebuild #11: index=35 origin=(16,-32,0) layers=1 verts=1308 (21.0 ms)
+[rebuild] index=36 origin=(32,-32,0) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 0.61 ms, total builds=12)
+[INFO ] rebuild #12: index=36 origin=(32,-32,0) layers=1 verts=1024 (12.7 ms)
+[rebuild] index=49 origin=(-32,-32,0) layers=2 verts=2892 tris=1446 color=yes uv=yes (blas 2.74 ms, total builds=13)
+[INFO ] rebuild #13: index=49 origin=(-32,-32,0) layers=2 verts=2892 (19.7 ms)
+[rebuild] index=50 origin=(-16,-32,0) layers=2 verts=164 tris=82 color=yes uv=yes (blas 0.93 ms, total builds=14)
+[INFO ] rebuild #14: index=50 origin=(-16,-32,0) layers=2 verts=164 (4.1 ms)
+[rebuild] index=52 origin=(16,-16,0) layers=1 verts=1088 tris=544 color=yes uv=yes (blas 3.42 ms, total builds=15)
+[INFO ] rebuild #15: index=52 origin=(16,-16,0) layers=1 verts=1088 (18.3 ms)
+[rebuild] index=53 origin=(32,-16,0) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 0.92 ms, total builds=16)
+[INFO ] rebuild #16: index=53 origin=(32,-16,0) layers=1 verts=1024 (12.3 ms)
+[addr] TLAS build#1: as=3840B obj=0x149886700 instBuf(mem)=0x12494F700 instBytes=1024 shadow(mem)=0x149864400
+[tlas] rebuilt in 11.69 ms (instances=16, as=3840 B, tris=11494, colorSlots=16, pools=137928+137928 B, total=1 builds)
+[rebuild] index=66 origin=(-32,-16,0) layers=1 verts=1040 tris=520 color=yes uv=yes (blas 2.05 ms, total builds=17)
+[INFO ] rebuild #17: index=66 origin=(-32,-16,0) layers=1 verts=1040 (8.7 ms)
+[rebuild] index=67 origin=(-16,-16,0) layers=1 verts=528 tris=264 color=yes uv=yes (blas 0.88 ms, total builds=18)
+[INFO ] rebuild #18: index=67 origin=(-16,-16,0) layers=1 verts=528 (5.9 ms)
+[rebuild] index=69 origin=(16,0,0) layers=1 verts=116 tris=58 color=yes uv=yes (blas 0.94 ms, total builds=19)
+[INFO ] rebuild #19: index=69 origin=(16,0,0) layers=1 verts=116 (6.2 ms)
+[rebuild] index=70 origin=(32,0,0) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 2.03 ms, total builds=20)
+[INFO ] rebuild #20: index=70 origin=(32,0,0) layers=1 verts=1024 (10.5 ms)
+[rebuild] index=83 origin=(-32,0,0) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 1.90 ms, total builds=21)
+[rebuild] index=86 origin=(16,16,0) layers=1 verts=36 tris=18 color=yes uv=yes (blas 0.62 ms, total builds=22)
+[rebuild] index=87 origin=(32,16,0) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 1.24 ms, total builds=23)
+[rebuild] index=100 origin=(-32,16,0) layers=1 verts=1032 tris=516 color=yes uv=yes (blas 4.15 ms, total builds=24)
+[rebuild] index=104 origin=(32,32,0) layers=1 verts=2852 tris=1426 color=yes uv=yes (blas 1.68 ms, total builds=25)
+[rebuild] index=117 origin=(-32,32,0) layers=1 verts=1092 tris=546 color=yes uv=yes (blas 2.81 ms, total builds=26)
+[rebuild] index=121 origin=(32,48,0) layers=1 verts=2924 tris=1462 color=yes uv=yes (blas 15.68 ms, total builds=27)
+[rebuild] index=134 origin=(-32,48,0) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 4.15 ms, total builds=28)
+[rebuild] index=136 origin=(0,64,0) layers=2 verts=712 tris=356 color=yes uv=yes (blas 3.16 ms, total builds=29)
+[rebuild] index=137 origin=(16,64,0) layers=1 verts=208 tris=104 color=yes uv=yes (blas 0.84 ms, total builds=30)
+[rebuild] index=138 origin=(32,64,0) layers=2 verts=1368 tris=684 color=yes uv=yes (blas 0.96 ms, total builds=31)
+[rebuild] index=151 origin=(-32,64,0) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 0.90 ms, total builds=32)
+[rebuild] index=152 origin=(-16,64,0) layers=1 verts=8 tris=4 color=yes uv=yes (blas 0.61 ms, total builds=33)
+[rebuild] index=153 origin=(0,80,0) layers=3 verts=10272 tris=5136 color=yes uv=yes (blas 7.72 ms, total builds=34)
+[rebuild] index=154 origin=(16,80,0) layers=3 verts=16620 tris=8310 color=yes uv=yes (blas 3.38 ms, total builds=35)
+[rebuild] index=155 origin=(32,80,0) layers=3 verts=11424 tris=5712 color=yes uv=yes (blas 5.33 ms, total builds=36)
+[rebuild] index=156 origin=(48,80,0) layers=3 verts=11524 tris=5762 color=yes uv=yes (blas 3.97 ms, total builds=37)
+[rebuild] index=168 origin=(-32,80,0) layers=2 verts=1864 tris=932 color=yes uv=yes (blas 2.64 ms, total builds=38)
+[rebuild] index=169 origin=(-16,80,0) layers=3 verts=3012 tris=1506 color=yes uv=yes (blas 3.29 ms, total builds=39)
+[rebuild] index=185 origin=(-32,96,0) layers=3 verts=4008 tris=2004 color=yes uv=yes (blas 1.96 ms, total builds=40)
+[rebuild] index=186 origin=(-16,96,0) layers=3 verts=7656 tris=3828 color=yes uv=yes (blas 2.33 ms, total builds=41)
+[rebuild] index=202 origin=(-32,112,0) layers=3 verts=11708 tris=5854 color=yes uv=yes (blas 2.43 ms, total builds=42)
+[rebuild] index=408 origin=(0,-64,16) layers=1 verts=2524 tris=1262 color=yes uv=yes (blas 2.47 ms, total builds=43)
+[rebuild] index=409 origin=(16,-64,16) layers=1 verts=1036 tris=518 color=yes uv=yes (blas 1.06 ms, total builds=44)
+[rebuild] index=410 origin=(32,-64,16) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 0.71 ms, total builds=45)
+[rebuild] index=411 origin=(48,-64,16) layers=1 verts=2048 tris=1024 color=yes uv=yes (blas 3.06 ms, total builds=46)
+[rebuild] index=423 origin=(-32,-64,16) layers=1 verts=2048 tris=1024 color=yes uv=yes (blas 0.88 ms, total builds=47)
+[rebuild] index=424 origin=(-16,-64,16) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 0.82 ms, total builds=48)
+[addr] TLAS build#2: as=10816B obj=0x149B57900 instBuf(mem)=0x14C8AB000 instBytes=3072 shadow(mem)=0x131EE4C00
+[retired] releasing 6 deferred objects
+[tlas] rebuilt in 9.94 ms (instances=48, as=10816 B, tris=63908, colorSlots=48, pools=766896+766896 B, total=2 builds)
+[rebuild] index=138 origin=(32,64,0) layers=1 verts=344 tris=172 color=yes uv=yes (blas 0.69 ms, total builds=49)
+[rebuild] index=155 origin=(32,80,0) layers=3 verts=11424 tris=5712 color=yes uv=yes (blas 1.67 ms, total builds=50)
+[INFO ] rebuild #50: index=155 origin=(32,80,0) layers=3 verts=11424 (8.4 ms)
+[rebuild] index=185 origin=(-32,96,0) layers=3 verts=2952 tris=1476 color=yes uv=yes (blas 1.54 ms, total builds=51)
+[rebuild] index=425 origin=(0,-48,16) layers=2 verts=848 tris=424 color=yes uv=yes (blas 1.59 ms, total builds=52)
+[rebuild] index=426 origin=(16,-48,16) layers=2 verts=556 tris=278 color=yes uv=yes (blas 0.71 ms, total builds=53)
+[rebuild] index=427 origin=(32,-48,16) layers=1 verts=244 tris=122 color=yes uv=yes (blas 1.06 ms, total builds=54)
+[rebuild] index=428 origin=(48,-48,16) layers=1 verts=1552 tris=776 color=yes uv=yes (blas 1.33 ms, total builds=55)
+[rebuild] index=439 origin=(-48,-48,16) layers=2 verts=1952 tris=976 color=yes uv=yes (blas 2.32 ms, total builds=56)
+[rebuild] index=440 origin=(-32,-48,16) layers=2 verts=1800 tris=900 color=yes uv=yes (blas 1.37 ms, total builds=57)
+[rebuild] index=442 origin=(0,-32,16) layers=1 verts=188 tris=94 color=yes uv=yes (blas 0.99 ms, total builds=58)
+[rebuild] index=443 origin=(16,-32,16) layers=1 verts=152 tris=76 color=yes uv=yes (blas 0.99 ms, total builds=59)
+[rebuild] index=444 origin=(32,-32,16) layers=1 verts=16 tris=8 color=yes uv=yes (blas 0.75 ms, total builds=60)
+[rebuild] index=445 origin=(48,-32,16) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 1.03 ms, total builds=61)
+[rebuild] index=456 origin=(-48,-32,16) layers=1 verts=3252 tris=1626 color=yes uv=yes (blas 2.25 ms, total builds=62)
+[rebuild] index=457 origin=(-32,-32,16) layers=1 verts=2160 tris=1080 color=yes uv=yes (blas 2.13 ms, total builds=63)
+[rebuild] index=458 origin=(-16,-32,16) layers=1 verts=36 tris=18 color=yes uv=yes (blas 0.80 ms, total builds=64)
+[rebuild] index=3 origin=(48,-64,0) layers=1 verts=2048 tris=1024 color=yes uv=yes (blas 7.41 ms, total builds=65)
+[rebuild] index=14 origin=(-48,-64,0) layers=1 verts=2048 tris=1024 color=yes uv=yes (blas 5.01 ms, total builds=66)
+[rebuild] index=20 origin=(48,-48,0) layers=1 verts=1536 tris=768 color=yes uv=yes (blas 2.96 ms, total builds=67)
+[rebuild] index=31 origin=(-48,-48,0) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 3.24 ms, total builds=68)
+[rebuild] index=37 origin=(48,-32,0) layers=2 verts=2336 tris=1168 color=yes uv=yes (blas 1.41 ms, total builds=69)
+[rebuild] index=48 origin=(-48,-32,0) layers=1 verts=1028 tris=514 color=yes uv=yes (blas 2.53 ms, total builds=70)
+[rebuild] index=459 origin=(0,-16,16) layers=1 verts=16 tris=8 color=yes uv=yes (blas 1.55 ms, total builds=71)
+[rebuild] index=462 origin=(48,-16,16) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 1.55 ms, total builds=72)
+[rebuild] index=473 origin=(-48,-16,16) layers=1 verts=1448 tris=724 color=yes uv=yes (blas 1.07 ms, total builds=73)
+[rebuild] index=474 origin=(-32,-16,16) layers=1 verts=48 tris=24 color=yes uv=yes (blas 0.76 ms, total builds=74)
+[rebuild] index=478 origin=(32,0,16) layers=1 verts=188 tris=94 color=yes uv=yes (blas 1.84 ms, total builds=75)
+[rebuild] index=479 origin=(48,0,16) layers=1 verts=1528 tris=764 color=yes uv=yes (blas 1.42 ms, total builds=76)
+[rebuild] index=490 origin=(-48,0,16) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 0.78 ms, total builds=77)
+[rebuild] index=496 origin=(48,16,16) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 2.44 ms, total builds=78)
+[rebuild] index=507 origin=(-48,16,16) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 1.62 ms, total builds=79)
+[rebuild] index=512 origin=(32,32,16) layers=2 verts=3060 tris=1530 color=yes uv=yes (blas 1.98 ms, total builds=80)
+[addr] TLAS build#3: as=17152B obj=0x1498A8000 instBuf(mem)=0x14CCC8000 instBytes=4928 shadow(mem)=0x7F94189000
+[retired] releasing 9 deferred objects
+[tlas] rebuilt in 1.65 ms (instances=77, as=17152 B, tris=79960, colorSlots=77, pools=959520+959520 B, total=3 builds)
+[rebuild] index=54 origin=(48,-16,0) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 1.04 ms, total builds=81)
+[rebuild] index=65 origin=(-48,-16,0) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 1.28 ms, total builds=82)
+[rebuild] index=71 origin=(48,0,0) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 0.90 ms, total builds=83)
+[rebuild] index=82 origin=(-48,0,0) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 1.08 ms, total builds=84)
+[rebuild] index=88 origin=(48,16,0) layers=1 verts=1196 tris=598 color=yes uv=yes (blas 1.55 ms, total builds=85)
+[rebuild] index=99 origin=(-48,16,0) layers=1 verts=1100 tris=550 color=yes uv=yes (blas 0.84 ms, total builds=86)
+[rebuild] index=105 origin=(48,32,0) layers=1 verts=3236 tris=1618 color=yes uv=yes (blas 1.82 ms, total builds=87)
+[rebuild] index=116 origin=(-48,32,0) layers=1 verts=1048 tris=524 color=yes uv=yes (blas 1.34 ms, total builds=88)
+[rebuild] index=122 origin=(48,48,0) layers=2 verts=1892 tris=946 color=yes uv=yes (blas 6.46 ms, total builds=89)
+[rebuild] index=133 origin=(-48,48,0) layers=1 verts=1040 tris=520 color=yes uv=yes (blas 14.12 ms, total builds=90)
+[rebuild] index=139 origin=(48,64,0) layers=2 verts=2216 tris=1108 color=yes uv=yes (blas 3.46 ms, total builds=91)
+[rebuild] index=140 origin=(64,64,0) layers=3 verts=8588 tris=4294 color=yes uv=yes (blas 11.47 ms, total builds=92)
+[rebuild] index=149 origin=(-64,64,0) layers=1 verts=3688 tris=1844 color=yes uv=yes (blas 2.00 ms, total builds=93)
+[rebuild] index=150 origin=(-48,64,0) layers=1 verts=1044 tris=522 color=yes uv=yes (blas 1.35 ms, total builds=94)
+[rebuild] index=513 origin=(48,32,16) layers=2 verts=3268 tris=1634 color=yes uv=yes (blas 6.07 ms, total builds=95)
+[rebuild] index=514 origin=(64,32,16) layers=3 verts=5720 tris=2860 color=yes uv=yes (blas 8.54 ms, total builds=96)
+[rebuild] index=122 origin=(48,48,0) layers=2 verts=872 tris=436 color=yes uv=yes (blas 1.71 ms, total builds=97)
+[rebuild] index=139 origin=(48,64,0) layers=2 verts=2216 tris=1108 color=yes uv=yes (blas 1.21 ms, total builds=98)
+[rebuild] index=156 origin=(48,80,0) layers=3 verts=11400 tris=5700 color=yes uv=yes (blas 1.71 ms, total builds=99)
+[rebuild] index=157 origin=(64,80,0) layers=1 verts=1176 tris=588 color=yes uv=yes (blas 1.80 ms, total builds=100)
+[INFO ] rebuild #100: index=157 origin=(64,80,0) layers=1 verts=1176 (3.5 ms)
+[rebuild] index=166 origin=(-64,80,0) layers=2 verts=2152 tris=1076 color=yes uv=yes (blas 2.75 ms, total builds=101)
+[rebuild] index=167 origin=(-48,80,0) layers=1 verts=172 tris=86 color=yes uv=yes (blas 0.76 ms, total builds=102)
+[rebuild] index=183 origin=(-64,96,0) layers=2 verts=2720 tris=1360 color=yes uv=yes (blas 1.29 ms, total builds=103)
+[rebuild] index=184 origin=(-48,96,0) layers=3 verts=1248 tris=624 color=yes uv=yes (blas 1.39 ms, total builds=104)
+[rebuild] index=200 origin=(-64,112,0) layers=3 verts=12280 tris=6140 color=yes uv=yes (blas 2.33 ms, total builds=105)
+[rebuild] index=201 origin=(-48,112,0) layers=3 verts=9376 tris=4688 color=yes uv=yes (blas 2.85 ms, total builds=106)
+[rebuild] index=412 origin=(64,-64,16) layers=1 verts=2048 tris=1024 color=yes uv=yes (blas 1.08 ms, total builds=107)
+[rebuild] index=422 origin=(-48,-64,16) layers=2 verts=2736 tris=1368 color=yes uv=yes (blas 1.55 ms, total builds=108)
+[rebuild] index=524 origin=(-48,32,16) layers=1 verts=1040 tris=520 color=yes uv=yes (blas 2.05 ms, total builds=109)
+[rebuild] index=527 origin=(0,48,16) layers=1 verts=108 tris=54 color=yes uv=yes (blas 1.39 ms, total builds=110)
+[rebuild] index=529 origin=(32,48,16) layers=1 verts=284 tris=142 color=yes uv=yes (blas 0.72 ms, total builds=111)
+[rebuild] index=530 origin=(48,48,16) layers=3 verts=1072 tris=536 color=yes uv=yes (blas 1.39 ms, total builds=112)
+[addr] TLAS build#4: as=23424B obj=0x1498EEE80 instBuf(mem)=0x14D2E3C00 instBytes=6784 shadow(mem)=0x14A274000
+[retired] releasing 9 deferred objects
+[tlas] rebuilt in 3.06 ms (instances=106, as=23424 B, tris=116660, colorSlots=106, pools=1399920+1399920 B, total=4 builds)
+[PASS ] 摄取窗口完成（112 次重建 / 6936 非空区块 / 积压 6667 / 55.2s）
+
+---- S5 统计汇总 ----
+[INFO ] Java 侧: polls=106 rebuilds=112 invalidations=802 relocations=0 非空区块=6936
+[INFO ] Native 侧: readyBLAS=106 BLAS构建=112 TLAS重建=4（含 shading pools）
+[INFO ] 几何: 三角形=116660 顶点=233320 顶点缓冲=3645.6 KB 索引缓冲=1367.1 KB TLAS=22.9 KB
+
+---- S6 场景摆放抽查（哨兵 + 相机姿态 + 整数格线） ----
+[PASS ] 相机姿态: pos=(2.50, 81.62, -5.50) yaw=0.0 pitch=0.0
+[sentinel] vert readback: (0.0, 0.0, 0.0) (1024.0, 0.0, 0.0) (0.0, 0.0, 1024.0) — stride 16 B, buffer 48 B
+[sentinel] identity instance: ray (256,64,256)-Y -> HIT (dist=64.00 instance=0, expect HIT dist~64 instance=0)
+[sentinel] translated instance K=(4096,0,4096): ray (4352,64,4352)-Y -> HIT (dist=64.00 instance=1, expect HIT dist~64 instance=1)
+[sentinel] negative control: ray (256,64,256)+Y -> MISS (expect MISS)
+[sentinel] verdict: identity=OK translated=OK control=OK
+[PASS ] 哨兵求交 PASS（位码=7：单位实例/平移实例/阴性对照全部正确——矩阵平移编码 flat[9..11] 维持 2.1 v0.5 真机结论）
+[INFO ] ray +X: miss（512 格内无几何）
+[INFO ] ray -X: miss（512 格内无几何）
+[INFO ] ray +Y(上): miss（512 格内无几何）
+[INFO ] ray -Y(下): miss（512 格内无几何）
+[PASS ] ray +Z: HIT distance=6.50 hitPoint=(2.50, 81.62, 1.00) [整数格线 z] (instance=53) → section=(0,80,0)
+[INFO ] ray -Z: miss（512 格内无几何）
+[FAIL ] 摆放抽查未达标（命中=1 整数格线=1 脚下地板=无）——v0.3 已携带 A/B 复测与 S6.5 审计；请附整份报告回报（v0.5 同场景：-Y 1.62 命中地板、8/9 整数格线；v0.2 审计已证 LIVE TLAS 内容正确）
+
+---- S6.5 判别审计（raw AABB / 顶点回读 / 矩阵回读 / 隔离 TLAS 对照电池） ----
+[audit] slot (0,-64,0) raw=[0.00..16.00, 0.00..16.00, 0.00..16.00]
+[audit] slot (16,-64,0) raw=[0.00..16.00, 0.00..16.00, 0.00..16.00]
+[audit] slot (32,-64,0) raw=[0.00..16.00, 0.00..16.00, 0.00..16.00]
+[audit] slot (48,-64,0) raw=[0.00..16.00, 0.00..16.00, 0.00..16.00]
+[audit] slot (-48,-64,0) raw=[0.00..16.00, 0.00..16.00, 0.00..16.00]
+[audit] global raw AABB over 106 slots: [-0.13..16.17, -0.20..16.00, -0.20..16.00] (garbage=0)
+[audit] raw verdict: SECTION-LOCAL (within [-1..17]^3) — 2.1 v0.5 契约成立
+[audit] camera section (0,80,-16) not ready — nearest ready origin=(0,80,0) @ 16.0 blocks
+[audit] camera slot (0,80,0) verts=10272 readback: v0=(4.00, 2.00, 1.00) v5136=(9.00, 9.00, 12.00) v10271=(3.83, 7.92, 10.90) — stride 16 B
+[audit] camera slot COLOR readback: v0=(35,69,19) v1=(44,87,24) v2=(44,87,24) v3=(44,87,24) — 顶点色=albedo 输入
+[audit] COLOR stats over 4096/10272 verts: R[8..204] G[16..204] B[4..204] mean=(46,73,30) distinct=41 white=0 greenish=3824 — distinct 偏低/全白 ⇒ albedo 通路缺陷（2.3 换 atlas 采样）；有绿有方差 ⇒ 通路健康
+[audit] pool tri #38572 (slot tri 0): (35,69,19) (44,87,24) (44,87,24)
+[audit] pool tri #41140 (slot tri 2568): (53,104,28) (17,34,9) (17,34,9)
+[audit] pool tri #43707 (slot tri 5135): (121,192,90) (121,192,90) (121,192,90)
+[audit] live TLAS instance #53 matrix: flat[9..11]=(0.0, 80.0, 0.0) — expect (0, 80, 0)
+[audit] ISO +X: MISS  |  LIVE +X: MISS
+[audit] ISO -X: MISS  |  LIVE -X: MISS
+[audit] ISO +Y(up): MISS  |  LIVE +Y(up): MISS
+[audit] ISO -Y(down): MISS  |  LIVE -Y(down): MISS
+[audit] ISO +Z: HIT dist=6.50 hitPoint=(2.50, 81.62, 1.00) (grid-z)  |  LIVE +Z: HIT dist=6.50 hitPoint=(2.50, 81.62, 1.00)
+[audit] ISO -Z: MISS  |  LIVE -Z: MISS
+[audit] ISO summary: hits=1/6 grid=1/6 down=0 — iso-HIT+live-MISS ⇒ live TLAS 组装缺陷；iso-MISS ⇒ 相机 BLAS 内容缺陷（结合 raw AABB 与 readback 判读）
+[INFO ] 审计汇总: raw=SECTION-LOCAL（2.1 契约成立） 相机槽位=1 live矩阵=正确 ISO命中=1/6(格线1) LIVE命中=1/6
+
+---- S7 离屏路径追踪渲染（相机 ray → TLAS → albedo → 太阳直射+阴影 → 弹射 → 累积 → tonemap → PNG） ----
+[INFO ] 摆放抽查未通过——启动隔离渲染诊断通道（相机区块单实例 TLAS，同一 BLAS/管线/池；或即第一帧光，或坐实 BLAS 内容缺陷）
+[audit] camera section (0,80,-16) not ready — nearest ready origin=(0,80,0) @ 16.0 blocks
+[render-iso] isolated TLAS: slot (0,80,0), tris=5136, poolBase=38572 — 同一 BLAS/管线/池，仅 TLAS 组装不同（诊断通道）
+[render] pathtrace-iso: 480x270 spp=24 bounces=2 -> 21.5 ms, queries=4559864 (camHit=34.6%, 212.50 Mray/s measured)
+[PASS ] PNG 落盘: /var/mobile/Containers/Data/Application/8BCCCFC1-5C33-44BA-811F-FC58EE9FCC6E/Documents/instances/default/versions/fabric-loader-0.20.1-1.21.4/game/pathtrace_frame.png (97480 B, 480x270, spp=24, bounces=2)——隔离诊断帧（相机区块，非全场景）
+[INFO ] 图像统计: 平均亮度=0.600 范围=[0.191..0.805] 量化颜色数=100
+[INFO ] 分带亮度: 上1/3=0.550 中1/3=0.589 下1/3=0.660
+[INFO ] 主色 top-4（4-bit 量化）: #9AB 35.9%  #AAB 24.7%  #89B 7.5%  #464 3.3%
+[PASS ] 图像自证 PASS（ISO 诊断帧：非黑场/非单色——渲染链健康；结构判定留给全场景帧，camHit% 见 [render] 行）
+
+==============================================================
+最终判定: ISO_RENDER_OK
+渲染链全链健康（隔离单实例 TLAS 出图 + 图像统计自证）——live 摆放未过但缺陷已精确隔离：结合 [audit] 行判读（ISO命中=1/6 vs LIVE命中=1/6）。若 ISO 命中而 LIVE 全 miss ⇒ multi-instance TLAS 组装缺陷（2.3 修复目标即此）；若 ISO 也 miss ⇒ 相机 BLAS 内容缺陷（看 raw AABB 与顶点回读行）。pathtrace_frame.png 为相机区块的真实路径追踪画面（隔离通道）。
+==============================================================
+
+---- S8 实时会话（渐进累积 + GL 合成 + atlas albedo——眼见为实） ----
+[live] session begun: 480x270 spp/frame=4 bounces=2 (atlas=white-vertex-color)
+[addr] live bufs: accum(mem)=0x14CE78000 image(mem)=0x14E2DC000 staging(mem)=0x7F7735C000 canary(mem)=0x14D074000 uniform(mem)=0x1223D6B00 stats(mem)=0x14D2E5700
+[PASS ] [S8.0] 实时会话开启: 480x270 spp/帧=4 bounces=2（静止收敛 / 移动重置；场景变化 native 自检重置）
+[PASS ] [S8.0] 合成钩子武装（mixin swapBuffers HEAD 回调已激活，下一次游戏帧交换时初始化 GL 合成器）
+[PASS ] [S8.3] 实时累积开始（TLAS = 探针线程构建，本线程零重建——v0.4.1 实证模式；哨兵电池见 [live-sentinel] 行）
+[PASS ] [S8.1] GL 合成器初始化: vendor=Mesa renderer=zink Vulkan 1.4(Apple A20 Pro GPU (MOLTENVK)) version=4.1 (Compatibility Profile) Mesa 25.0.7 (git-742a20f48c)
+[PASS ] [S8.1] RT 纹理+FBO 就绪: 480x270 RGBA8 (tex=52 fbo=6)
+[PASS ] [live-sentinel atlas 前基线（t≈0，epoch=0）] worker 直查 TLAS：1/6 命中 | verified：1/6 | 六射线 5 ms（慢+全miss=毒化签名） | tlas=build#4 ptr=0x1498EEE80 verified=build#4 | cam=(2.50, 81.62, -5.50) yaw=0.0 pitch=0.0 —— 与 [live] camHit 互证；g_tlas 与 verified 分歧 ⇒ 句柄陈旧，双 0 ⇒ 毒化/GPU 层
+[FAIL ] [tlas-health] t=0.01s 死亡（-Y 金丝瑞 miss——相机正下方本有地板）| 事件关联: atlas未上传 仍顶点色帧 compose=0帧
+[INFO ] [audit] t=0.01s build#4: 实例缓冲=干净 金丝瑞=干净 —— 双净而 TLAS 死 ⇒ GPU 私有内存写手（二分轮收口）
+[INFO ] [live] 0s: frames=1 (5.0 f/s) wall=76.9 f/s loop=77Hz spp=4 resets=0 tlas=build#4 | 上帧 0 查询 camHit=0.0% (0.00 Mray/s) | atlas=顶点色回退
+[live] atlas uploaded: 1024x512 RGBA8 -> MTLTexture (albedo path: ATLAS_RGB x vertex tint)
+[PASS ] [S8.2] atlas 采集 PASS: glId=10 1024x512 RGBA8 已上传 MTLTexture（albedo = texel × 顶点色）
+[PASS ] [compose] 捕获时像素传输状态: row=0 align=4 skipPx=0 skipRows=54  ⚠ SKIP 污染坐实（花屏条/SIGSEGV 同源——本帧起归零重置）
+[INFO ] [compose] pname 支持探测: SKIP_PIXELS=ok SKIP_ROWS=ok SWAP_BYTES=ok——掩码=0x0（被拒 pname 跳过读/重置/恢复三连；被拒即不可能被污染，无残留风险）
+[live] first ATLAS_RGB frame dispatched (tlas=build#4)
+[PASS ] [compose] 首帧几何: RT=480x270 win=2796(反射链) dst=2796x1290 blit_src=(0,0,480,270) blit_dst=(0,1290,2796,0) viewport=[0,0 2796x1290] scissor=off[0,0 2796x1290]
+[PASS ] [compose] 首帧调用归因梯: 重置=0x0500 bind=0x0000 段0=0x0000 段0重试=0x0000 段1=0x0000（0=净；非 0 即该步被驱动拒——INVALID_ENUM 出生地一步定谳）
+[PASS ] [live-sentinel atlas 后即时（epoch=1）] worker 直查 TLAS：1/6 命中 | verified：1/6 | 六射线 5 ms（慢+全miss=毒化签名） | tlas=build#4 ptr=0x1498EEE80 verified=build#4 | cam=(2.50, 81.62, -5.50) yaw=0.0 pitch=0.0 —— 与 [live] camHit 互证；g_tlas 与 verified 分歧 ⇒ 句柄陈旧，双 0 ⇒ 毒化/GPU 层
+[PASS ] [compose] 段上传误记自愈: y=0 rows=64 重试后成功（首错 0x0500 为排空前遗留误记，非上传失败）
+[PASS ] [compose] 段上传误记自愈: y=0 rows=64 重试后成功（首错 0x0500 为排空前遗留误记，非上传失败）
+[PASS ] [compose] 段上传误记自愈: y=0 rows=64 重试后成功（首错 0x0500 为排空前遗留误记，非上传失败）
+[census] 106 实例金丝瑞电池完成（109 ms，tlas=build#4）
+[PASS ] [census 基线（atlas 前）] t=0.15s: 命中列=38/106 自身=38 | 幸存=38 新亡=0 幸存XY盒=128x16格 | 幸存索引=0-6,12,14,18,20,36-37,48-49,53-56,65-76,81,87-88,92,99-101
+[INFO ] [audit] t=0.15s build#4: 实例缓冲=干净 金丝瑞=干净 —— 双净而 TLAS 死 ⇒ GPU 私有内存写手（二分轮收口）
+[INFO ] [live] 1s: frames=86 (84.3 f/s) wall=84.4 f/s loop=83Hz spp=344 resets=0 tlas=build#4 | 上帧 760390 查询 camHit=34.7% (64.18 Mray/s) | atlas=ATLAS_RGB
+[PASS ] [live-sentinel 1.5s 早期（毒化窗口加密点）] worker 直查 TLAS：0/6 命中 | verified：0/6 | 六射线 2 ms（慢+全miss=毒化签名） | tlas=build#4 ptr=0x1498EEE80 verified=build#4 | cam=(2.50, 81.62, -5.50) yaw=0.0 pitch=0.0 —— 与 [live] camHit 互证；g_tlas 与 verified 分歧 ⇒ 句柄陈旧，双 0 ⇒ 毒化/GPU 层
+[INFO ] [live-sentinel] 零命中 → 已请求探针线程交叉复测（[probe-sentinel] 行约 0.5s 内出现——同 TLAS 同射线仅换线程：probe 命中=worker 派发坏；双 miss=AS 内容坏）
+[INFO ] ray +X [probe]: miss（512 格内无几何）
+[INFO ] ray -X [probe]: miss（512 格内无几何）
+[INFO ] ray +Y(上) [probe]: miss（512 格内无几何）
+[INFO ] ray -Y(下) [probe]: miss（512 格内无几何）
+[INFO ] ray +Z [probe]: miss（512 格内无几何）
+[PASS ] [live-sentinel 2s 重锚前基线] worker 直查 TLAS：0/6 命中 | verified：0/6 | 六射线 4 ms（慢+全miss=毒化签名） | tlas=build#4 ptr=0x1498EEE80 verified=build#4 | cam=(2.50, 81.62, -5.50) yaw=0.0 pitch=0.0 —— 与 [live] camHit 互证；g_tlas 与 verified 分歧 ⇒ 句柄陈旧，双 0 ⇒ 毒化/GPU 层
+[INFO ] ray -Z [probe]: miss（512 格内无几何）
+[PASS ] [probe-sentinel worker 0/6 交叉复测#1] 探针线程直查 TLAS：0/6 命中（格线 0，-Y 脚下 0）| cam=(2.50, 81.62, -5.50) yaw=0.0 pitch=0.0 —— 与 [live-sentinel] 行互证
+[INFO ] [live] 2s: frames=180 (88.8 f/s) wall=93.3 f/s loop=46Hz spp=720 resets=0 tlas=build#4 | 上帧 518987 查询 camHit=0.1% (48.45 Mray/s) | atlas=ATLAS_RGB
+[census] 106 实例金丝瑞电池完成（37 ms，tlas=build#4）
+[PASS ] [census 稳态毒化后] t=3.00s: 命中列=0/106 自身=0 | 幸存=0 新亡=38 | 幸存索引=
+[INFO ] [audit] t=3.00s build#4: 实例缓冲=干净 金丝瑞=干净 —— 双净而 TLAS 死 ⇒ GPU 私有内存写手（二分轮收口）
+[INFO ] [live] 3s: frames=278 (91.2 f/s) wall=96.0 f/s loop=32Hz spp=1112 resets=0 tlas=build#4 | 上帧 518987 查询 camHit=0.1% (49.81 Mray/s) | atlas=ATLAS_RGB
+[PASS ] [live-sentinel 自愈前置（camHit 连续归零）] worker 直查 TLAS：0/6 命中 | verified：0/6 | 六射线 1 ms（慢+全miss=毒化签名） | tlas=build#4 ptr=0x1498EEE80 verified=build#4 | cam=(2.50, 81.62, -5.50) yaw=0.0 pitch=0.0 —— 与 [live] camHit 互证；g_tlas 与 verified 分歧 ⇒ 句柄陈旧，双 0 ⇒ 毒化/GPU 层
+[INFO ] [live] 自愈重锚请求 #1（camHit 连续 2 行≈0 且电池双死坐实）——探针线程 0.5s 内重建 TLAS + [live] reset；若重建后恢复又再度归零 ⇒ 持续型毒化（对照各行 tlas=build# 与 [live-sentinel] 耗时栏）
+[addr] TLAS build#5: as=23424B obj=0x149923600 instBuf(mem)=0x14D2F7E00 instBytes=6784 shadow(mem)=0x14A274000
+[live] reset: TLAS rebuilt (builds=5)
+[retired] releasing 6 deferred objects
+[tlas] rebuilt in 2.41 ms (instances=106, as=23424 B, tris=116660, colorSlots=106, pools=1399920+1399920 B, total=5 builds)
+[refresh] TLAS re-anchored on probe thread (instances=106, tlas builds=5)
+[PASS ] [S8.7] 自愈重锚 #1（探针线程执行——camHit 连续归零 + 哨兵双死触发；对比重建 前后 [live] 行 tlas=build# 与 camHit）
+[INFO ] ray +X [probe]: miss（512 格内无几何）
+[INFO ] ray -X [probe]: miss（512 格内无几何）
+[INFO ] ray +Y(上) [probe]: miss（512 格内无几何）
+[INFO ] ray -Y(下) [probe]: miss（512 格内无几何）
+[PASS ] ray +Z [probe]: HIT distance=6.50 hitPoint=(2.50, 81.62, 1.00) [整数格线 z] (instance=53) → section=(0,80,0)
+[INFO ] ray -Z [probe]: miss（512 格内无几何）
+[PASS ] [probe-sentinel 自愈重锚后（探针线程）] 探针线程直查 TLAS：1/6 命中（格线 1，-Y 脚下 0）| cam=(2.50, 81.62, -5.50) yaw=0.0 pitch=0.0 —— 与 [live-sentinel] 行互证
+[INFO ] [live] 4s: frames=52 (260.0 f/s) wall=98.3 f/s loop=24Hz spp=208 resets=1 tlas=build#5 | 上帧 850473 查询 camHit=45.2% (83.61 Mray/s) | atlas=ATLAS_RGB
+[INFO ] [compose] 心跳 #256: texSubErr=0 blitErr=0 shortBuf=0 drained=0 retryOk=254 chunkFail=0 mask=0x0 (RT=480x270 chunks=64行/段)
+[INFO ] [live] 5s: frames=146 (145.0 f/s) wall=93.3 f/s loop=19Hz spp=584 resets=1 tlas=build#5 | 上帧 518987 查询 camHit=0.1% (48.45 Mray/s) | atlas=ATLAS_RGB
+[INFO ] [live] 6s: frames=243 (120.8 f/s) wall=96.5 f/s loop=16Hz spp=972 resets=1 tlas=build#5 | 上帧 518987 查询 camHit=0.1% (50.09 Mray/s) | atlas=ATLAS_RGB
+[PASS ] [live-sentinel 自愈前置（camHit 连续归零）] worker 直查 TLAS：0/6 命中 | verified：0/6 | 六射线 2 ms（慢+全miss=毒化签名） | tlas=build#5 ptr=0x149923600 verified=build#5 | cam=(2.50, 81.62, -5.50) yaw=0.0 pitch=0.0 —— 与 [live] camHit 互证；g_tlas 与 verified 分歧 ⇒ 句柄陈旧，双 0 ⇒ 毒化/GPU 层
+[INFO ] [live] camHit 连续归零但电池未双死（天空场景或句柄陈旧）——不重锚，累积保留
+[INFO ] [live] 7s: frames=344 (113.9 f/s) wall=100.1 f/s loop=14Hz spp=1376 resets=1 tlas=build#5 | 上帧 518987 查询 camHit=0.1% (51.95 Mray/s) | atlas=ATLAS_RGB
+[INFO ] [live] 8s: frames=437 (108.6 f/s) wall=92.7 f/s loop=12Hz spp=1748 resets=1 tlas=build#5 | 上帧 518987 查询 camHit=0.1% (48.12 Mray/s) | atlas=ATLAS_RGB
+[PASS ] [live-sentinel 自愈前置（camHit 连续归零）] worker 直查 TLAS：0/6 命中 | verified：0/6 | 六射线 18 ms（慢+全miss=毒化签名） | tlas=build#5 ptr=0x149923600 verified=build#5 | cam=(2.50, 81.62, -5.50) yaw=0.0 pitch=0.0 —— 与 [live] camHit 互证；g_tlas 与 verified 分歧 ⇒ 句柄陈旧，双 0 ⇒ 毒化/GPU 层
+[INFO ] [live-sentinel] 零命中 → 已请求探针线程交叉复测（[probe-sentinel] 行约 0.5s 内出现——同 TLAS 同射线仅换线程：probe 命中=worker 派发坏；双 miss=AS 内容坏）
+[INFO ] [live] 自愈重锚请求 #2（camHit 连续 2 行≈0 且电池双死坐实）——探针线程 0.5s 内重建 TLAS + [live] reset；若重建后恢复又再度归零 ⇒ 持续型毒化（对照各行 tlas=build# 与 [live-sentinel] 耗时栏）
+[INFO ] ray +X [probe]: miss（512 格内无几何）
+[INFO ] ray -X [probe]: miss（512 格内无几何）
+[INFO ] ray +Y(上) [probe]: miss（512 格内无几何）
+[INFO ] ray -Y(下) [probe]: miss（512 格内无几何）
+[INFO ] ray +Z [probe]: miss（512 格内无几何）
+[INFO ] ray -Z [probe]: miss（512 格内无几何）
+[PASS ] [probe-sentinel worker 0/6 交叉复测#2] 探针线程直查 TLAS：0/6 命中（格线 0，-Y 脚下 0）| cam=(2.50, 81.62, -5.50) yaw=0.0 pitch=0.0 —— 与 [live-sentinel] 行互证
+[addr] TLAS build#6: as=23424B obj=0x149959C80 instBuf(mem)=0x14D2FCF00 instBytes=6784 shadow(mem)=0x14A274000
+[live] reset: TLAS rebuilt (builds=6)
+[retired] releasing 6 deferred objects
+[tlas] rebuilt in 2.21 ms (instances=106, as=23424 B, tris=116660, colorSlots=106, pools=1399920+1399920 B, total=6 builds)
+[refresh] TLAS re-anchored on probe thread (instances=106, tlas builds=6)
+[PASS ] [S8.7] 自愈重锚 #2（探针线程执行——camHit 连续归零 + 哨兵双死触发；对比重建 前后 [live] 行 tlas=build# 与 camHit）
+[INFO ] ray +X [probe]: miss（512 格内无几何）
+[INFO ] ray -X [probe]: miss（512 格内无几何）
+[INFO ] ray +Y(上) [probe]: miss（512 格内无几何）
+[INFO ] ray -Y(下) [probe]: miss（512 格内无几何）
+[PASS ] ray +Z [probe]: HIT distance=6.50 hitPoint=(2.50, 81.62, 1.00) [整数格线 z] (instance=53) → section=(0,80,0)
+[INFO ] ray -Z [probe]: miss（512 格内无几何）
+[PASS ] [probe-sentinel 自愈重锚后（探针线程）] 探针线程直查 TLAS：1/6 命中（格线 1，-Y 脚下 0）| cam=(2.50, 81.62, -5.50) yaw=0.0 pitch=0.0 —— 与 [live-sentinel] 行互证
+[INFO ] [live] 9s: frames=91 (455.0 f/s) wall=92.5 f/s loop=10Hz spp=364 resets=2 tlas=build#6 | 上帧 850473 查询 camHit=45.2% (78.70 Mray/s) | atlas=ATLAS_RGB
+[INFO ] [compose] 心跳 #512: texSubErr=0 blitErr=0 shortBuf=0 drained=0 retryOk=510 chunkFail=0 mask=0x0 (RT=480x270 chunks=64行/段)
+[PASS ] [live-sentinel 12s 重锚前基线] worker 直查 TLAS：0/6 命中 | verified：0/6 | 六射线 4 ms（慢+全miss=毒化签名） | tlas=build#6 ptr=0x149959C80 verified=build#6 | cam=(2.50, 81.62, -5.50) yaw=0.0 pitch=0.0 —— 与 [live] camHit 互证；g_tlas 与 verified 分歧 ⇒ 句柄陈旧，双 0 ⇒ 毒化/GPU 层
+[INFO ] [live] 14s: frames=566 (113.0 f/s) wall=94.8 f/s loop=34Hz spp=2264 resets=2 tlas=build#6 | 上帧 518987 查询 camHit=0.1% (49.22 Mray/s) | atlas=ATLAS_RGB
+[INFO ] [compose] 心跳 #768: texSubErr=0 blitErr=0 shortBuf=0 drained=0 retryOk=766 chunkFail=0 mask=0x0 (RT=480x270 chunks=64行/段)
+[PASS ] [S8.5 早期收敛快照] PNG 落盘: /var/mobile/Containers/Data/Application/8BCCCFC1-5C33-44BA-811F-FC58EE9FCC6E/Documents/instances/default/versions/fabric-loader-0.20.1-1.21.4/game/pathtrace_live.png (44585 B, 480x270, @15s)
+[INFO ] [compose] 心跳 #1024: texSubErr=0 blitErr=0 shortBuf=0 drained=0 retryOk=1022 chunkFail=0 mask=0x0 (RT=480x270 chunks=64行/段)
+[INFO ] [live] 19s: frames=1052 (105.0 f/s) wall=97.0 f/s loop=25Hz spp=4208 resets=2 tlas=build#6 | 上帧 518987 查询 camHit=0.1% (50.36 Mray/s) | atlas=ATLAS_RGB
+[PASS ] [live-sentinel 自愈前置（camHit 连续归零）] worker 直查 TLAS：0/6 命中 | verified：0/6 | 六射线 1 ms（慢+全miss=毒化签名） | tlas=build#6 ptr=0x149959C80 verified=build#6 | cam=(2.50, 81.62, -5.50) yaw=0.0 pitch=0.0 —— 与 [live] camHit 互证；g_tlas 与 verified 分歧 ⇒ 句柄陈旧，双 0 ⇒ 毒化/GPU 层
+[INFO ] [live-sentinel] 零命中 → 已请求探针线程交叉复测（[probe-sentinel] 行约 0.5s 内出现——同 TLAS 同射线仅换线程：probe 命中=worker 派发坏；双 miss=AS 内容坏）
+[INFO ] [live] 自愈重锚请求 #3（camHit 连续 2 行≈0 且电池双死坐实）——探针线程 0.5s 内重建 TLAS + [live] reset；若重建后恢复又再度归零 ⇒ 持续型毒化（对照各行 tlas=build# 与 [live-sentinel] 耗时栏）
+[INFO ] ray +X [probe]: miss（512 格内无几何）
+[INFO ] ray -X [probe]: miss（512 格内无几何）
+[INFO ] ray +Y(上) [probe]: miss（512 格内无几何）
+[INFO ] ray -Y(下) [probe]: miss（512 格内无几何）
+[INFO ] ray +Z [probe]: miss（512 格内无几何）
+[INFO ] ray -Z [probe]: miss（512 格内无几何）
+[PASS ] [probe-sentinel worker 0/6 交叉复测#3] 探针线程直查 TLAS：0/6 命中（格线 0，-Y 脚下 0）| cam=(2.50, 81.62, -5.50) yaw=0.0 pitch=0.0 —— 与 [live-sentinel] 行互证
+[addr] TLAS build#7: as=23424B obj=0x149990300 instBuf(mem)=0x14D501F00 instBytes=6784 shadow(mem)=0x14A274000
+[live] reset: TLAS rebuilt (builds=7)
+[retired] releasing 6 deferred objects
+[tlas] rebuilt in 1.26 ms (instances=106, as=23424 B, tris=116660, colorSlots=106, pools=1399920+1399920 B, total=7 builds)
+[refresh] TLAS re-anchored on probe thread (instances=106, tlas builds=7)
+[PASS ] [S8.7] 自愈重锚 #3（探针线程执行——camHit 连续归零 + 哨兵双死触发；对比重建 前后 [live] 行 tlas=build# 与 camHit）
+[INFO ] ray +X [probe]: miss（512 格内无几何）
+[INFO ] ray -X [probe]: miss（512 格内无几何）
+[INFO ] ray +Y(上) [probe]: miss（512 格内无几何）
+[INFO ] ray -Y(下) [probe]: miss（512 格内无几何）
+[PASS ] ray +Z [probe]: HIT distance=6.50 hitPoint=(2.50, 81.62, 1.00) [整数格线 z] (instance=53) → section=(0,80,0)
+[INFO ] ray -Z [probe]: miss（512 格内无几何）
+[PASS ] [probe-sentinel 自愈重锚后（探针线程）] 探针线程直查 TLAS：1/6 命中（格线 1，-Y 脚下 0）| cam=(2.50, 81.62, -5.50) yaw=0.0 pitch=0.0 —— 与 [live-sentinel] 行互证
+[INFO ] [compose] 心跳 #1280: texSubErr=0 blitErr=0 shortBuf=0 drained=0 retryOk=1278 chunkFail=0 mask=0x0 (RT=480x270 chunks=64行/段)
+[INFO ] [compose] 心跳 #1536: texSubErr=0 blitErr=0 shortBuf=0 drained=0 retryOk=1534 chunkFail=0 mask=0x0 (RT=480x270 chunks=64行/段)
+[INFO ] [live] 24s: frames=434 (2170.0 f/s) wall=101.9 f/s loop=21Hz spp=1736 resets=4 tlas=build#7 | 上帧 520889 查询 camHit=0.4% (53.10 Mray/s) | atlas=ATLAS_RGB
+[INFO ] [compose] 心跳 #1792: texSubErr=0 blitErr=0 shortBuf=0 drained=0 retryOk=1790 chunkFail=0 mask=0x0 (RT=480x270 chunks=64行/段)
+[INFO ] [compose] 心跳 #2048: texSubErr=0 blitErr=0 shortBuf=0 drained=0 retryOk=2046 chunkFail=0 mask=0x0 (RT=480x270 chunks=64行/段)
+[INFO ] [live] 29s: frames=944 (188.5 f/s) wall=101.8 f/s loop=18Hz spp=3776 resets=4 tlas=build#7 | 上帧 520889 查询 camHit=0.4% (53.05 Mray/s) | atlas=ATLAS_RGB
+[PASS ] [live-sentinel 自愈前置（camHit 连续归零）] worker 直查 TLAS：0/6 命中 | verified：0/6 | 六射线 3 ms（慢+全miss=毒化签名） | tlas=build#7 ptr=0x149990300 verified=build#7 | cam=(2.41, 81.62, -5.41) yaw=0.0 pitch=0.0 —— 与 [live] camHit 互证；g_tlas 与 verified 分歧 ⇒ 句柄陈旧，双 0 ⇒ 毒化/GPU 层
+[INFO ] [live-sentinel] 零命中 → 已请求探针线程交叉复测（[probe-sentinel] 行约 0.5s 内出现——同 TLAS 同射线仅换线程：probe 命中=worker 派发坏；双 miss=AS 内容坏）
+[INFO ] [live] 自愈重锚请求 #4（camHit 连续 2 行≈0 且电池双死坐实）——探针线程 0.5s 内重建 TLAS + [live] reset；若重建后恢复又再度归零 ⇒ 持续型毒化（对照各行 tlas=build# 与 [live-sentinel] 耗时栏）
+[INFO ] ray +X [probe]: miss（512 格内无几何）
+[INFO ] ray -X [probe]: miss（512 格内无几何）
+[INFO ] ray +Y(上) [probe]: miss（512 格内无几何）
+[INFO ] ray -Y(下) [probe]: miss（512 格内无几何）
+[INFO ] ray +Z [probe]: miss（512 格内无几何）
+[INFO ] ray -Z [probe]: miss（512 格内无几何）
+[PASS ] [probe-sentinel worker 0/6 交叉复测#4] 探针线程直查 TLAS：0/6 命中（格线 0，-Y 脚下 0）| cam=(2.41, 81.62, -5.41) yaw=0.0 pitch=0.0 —— 与 [live-sentinel] 行互证
+[addr] TLAS build#8: as=23424B obj=0x1499A4480 instBuf(mem)=0x14D505C00 instBytes=6784 shadow(mem)=0x14A274000
+[retired] releasing 6 deferred objects
+[tlas] rebuilt in 1.79 ms (instances=106, as=23424 B, tris=116660, colorSlots=106, pools=1399920+1399920 B, total=8 builds)
+[refresh] TLAS re-anchored on probe thread (instances=106, tlas builds=8)
+[PASS ] [S8.7] 自愈重锚 #4（探针线程执行——camHit 连续归零 + 哨兵双死触发；对比重建 前后 [live] 行 tlas=build# 与 camHit）
+[INFO ] ray +X [probe]: miss（512 格内无几何）
+[INFO ] ray -X [probe]: miss（512 格内无几何）
+[INFO ] ray +Y(上) [probe]: miss（512 格内无几何）
+[INFO ] ray -Y(下) [probe]: miss（512 格内无几何）
+[PASS ] ray +Z [probe]: HIT distance=6.41 hitPoint=(2.41, 81.62, 1.00) [整数格线 z] (instance=53) → section=(0,80,0)
+[INFO ] ray -Z [probe]: miss（512 格内无几何）
+[PASS ] [probe-sentinel 自愈重锚后（探针线程）] 探针线程直查 TLAS：1/6 命中（格线 1，-Y 脚下 0）| cam=(2.41, 81.62, -5.41) yaw=0.0 pitch=0.0 —— 与 [live-sentinel] 行互证
+[live] reset: TLAS rebuilt (builds=8)
+[addr] TLAS build#9: as=23424B obj=0x1499BF900 instBuf(mem)=0x14D508200 instBytes=6784 shadow(mem)=0x14A274000
+[retired] releasing 6 deferred objects
+[tlas] rebuilt in 2.38 ms (instances=106, as=23424 B, tris=116660, colorSlots=106, pools=1399920+1399920 B, total=9 builds)
+[refresh] TLAS re-anchored on probe thread (instances=106, tlas builds=9)
+[PASS ] [S8.4] 探针线程 30s 定时重锚（A/B 后半段：探针构建 + worker 查询——对比 [live] 行 30s 前后的 camHit）
+[INFO ] ray +X [probe]: miss（512 格内无几何）
+[INFO ] ray -X [probe]: miss（512 格内无几何）
+[INFO ] ray +Y(上) [probe]: miss（512 格内无几何）
+[INFO ] ray -Y(下) [probe]: miss（512 格内无几何）
+[PASS ] ray +Z [probe]: HIT distance=6.41 hitPoint=(2.41, 81.62, 1.00) [整数格线 z] (instance=53) → section=(0,80,0)
+[INFO ] ray -Z [probe]: miss（512 格内无几何）
+[PASS ] [probe-sentinel S8.4 重锚后（探针线程）] 探针线程直查 TLAS：1/6 命中（格线 1，-Y 脚下 0）| cam=(2.41, 81.62, -5.41) yaw=0.0 pitch=0.0 —— 与 [live-sentinel] 行互证
+[live] reset: TLAS rebuilt (builds=9)
+[census] 106 实例金丝瑞电池完成（34 ms，tlas=build#9）
+[PASS ] [census S8.4 重锚后新鲜] t=30.60s: 命中列=38/106 自身=38 | 幸存=38 新亡=0 幸存XY盒=128x16格 | 幸存索引=0-6,12,14,18,20,36-37,48-49,53-56,65-76,81,87-88,92,99-101
+[INFO ] [audit] t=30.60s build#9: 实例缓冲=干净 金丝瑞=干净 —— 双净而 TLAS 死 ⇒ GPU 私有内存写手（二分轮收口）
+[INFO ] [compose] 心跳 #2304: texSubErr=0 blitErr=0 shortBuf=0 drained=0 retryOk=2302 chunkFail=0 mask=0x0 (RT=480x270 chunks=64行/段)
+[PASS ] [live-sentinel 32s 探针重锚后] worker 直查 TLAS：0/6 命中 | verified：0/6 | 六射线 2 ms（慢+全miss=毒化签名） | tlas=build#9 ptr=0x1499BF900 verified=build#9 | cam=(2.41, 81.62, -5.41) yaw=0.0 pitch=0.0 —— 与 [live] camHit 互证；g_tlas 与 verified 分歧 ⇒ 句柄陈旧，双 0 ⇒ 毒化/GPU 层
+[census] 106 实例金丝瑞电池完成（32 ms，tlas=build#9）
+[PASS ] [census 再衰减后] t=33.00s: 命中列=0/106 自身=0 | 幸存=0 新亡=38 | 幸存索引=
+[INFO ] [audit] t=33.00s build#9: 实例缓冲=干净 金丝瑞=干净 —— 双净而 TLAS 死 ⇒ GPU 私有内存写手（二分轮收口）
+[INFO ] [compose] 心跳 #2560: texSubErr=0 blitErr=0 shortBuf=0 drained=0 retryOk=2558 chunkFail=0 mask=0x0 (RT=480x270 chunks=64行/段)
+[PASS ] [live-sentinel 34s 延迟复测（毒化半衰期）] worker 直查 TLAS：0/6 命中 | verified：0/6 | 六射线 2 ms（慢+全miss=毒化签名） | tlas=build#9 ptr=0x1499BF900 verified=build#9 | cam=(2.41, 81.62, -5.41) yaw=0.0 pitch=0.0 —— 与 [live] camHit 互证；g_tlas 与 verified 分歧 ⇒ 句柄陈旧，双 0 ⇒ 毒化/GPU 层
+[INFO ] [live] 34s: frames=378 (1890.0 f/s) wall=100.5 f/s loop=15Hz spp=1512 resets=6 tlas=build#9 | 上帧 520889 查询 camHit=0.4% (52.35 Mray/s) | atlas=ATLAS_RGB
+[INFO ] [compose] 心跳 #2816: texSubErr=0 blitErr=0 shortBuf=0 drained=0 retryOk=2814 chunkFail=0 mask=0x0 (RT=480x270 chunks=64行/段)
+[INFO ] [compose] 心跳 #3072: texSubErr=0 blitErr=0 shortBuf=0 drained=0 retryOk=3070 chunkFail=0 mask=0x0 (RT=480x270 chunks=64行/段)
+[INFO ] [live] 39s: frames=886 (177.0 f/s) wall=101.5 f/s loop=13Hz spp=3544 resets=6 tlas=build#9 | 上帧 520889 查询 camHit=0.4% (52.85 Mray/s) | atlas=ATLAS_RGB
+[PASS ] [live-sentinel 自愈前置（camHit 连续归零）] worker 直查 TLAS：0/6 命中 | verified：0/6 | 六射线 1 ms（慢+全miss=毒化签名） | tlas=build#9 ptr=0x1499BF900 verified=build#9 | cam=(2.41, 81.62, -5.41) yaw=0.0 pitch=0.0 —— 与 [live] camHit 互证；g_tlas 与 verified 分歧 ⇒ 句柄陈旧，双 0 ⇒ 毒化/GPU 层
+[INFO ] [live-sentinel] 零命中 → 已请求探针线程交叉复测（[probe-sentinel] 行约 0.5s 内出现——同 TLAS 同射线仅换线程：probe 命中=worker 派发坏；双 miss=AS 内容坏）
+[INFO ] [live] 自愈重锚请求 #5（camHit 连续 2 行≈0 且电池双死坐实）——探针线程 0.5s 内重建 TLAS + [live] reset；若重建后恢复又再度归零 ⇒ 持续型毒化（对照各行 tlas=build# 与 [live-sentinel] 耗时栏）
+[INFO ] ray +X [probe]: miss（512 格内无几何）
+[INFO ] ray -X [probe]: miss（512 格内无几何）
+[INFO ] ray +Y(上) [probe]: miss（512 格内无几何）
+[INFO ] ray -Y(下) [probe]: miss（512 格内无几何）
+[INFO ] ray +Z [probe]: miss（512 格内无几何）
+[INFO ] ray -Z [probe]: miss（512 格内无几何）
+[PASS ] [probe-sentinel worker 0/6 交叉复测#5] 探针线程直查 TLAS：0/6 命中（格线 0，-Y 脚下 0）| cam=(2.41, 81.62, -5.41) yaw=0.0 pitch=0.0 —— 与 [live-sentinel] 行互证
+[addr] TLAS build#10: as=23424B obj=0x149A02280 instBuf(mem)=0x14D51A600 instBytes=6784 shadow(mem)=0x14A274000
+[retired] releasing 6 deferred objects
+[tlas] rebuilt in 1.59 ms (instances=106, as=23424 B, tris=116660, colorSlots=106, pools=1399920+1399920 B, total=10 builds)
+[refresh] TLAS re-anchored on probe thread (instances=106, tlas builds=10)
+[PASS ] [S8.7] 自愈重锚 #5（探针线程执行——camHit 连续归零 + 哨兵双死触发；对比重建 前后 [live] 行 tlas=build# 与 camHit）
+[INFO ] ray +X [probe]: miss（512 格内无几何）
+[INFO ] ray -X [probe]: miss（512 格内无几何）
+[INFO ] ray +Y(上) [probe]: miss（512 格内无几何）
+[INFO ] ray -Y(下) [probe]: miss（512 格内无几何）
+[PASS ] ray +Z [probe]: HIT distance=6.41 hitPoint=(2.41, 81.62, 1.00) [整数格线 z] (instance=53) → section=(0,80,0)
+[INFO ] ray -Z [probe]: miss（512 格内无几何）
+[PASS ] [probe-sentinel 自愈重锚后（探针线程）] 探针线程直查 TLAS：1/6 命中（格线 1，-Y 脚下 0）| cam=(2.41, 81.62, -5.41) yaw=0.0 pitch=0.0 —— 与 [live-sentinel] 行互证
+[live] reset: TLAS rebuilt (builds=10)
+[INFO ] [compose] 心跳 #3328: texSubErr=0 blitErr=0 shortBuf=0 drained=0 retryOk=3326 chunkFail=0 mask=0x0 (RT=480x270 chunks=64行/段)
+[INFO ] [compose] 心跳 #3584: texSubErr=0 blitErr=0 shortBuf=0 drained=0 retryOk=3582 chunkFail=0 mask=0x0 (RT=480x270 chunks=64行/段)
+[INFO ] [live] 44s: frames=480 (2400.0 f/s) wall=101.7 f/s loop=12Hz spp=1920 resets=7 tlas=build#10 | 上帧 520889 查询 camHit=0.4% (52.95 Mray/s) | atlas=ATLAS_RGB
+[INFO ] [compose] 心跳 #3840: texSubErr=0 blitErr=0 shortBuf=0 drained=0 retryOk=3838 chunkFail=0 mask=0x0 (RT=480x270 chunks=64行/段)
+[INFO ] [live] 49s: frames=985 (196.8 f/s) wall=100.9 f/s loop=10Hz spp=3940 resets=7 tlas=build#10 | 上帧 520889 查询 camHit=0.4% (52.55 Mray/s) | atlas=ATLAS_RGB
+[PASS ] [live-sentinel 自愈前置（camHit 连续归零）] worker 直查 TLAS：0/6 命中 | verified：0/6 | 六射线 1 ms（慢+全miss=毒化签名） | tlas=build#10 ptr=0x149A02280 verified=build#10 | cam=(2.41, 81.62, -5.41) yaw=0.0 pitch=0.0 —— 与 [live] camHit 互证；g_tlas 与 verified 分歧 ⇒ 句柄陈旧，双 0 ⇒ 毒化/GPU 层
+[INFO ] [live-sentinel] 零命中 → 已请求探针线程交叉复测（[probe-sentinel] 行约 0.5s 内出现——同 TLAS 同射线仅换线程：probe 命中=worker 派发坏；双 miss=AS 内容坏）
+[INFO ] [live] 自愈重锚请求 #6（camHit 连续 2 行≈0 且电池双死坐实）——探针线程 0.5s 内重建 TLAS + [live] reset；若重建后恢复又再度归零 ⇒ 持续型毒化（对照各行 tlas=build# 与 [live-sentinel] 耗时栏）
+[INFO ] ray +X [probe]: miss（512 格内无几何）
+[INFO ] ray -X [probe]: miss（512 格内无几何）
+[INFO ] ray +Y(上) [probe]: miss（512 格内无几何）
+[INFO ] ray -Y(下) [probe]: miss（512 格内无几何）
+[INFO ] ray +Z [probe]: miss（512 格内无几何）
+[INFO ] ray -Z [probe]: miss（512 格内无几何）
+[PASS ] [probe-sentinel worker 0/6 交叉复测#6] 探针线程直查 TLAS：0/6 命中（格线 0，-Y 脚下 0）| cam=(2.41, 81.62, -5.41) yaw=0.0 pitch=0.0 —— 与 [live-sentinel] 行互证
+[addr] TLAS build#11: as=23424B obj=0x149A78780 instBuf(mem)=0x14D52C000 instBytes=6784 shadow(mem)=0x14A274000
+[live] reset: TLAS rebuilt (builds=11)
+[retired] releasing 6 deferred objects
+[tlas] rebuilt in 1.68 ms (instances=106, as=23424 B, tris=116660, colorSlots=106, pools=1399920+1399920 B, total=11 builds)
+[refresh] TLAS re-anchored on probe thread (instances=106, tlas builds=11)
+[PASS ] [S8.7] 自愈重锚 #6（探针线程执行——camHit 连续归零 + 哨兵双死触发；对比重建 前后 [live] 行 tlas=build# 与 camHit）
+[INFO ] ray +X [probe]: miss（512 格内无几何）
+[INFO ] ray -X [probe]: miss（512 格内无几何）
+[INFO ] ray +Y(上) [probe]: miss（512 格内无几何）
+[INFO ] ray -Y(下) [probe]: miss（512 格内无几何）
+[PASS ] ray +Z [probe]: HIT distance=6.41 hitPoint=(2.41, 81.62, 1.00) [整数格线 z] (instance=53) → section=(0,80,0)
+[INFO ] ray -Z [probe]: miss（512 格内无几何）
+[PASS ] [probe-sentinel 自愈重锚后（探针线程）] 探针线程直查 TLAS：1/6 命中（格线 1，-Y 脚下 0）| cam=(2.41, 81.62, -5.41) yaw=0.0 pitch=0.0 —— 与 [live-sentinel] 行互证
+[INFO ] [compose] 心跳 #4096: texSubErr=0 blitErr=0 shortBuf=0 drained=0 retryOk=4094 chunkFail=0 mask=0x0 (RT=480x270 chunks=64行/段)
+[INFO ] [compose] 心跳 #4352: texSubErr=0 blitErr=0 shortBuf=0 drained=0 retryOk=4350 chunkFail=0 mask=0x0 (RT=480x270 chunks=64行/段)
+[INFO ] [live] 54s: frames=475 (2375.0 f/s) wall=101.8 f/s loop=9Hz spp=1900 resets=8 tlas=build#11 | 上帧 520889 查询 camHit=0.4% (53.01 Mray/s) | atlas=ATLAS_RGB
+[PASS ] [S8.5 高 spp 收敛快照] PNG 落盘: /var/mobile/Containers/Data/Application/8BCCCFC1-5C33-44BA-811F-FC58EE9FCC6E/Documents/instances/default/versions/fabric-loader-0.20.1-1.21.4/game/pathtrace_live_final.png (51988 B, 480x270, @55s)
+[INFO ] [compose] 心跳 #4608: texSubErr=0 blitErr=0 shortBuf=0 drained=0 retryOk=4606 chunkFail=0 mask=0x0 (RT=480x270 chunks=64行/段)
+[census] 106 实例金丝瑞电池完成（29 ms，tlas=build#11）
+[PASS ] [census 晚窗] t=58.00s: 命中列=0/106 自身=0 | 幸存=0 新亡=38 | 幸存索引=
+[INFO ] [audit] t=58.00s build#11: 实例缓冲=干净 金丝瑞=干净 —— 双净而 TLAS 死 ⇒ GPU 私有内存写手（二分轮收口）
+[INFO ] [compose] 心跳 #4864: texSubErr=0 blitErr=0 shortBuf=0 drained=0 retryOk=4862 chunkFail=0 mask=0x0 (RT=480x270 chunks=64行/段)
+[INFO ] [live] 59s: frames=979 (195.5 f/s) wall=100.7 f/s loop=9Hz spp=3916 resets=8 tlas=build#11 | 上帧 520889 查询 camHit=0.4% (52.43 Mray/s) | atlas=ATLAS_RGB
+[PASS ] [live-sentinel 自愈前置（camHit 连续归零）] worker 直查 TLAS：0/6 命中 | verified：0/6 | 六射线 1 ms（慢+全miss=毒化签名） | tlas=build#11 ptr=0x149A78780 verified=build#11 | cam=(2.41, 81.62, -5.41) yaw=0.0 pitch=0.0 —— 与 [live] camHit 互证；g_tlas 与 verified 分歧 ⇒ 句柄陈旧，双 0 ⇒ 毒化/GPU 层
+[INFO ] [live-sentinel] 零命中 → 已请求探针线程交叉复测（[probe-sentinel] 行约 0.5s 内出现——同 TLAS 同射线仅换线程：probe 命中=worker 派发坏；双 miss=AS 内容坏）
+[INFO ] [live] 自愈重锚请求 #7（camHit 连续 2 行≈0 且电池双死坐实）——探针线程 0.5s 内重建 TLAS + [live] reset；若重建后恢复又再度归零 ⇒ 持续型毒化（对照各行 tlas=build# 与 [live-sentinel] 耗时栏）
+[INFO ] ray +X [probe]: miss（512 格内无几何）
+[INFO ] ray -X [probe]: miss（512 格内无几何）
+[INFO ] ray +Y(上) [probe]: miss（512 格内无几何）
+[INFO ] ray -Y(下) [probe]: miss（512 格内无几何）
+[INFO ] ray +Z [probe]: miss（512 格内无几何）
+[INFO ] ray -Z [probe]: miss（512 格内无几何）
+[PASS ] [probe-sentinel worker 0/6 交叉复测#7] 探针线程直查 TLAS：0/6 命中（格线 0，-Y 脚下 0）| cam=(2.41, 81.62, -5.41) yaw=0.0 pitch=0.0 —— 与 [live-sentinel] 行互证
+[addr] TLAS build#12: as=23424B obj=0x149A3A700 instBuf(mem)=0x14D535C00 instBytes=6784 shadow(mem)=0x14A274000
+[retired] releasing 6 deferred objects
+[tlas] rebuilt in 2.10 ms (instances=106, as=23424 B, tris=116660, colorSlots=106, pools=1399920+1399920 B, total=12 builds)
+[refresh] TLAS re-anchored on probe thread (instances=106, tlas builds=12)
+[PASS ] [S8.7] 自愈重锚 #7（探针线程执行——camHit 连续归零 + 哨兵双死触发；对比重建 前后 [live] 行 tlas=build# 与 camHit）
+[INFO ] ray +X [probe]: miss（512 格内无几何）
+[INFO ] ray -X [probe]: miss（512 格内无几何）
+[INFO ] ray +Y(上) [probe]: miss（512 格内无几何）
+[INFO ] ray -Y(下) [probe]: miss（512 格内无几何）
+[PASS ] ray +Z [probe]: HIT distance=6.41 hitPoint=(2.41, 81.62, 1.00) [整数格线 z] (instance=53) → section=(0,80,0)
+[INFO ] ray -Z [probe]: miss（512 格内无几何）
+[PASS ] [probe-sentinel 自愈重锚后（探针线程）] 探针线程直查 TLAS：1/6 命中（格线 1，-Y 脚下 0）| cam=(2.41, 81.62, -5.41) yaw=0.0 pitch=0.0 —— 与 [live-sentinel] 行互证
+[live] reset: TLAS rebuilt (builds=12)
+
+---- S8.6 实时会话判定（60s 观察窗收口） ----
+[INFO ] 会话统计: frames=45 spp=180 resets=9 refreshes=0 | 上帧 camHit=45.3% | wall=99.3 f/s | hook: swap=7969 blit=4941 glErrors=0
+
+==============================================================
+实时会话判定: LIVE_OK
+2.3 三件事闭环：渐进累积（静止收敛 spp=180，移动 resets=9 自动重置）+ GL 合成（blit=4941 帧，整帧替换游戏画面）+ atlas albedo（ATLAS_RGB × 顶点色）。v0.4.2 证据链：camHit 见 [live] 行（分母已修——v0.4 显示 bug 曾把真命中率抹成 0.0%）、TLAS 线程归责见 [live-sentinel]/[probe-sentinel]/[S8.4] 行（探针构建 + 双线程查询 A/B）、GL 错误分类学见 [compose] 行。会话继续运行直到游戏退出——眼见为实。下一步（2.4）：反射/GI 质量与阴影 ray 复用、事件驱动摄取（mixin 化 SceneProxy）。
+==============================================================
+[INFO ] [S8] 会话继续运行（不上屏即熄）——原生资源随游戏进程退出释放
+[INFO ] [compose] 心跳 #5120: texSubErr=0 blitErr=0 shortBuf=0 drained=0 retryOk=5118 chunkFail=0 mask=0x0 (RT=480x270 chunks=64行/段)
+[INFO ] [live] 64s: frames=468 (2340.0 f/s) wall=102.0 f/s loop=8Hz spp=1872 resets=9 tlas=build#12 | 上帧 520889 查询 camHit=0.4% (53.12 Mray/s) | atlas=ATLAS_RGB
+[INFO ] [compose] 心跳 #5376: texSubErr=0 blitErr=0 shortBuf=0 drained=0 retryOk=5374 chunkFail=0 mask=0x0 (RT=480x270 chunks=64行/段)
+[INFO ] [compose] 心跳 #5632: texSubErr=0 blitErr=0 shortBuf=0 drained=0 retryOk=5630 chunkFail=0 mask=0x0 (RT=480x270 chunks=64行/段)
+[INFO ] [live] 69s: frames=978 (195.4 f/s) wall=101.9 f/s loop=7Hz spp=3912 resets=9 tlas=build#12 | 上帧 520889 查询 camHit=0.4% (53.07 Mray/s) | atlas=ATLAS_RGB
+[PASS ] [live-sentinel 自愈前置（camHit 连续归零）] worker 直查 TLAS：0/6 命中 | verified：0/6 | 六射线 1 ms（慢+全miss=毒化签名） | tlas=build#12 ptr=0x149A3A700 verified=build#12 | cam=(2.41, 81.62, -5.41) yaw=0.0 pitch=0.0 —— 与 [live] camHit 互证；g_tlas 与 verified 分歧 ⇒ 句柄陈旧，双 0 ⇒ 毒化/GPU 层
+[INFO ] [live-sentinel] 零命中 → 已请求探针线程交叉复测（[probe-sentinel] 行约 0.5s 内出现——同 TLAS 同射线仅换线程：probe 命中=worker 派发坏；双 miss=AS 内容坏）
+[INFO ] [live] 自愈重锚请求 #8（camHit 连续 2 行≈0 且电池双死坐实）——探针线程 0.5s 内重建 TLAS + [live] reset；若重建后恢复又再度归零 ⇒ 持续型毒化（对照各行 tlas=build# 与 [live-sentinel] 耗时栏）
+[INFO ] [compose] 心跳 #5888: texSubErr=0 blitErr=0 shortBuf=0 drained=0 retryOk=5886 chunkFail=0 mask=0x0 (RT=480x270 chunks=64行/段)
+[INFO ] [live] 74s: frames=1490 (148.9 f/s) wall=102.4 f/s loop=7Hz spp=5960 resets=9 tlas=build#12 | 上帧 520889 查询 camHit=0.4% (53.34 Mray/s) | atlas=ATLAS_RGB
+[INFO ] [compose] 心跳 #6144: texSubErr=0 blitErr=0 shortBuf=0 drained=0 retryOk=6142 chunkFail=0 mask=0x0 (RT=480x270 chunks=64行/段)
+[INFO ] [live] 79s: frames=2002 (133.4 f/s) wall=102.3 f/s loop=6Hz spp=8008 resets=9 tlas=build#12 | 上帧 520889 查询 camHit=0.4% (53.26 Mray/s) | atlas=ATLAS_RGB
+[PASS ] [live-sentinel 自愈前置（camHit 连续归零）] worker 直查 TLAS：0/6 命中 | verified：0/6 | 六射线 1 ms（慢+全miss=毒化签名） | tlas=build#12 ptr=0x149A3A700 verified=build#12 | cam=(2.41, 81.62, -5.41) yaw=0.0 pitch=0.0 —— 与 [live] camHit 互证；g_tlas 与 verified 分歧 ⇒ 句柄陈旧，双 0 ⇒ 毒化/GPU 层
+[INFO ] [live-sentinel] 零命中 → 已请求探针线程交叉复测（[probe-sentinel] 行约 0.5s 内出现——同 TLAS 同射线仅换线程：probe 命中=worker 派发坏；双 miss=AS 内容坏）
+[INFO ] [live] 自愈重锚请求 #9（camHit 连续 2 行≈0 且电池双死坐实）——探针线程 0.5s 内重建 TLAS + [live] reset；若重建后恢复又再度归零 ⇒ 持续型毒化（对照各行 tlas=build# 与 [live-sentinel] 耗时栏）
+[INFO ] [compose] 心跳 #6400: texSubErr=0 blitErr=0 shortBuf=0 drained=0 retryOk=6398 chunkFail=0 mask=0x0 (RT=480x270 chunks=64行/段)
+[INFO ] [live] 84s: frames=2510 (125.4 f/s) wall=101.5 f/s loop=6Hz spp=10040 resets=9 tlas=build#12 | 上帧 520889 查询 camHit=0.4% (52.86 Mray/s) | atlas=ATLAS_RGB
+[INFO ] [compose] 心跳 #6656: texSubErr=0 blitErr=0 shortBuf=0 drained=0 retryOk=6654 chunkFail=0 mask=0x0 (RT=480x270 chunks=64行/段)
+[INFO ] [live] 89s: frames=3020 (120.7 f/s) wall=101.9 f/s loop=6Hz spp=12080 resets=9 tlas=build#12 | 上帧 520889 查询 camHit=0.4% (53.07 Mray/s) | atlas=ATLAS_RGB
+[PASS ] [live-sentinel 自愈前置（camHit 连续归零）] worker 直查 TLAS：0/6 命中 | verified：0/6 | 六射线 2 ms（慢+全miss=毒化签名） | tlas=build#12 ptr=0x149A3A700 verified=build#12 | cam=(2.41, 81.62, -5.41) yaw=0.0 pitch=0.0 —— 与 [live] camHit 互证；g_tlas 与 verified 分歧 ⇒ 句柄陈旧，双 0 ⇒ 毒化/GPU 层
+[INFO ] [live-sentinel] 零命中 → 已请求探针线程交叉复测（[probe-sentinel] 行约 0.5s 内出现——同 TLAS 同射线仅换线程：probe 命中=worker 派发坏；双 miss=AS 内容坏）
+[INFO ] [live] 自愈重锚请求 #10（camHit 连续 2 行≈0 且电池双死坐实）——探针线程 0.5s 内重建 TLAS + [live] reset；若重建后恢复又再度归零 ⇒ 持续型毒化（对照各行 tlas=build# 与 [live-sentinel] 耗时栏）
+[INFO ] [compose] 心跳 #6912: texSubErr=0 blitErr=0 shortBuf=0 drained=0 retryOk=6910 chunkFail=0 mask=0x0 (RT=480x270 chunks=64行/段)
+[INFO ] [live] 94s: frames=3532 (117.6 f/s) wall=102.3 f/s loop=5Hz spp=14128 resets=9 tlas=build#12 | 上帧 520889 查询 camHit=0.4% (53.30 Mray/s) | atlas=ATLAS_RGB
+[INFO ] [compose] 心跳 #7168: texSubErr=0 blitErr=0 shortBuf=0 drained=0 retryOk=7166 chunkFail=0 mask=0x0 (RT=480x270 chunks=64行/段)
+[INFO ] [live] 99s: frames=4041 (115.3 f/s) wall=101.7 f/s loop=5Hz spp=16164 resets=9 tlas=build#12 | 上帧 520889 查询 camHit=0.4% (52.97 Mray/s) | atlas=ATLAS_RGB
+[PASS ] [live-sentinel 自愈前置（camHit 连续归零）] worker 直查 TLAS：0/6 命中 | verified：0/6 | 六射线 2 ms（慢+全miss=毒化签名） | tlas=build#12 ptr=0x149A3A700 verified=build#12 | cam=(2.41, 81.62, -5.41) yaw=0.0 pitch=0.0 —— 与 [live] camHit 互证；g_tlas 与 verified 分歧 ⇒ 句柄陈旧，双 0 ⇒ 毒化/GPU 层
+[INFO ] [live-sentinel] 零命中 → 已请求探针线程交叉复测（[probe-sentinel] 行约 0.5s 内出现——同 TLAS 同射线仅换线程：probe 命中=worker 派发坏；双 miss=AS 内容坏）
+[INFO ] [live] 自愈重锚请求 #11（camHit 连续 2 行≈0 且电池双死坐实）——探针线程 0.5s 内重建 TLAS + [live] reset；若重建后恢复又再度归零 ⇒ 持续型毒化（对照各行 tlas=build# 与 [live-sentinel] 耗时栏）
+[INFO ] [compose] 心跳 #7424: texSubErr=0 blitErr=0 shortBuf=0 drained=0 retryOk=7422 chunkFail=0 mask=0x0 (RT=480x270 chunks=64行/段)
+[INFO ] [live] 104s: frames=4549 (113.6 f/s) wall=101.5 f/s loop=5Hz spp=18196 resets=9 tlas=build#12 | 上帧 520889 查询 camHit=0.4% (52.85 Mray/s) | atlas=ATLAS_RGB

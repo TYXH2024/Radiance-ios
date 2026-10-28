@@ -42,16 +42,16 @@ jobs:
           set -ex
           chmod +x chapter2/pathtrace/build.sh
           bash chapter2/pathtrace/build.sh
-          JAR="chapter2/pathtrace/pathtrace-0.4.5.jar"
+          JAR="chapter2/pathtrace/pathtrace-0.4.6.jar"
           test -f "$JAR"
-          cp "$JAR" ./pathtrace-0.4.5.jar
+          cp "$JAR" ./pathtrace-0.4.6.jar
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: pathtrace-jar
           path: |
-            pathtrace-0.4.5.jar
+            pathtrace-0.4.6.jar
             chapter2/pathtrace/build/native/libradiance_pathtrace.dylib
             chapter2/pathtrace/build/native/pathtrace.metallib
           if-no-files-found: error
@@ -111,7 +111,7 @@ jobs:
           file "$METALLIB"
           test -s "$METALLIB"
           # JAR 内容验证：mixin 类 + mixins.json 必须在包内
-          JAR="chapter2/pathtrace/pathtrace-0.4.5.jar"
+          JAR="chapter2/pathtrace/pathtrace-0.4.6.jar"
           unzip -l "$JAR" | grep -q "net/prisma/pathtrace/mixin/PathtraceWindowMixin.class" \
             && echo "JAR_MIXIN_CLASS_OK"
           unzip -l "$JAR" | grep -q "pathtrace.mixins.json" \
@@ -119,64 +119,58 @@ jobs:
           unzip -l "$JAR" | grep -q "fabric.mod.json" \
             && echo "JAR_FABRIC_MOD_OK"
 
-      - name: Release (pathtrace-v0.4.5, prerelease)
+      - name: Release (pathtrace-v0.4.6, prerelease)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -ex
-          TAG="pathtrace-v0.4.5"
-          TITLE="pathtrace v0.4.5 — v0.4.4 真机定谳（毒化=时间级非线程级；黑屏已修）+ 普查/审计/健康监视器三仪 + 自愈阈值修复"
+          TAG="pathtrace-v0.4.6"
+          TITLE="pathtrace v0.4.6 — v0.4.5 六份真机日志定谳：相机段被数组序饿死（眼前 void + 脚底检测不到同根因）；摄取改为相机距离近先"
           NOTES_FILE=release-notes.md
           cat > "$NOTES_FILE" <<'EOF'
-          # pathtrace v0.4.5 — v0.4.4 真机回收判读 + 毒化定谳仪器三件套
+          # pathtrace v0.4.6 — 相机段饿死根因修复（摄取优先级重写）
 
-          **v0.4.4 真机判定（A20 Pro，19:45 run）**：
-          - **P0-1 黑屏：已修复 ✓**——归因梯全 0、心跳零真错、blit=4753 帧
-            上屏、进程全程存活；[compose] 段级重试自愈 4862 次（全部为排空
-            前遗留误记，无一真失败）。
-          - **P0-2 TLAS 毒化：定谳为【时间级】而非线程级**——同一 TLAS#30
-            （探针线程 30s 重建）：探针 30.05s 查询 2/6 命中，32s 探针+
-            worker 双 0/6（交叉复测 #3）；TLAS#29 同样在 atlas 后 ~1s 内
-            由活转死（epoch=1 即时探针 2/6 → 1.5s 双亡）。**新建 AS 在
-            ~2s 内被原地打坏，与查询线程无关**。
-          - 残存 camHit=0.6% 与快照 0.40% 非平坦像素精确对应：相机正下方
-            一小片几何幸存（15s/55s 快照同形——毒化后为稳定部分态）。
-            用户看到的"灰蒙渐变+中途一次重置再渐变" = camHit 归零后全屏
-            地平线色 + S8.4 30s 重锚（非 S8.7 自愈——阈值 bug 使其未触发）。
+          **v0.4.5 六份真机日志定谳（A20×3 + M3×3，同一存档同姿态）**：
+          - **症状三合一同源**：① 用户实测“视角附近四五格的方块不渲染”；
+            ② v0.4.4 起的“检测不到脚底”； ③ [tlas-health] t=0.01s 即死亡
+            （-Y 金丝雀 miss）——全部指向同一件事：**相机自己所在的区块段
+            从未进入 TLAS**。
+          - **证据链**：相机 pos=(2.50,81.62,-5.50) → 相机段 (0,80,-16)；
+            六份报告全部 `camera section (0,80,-16) not ready — nearest
+            ready @ 16.0 blocks`；所有 rebuild origin 的 z 值仅 0/16/32/…
+            （六份日志零负 z），x 却对称覆盖 -128..+128；探针电池 +Z 射线
+            命中点恰好踩在缺失条带边界 z=1.00（相机 z=-5.41，眼前 5.4 格
+            void）。
+          - **根因**：vanilla BuiltChunkStorage 槽位索引为 floorMod 回绕布局
+            （实测 1.21.4：index = relZ·408 + relY·17 + relX，负半轴排在行尾）。
+            相机在 z=-5.5（section z=-16）而存储中心 z=0 时，相机段落在
+            relZ=16——**整个数组的最后 408 槽**。旧摄取循环按数组序每轮取
+            前 16 个 dirty，真机 35s 窗口只推进到 index≈1300（z=+96 行）即
+            FORCE_READY 收口（六份报告：积压 5648-6667 未排空）⇒ 相机段/
+            脚下段永不摄取。
 
-          **本版三仪（把"一小片"展开定谳）**：
-          1. **实例普查 [census]**：每实例一条 -Y 金丝瑞射线，157 实例
-             幸存/阵亡地图——连续索引区段=TLAS 实例记录线性扫写 /
-             空间聚集=距离选择性失效 / 散布=BLAS 层；五点编排
-             （基线/稳态/S8.4 新鲜/再衰减/晚窗）。
-          2. **共享内存审计 [audit]**：实例缓冲 vs 构建时影子 memcmp +
-             64KB 确定性图案金丝瑞——共享侧越界写手当场落网（首异偏移
-             +hexdump=写手签名）；双净而 TLAS 死 ⇒ GPU 私有内存写手。
-          3. **健康监视器 [tlas-health]**：相机正下方 -Y 射线 250ms 密度
-             ——死亡时刻钉到 ±0.25s 并与 atlas 上传/首帧 ATLAS_RGB/
-             合成帧序一行关联。
+          **本版修复（SceneProxy 摄取选择重写）**：
+          1. 每轮先全量收集 dirty 候选，再按【相机到 section AABB 的 clamp
+             距离】近先排序（相机自身段距离 0 必然首轮入库，周围 26 邻居
+             次之，远处按距离补齐）——对 vanilla 中心漂移/回绕布局免疫。
+          2. 槽位 origin 带 index 级缓存（重定位即失效），排序开销仅首轮
+             ~30ms；旧逻辑“沿途 mesh 空返区块”的浪费同步消除，有效吞吐
+             提升。
+          3. 新证据行：`[camera-first] 相机段 (x,y,z) 已摄取` ——真机直接
+             验证修复生效；S6 审计的 `camera section not ready` 行应消失。
 
-          **本版修复**：S8.7 自愈阈值 camHit<0.5 → <2.0（v0.4.4 现场
-          0.6% 残存命中把触发器卡死——用户全程只见灰蒙）+ 5s 冷却防
-          重建风暴——毒化仍在时用户看到周期性真画面（每次重建约 1-2s
-          真画面 + 一次半衰期测量）。
+          **预期真机变化**：眼前 5.4 格 void 消失；-Y 金丝雀命中
+          （[tlas-health] 不再 t=0 死亡）；camHit 稳定；S6 audit 找到精确
+          相机段。
 
-          **使用（三轮二分——关键）**：替换 mods/ 内旧 JAR，同一存档
-          同一姿态：
-          1. 默认跑 60s
-          2. `-Dpathtrace.atlas=false` 跑 60s（TLAS 全程存活 ⇒ atlas 链
-             凶手坐实）
-          3. `-Dpathtrace.compose=false` 跑 60s（存活 ⇒ 合成器 GL 链
-             凶手坐实；两轮均死 ⇒ 渲染环/驱动层）
-          回报每轮 pathtrace_report.txt（重点：[tlas-health] 死亡行/
-          [census] 五点/[audit]/[S8.7] 自愈周期）。文件名按设备命名
-          （如 A20Pro-default.txt）——v0.4.3/0.4.4 的"M3-"前缀实为
-          A20 Pro 运行，教训立此存照。
+          **使用**：替换 mods/ 内旧 JAR，同一存档同一姿态跑 60s，回报
+          pathtrace_report.txt（重点：[camera-first] 行 / [tlas-health] /
+          [live] camHit / S6 audit 段）。
           EOF
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release upload "$TAG" ./pathtrace-0.4.5.jar --clobber --repo "$GITHUB_REPOSITORY"
+            gh release upload "$TAG" ./pathtrace-0.4.6.jar --clobber --repo "$GITHUB_REPOSITORY"
           else
-            gh release create "$TAG" ./pathtrace-0.4.5.jar \
+            gh release create "$TAG" ./pathtrace-0.4.6.jar \
                  --title "$TITLE" --notes-file "$NOTES_FILE" \
                  --prerelease --repo "$GITHUB_REPOSITORY"
           fi
