@@ -1,0 +1,12 @@
+{
+  "required": false,
+  "minVersion": "0.8",
+  "package": "net.prisma.pathtrace.mixin",
+  "compatibilityLevel": "JAVA_8",
+  "client": [
+    "PathtraceWindowMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 0
+  }
+}

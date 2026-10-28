@@ -50,6 +50,13 @@ import java.util.Map;
  *                                          使用但 v0.2 漏审计 → res() 静默
  *                                          null → NPE，S6 被跳过）
  *   GameRenderer              class_757    .camera field_18765
+ *   （2.3 v0.4 软符号——失败降级不阻断，S8 专用：
+ *     Window class_1041 .getFramebufferWidth/Height method_4489/4506
+ *     MinecraftClient .getTextureManager method_1531 .getWindow method_22683
+ *     Identifier class_2960 .of(String,String) method_60655
+ *     TextureManager class_1060 .getTexture(Identifier) method_4619
+ *     AbstractTexture class_1044 .glId field_5204
+ *     VertexFormatElement.UV_0 field_52109（摄取期用；缺失 → uv 提取禁用））
  */
 final class Mappings {
 
@@ -77,6 +84,12 @@ final class Mappings {
     static final String C_GAME_RENDERER   = "net.minecraft.class_757";
     static final String C_CLIENT_WORLD    = "net.minecraft.class_638";
     static final String C_WORLD           = "net.minecraft.class_1937";
+
+    // ---- 2.3 v0.4 软符号类（S8/GL 合成/atlas 链路；失败降级不阻断） ----
+    static final String C_WINDOW          = "net.minecraft.class_1041";
+    static final String C_IDENTIFIER      = "net.minecraft.class_2960";
+    static final String C_TEXTURE_MANAGER = "net.minecraft.class_1060";
+    static final String C_ABSTRACT_TEXTURE = "net.minecraft.class_1044";
 
     // ---- 字段 ----
     static final String F_MC_WORLD        = "field_1687";
@@ -119,9 +132,18 @@ final class Mappings {
     static final String M_VF_GET_OFFSET   = "method_60835"; // getOffset(VertexFormatElement)I
     static final String M_VF_HAS           = "method_60836"; // has(VertexFormatElement)Z
     static final String F_VE_COLOR         = "field_52108"; // VertexFormatElement.COLOR (static)
+    static final String F_VE_UV            = "field_52109"; // 2.3: VertexFormatElement.UV_0 (static)
+    static final String F_TEX_GL_ID        = "field_5204";  // 2.3: AbstractTexture.glId
     static final String M_CAMERA_GET_POS  = "method_19326";
     static final String M_CAMERA_GET_YAW  = "method_19330"; // Camera.getYaw()F
     static final String M_CAMERA_GET_PITCH = "method_19329"; // Camera.getPitch()F
+    // ---- 2.3 v0.4 软符号方法 ----
+    static final String M_MC_GET_TEXTURE_MANAGER = "method_1531"; // ()Lclass_1060;
+    static final String M_MC_GET_WINDOW          = "method_22683"; // ()Lclass_1041;
+    static final String M_WINDOW_GET_FB_WIDTH    = "method_4489";  // ()I
+    static final String M_WINDOW_GET_FB_HEIGHT   = "method_4506";  // ()I
+    static final String M_IDENTIFIER_OF          = "method_60655"; // (String,String)Lclass_2960;
+    static final String M_TM_GET_TEXTURE         = "method_4619";  // (Lclass_2960;)Lclass_1044;
 
     // ---- 解析产物 ----
     static final Map<String, Object> RESOLVED = new LinkedHashMap<>();
@@ -227,7 +249,87 @@ final class Mappings {
         ctor(r, C_ALLOC_STORAGE);
         ctor(r, C_REGION_BUILDER);
 
+        // ---- 2.3 v0.4 软符号（S8 专用链路；失败降级不进 FAILURES） ----
+        resolveSoft(r);
+
         return FAILURES.isEmpty();
+    }
+
+    /**
+     * v0.4：S8/GL 合成/atlas 链路符号——缺失时相应功能降级（合成不激活 /
+     * atlas 回退顶点色 / uv 提取禁用），不构成 REFLECT_FAIL。报告行前缀
+     * [S8soft]，便于字段回收时直接定位。
+     */
+    private static void resolveSoft(ProbeReport r) {
+        Class<?> window = softClass(r, C_WINDOW);
+        Class<?> identifier = softClass(r, C_IDENTIFIER);
+        Class<?> textureManager = softClass(r, C_TEXTURE_MANAGER);
+        Class<?> abstractTexture = softClass(r, C_ABSTRACT_TEXTURE);
+
+        if (window != null) {
+            softMethod(r, window, M_WINDOW_GET_FB_WIDTH);
+            softMethod(r, window, M_WINDOW_GET_FB_HEIGHT);
+        }
+        if (identifier != null) {
+            softMethod(r, identifier, M_IDENTIFIER_OF, String.class, String.class);
+        }
+        if (textureManager != null && identifier != null) {
+            softMethod(r, textureManager, M_TM_GET_TEXTURE, identifier);
+        }
+        if (abstractTexture != null) {
+            softField(r, abstractTexture, F_TEX_GL_ID);
+        }
+        if (clsOpt(C_MC) != null) {
+            softMethod(r, clsOpt(C_MC), M_MC_GET_TEXTURE_MANAGER);
+            softMethod(r, clsOpt(C_MC), M_MC_GET_WINDOW);
+        }
+        // UV_0 元素（摄取期用；缺失 → SceneProxy 捕获后禁用 uv 提取）
+        Class<?> ve = clsOpt(C_VERTEX_ELEM);
+        if (ve != null) {
+            softField(r, ve, F_VE_UV);
+        }
+    }
+
+    private static Class<?> clsOpt(String name) {
+        Object v = RESOLVED.get(name);
+        return v instanceof Class<?> ? (Class<?>) v : null;
+    }
+
+    private static Class<?> softClass(ProbeReport r, String cn) {
+        try {
+            Class<?> c = Class.forName(cn);
+            RESOLVED.put(cn, c);
+            r.info("[S8soft] class " + cn + " 解析成功");
+            return c;
+        } catch (Throwable t) {
+            r.info("[S8soft] class " + cn + " 缺失 — 对应 S8 功能将降级");
+            return null;
+        }
+    }
+
+    private static void softMethod(ProbeReport r, Class<?> owner, String name,
+            Class<?>... params) {
+        String key = owner.getName() + "#" + name;
+        try {
+            Method m = owner.getDeclaredMethod(name, params);
+            m.setAccessible(true);
+            RESOLVED.put(key, m);
+            r.info("[S8soft] method " + key + " 解析成功");
+        } catch (Throwable t) {
+            r.info("[S8soft] method " + key + " 缺失 — 对应 S8 功能将降级");
+        }
+    }
+
+    private static void softField(ProbeReport r, Class<?> owner, String name) {
+        String key = owner.getName() + "#" + name;
+        try {
+            Field f = owner.getDeclaredField(name);
+            f.setAccessible(true);
+            RESOLVED.put(key, f);
+            r.info("[S8soft] field " + key + " 解析成功");
+        } catch (Throwable t) {
+            r.info("[S8soft] field " + key + " 缺失 — 对应 S8 功能将降级");
+        }
     }
 
     private static void ctor(ProbeReport r, String cn) {
@@ -274,6 +376,12 @@ final class Mappings {
             throw new IllegalStateException("符号未解析（不在 S3 审计列表）: " + key);
         }
         return (T) v;
+    }
+
+    /** v0.4：软符号查询——缺失返回 null（调用方自行降级），不抛。 */
+    @SuppressWarnings("unchecked")
+    static <T> T resOpt(String key) {
+        return (T) RESOLVED.get(key);
     }
 
     private static void field(ProbeReport r, Class<?> owner, String name) {

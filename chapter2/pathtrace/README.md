@@ -1,35 +1,41 @@
-# pathtrace — 第二章 2.2 阶段交付物（Metal 直连 · 路径追踪引擎首帧）
+# pathtrace — 第二章 2.2/2.3 阶段交付物（Metal 直连 · 实时路径追踪 + GL 合成）
 
 > 设计文档：`docs/chapter2-pathtrace-design.md`
 > 前置：2.1 `scene-ingestion` v0.5 真机判定 SCENE_INGEST_OK——摄取契约已盖章。
 > **v0.1 真机回收（2026-10-28 01:08）：判 PLACEMENT_FAIL**（六向全 miss、哨兵 3/3、相机区块已摄取且 verts=2344 与 2.1 一致）——离线逐函数比对确认 fork 与 2.1 数学等价，v0.2 按零粉饰纪律装判别仪器（不盲改）。
 > **v0.2 真机回收（2026-10-28 02:23）：仍判 PLACEMENT_FAIL，但仪器已定谳**——LIVE TLAS/BLAS/矩阵/摆放全部正确（ISO=LIVE 一致，3/6 命中、脚下地板 1.62、hitPoint 与 v0.5 完全一致），S6 全 miss 是探针通道自身缺陷；隔离渲染出图 + 62.40 Mray/s。**v0.3：探测线程重锚 + A/B 复测自证 + albedo 回读仪器。**现场记录：`docs/chapter2-pathtrace-field/`
+> **v0.3 真机回收（2026-10-28 03:25）：判 PATHTRACE_OK——2.2 关闭。**重锚机制当场坐实：首轮六向全 miss → 探测线程 TLAS 重锚（refreshTlasNative）→ 复测 3/6 命中（+X/-Y/-Z 整数格线全中，miss 三向 512 格内确无几何），ISO/LIVE 逐向一致（TLAS 组装健康）。离屏首帧 480×270 / 24 spp / 2 bounces → 77.7 ms、4,990,055 queries、camHit=45.7%、**64.19 Mray/s 实测**。**2.3 开工：实时累积 + GL 合成 + atlas 采样（本版）。**
 
 ## 取成品（两个通道，内容相同）
 
 | 通道 | 位置 | 说明 |
 |---|---|---|
-| **A · 工作流运行页成品文件** | Actions → `chapter2-pathtrace` → 任意绿勾运行 → 页面底部 **Artifacts** 区 → `pathtrace-jar` | 每次绿勾必有；zip 内含 `pathtrace-0.3.0.jar` + dylib + metallib。**运行中途被取消的运行没有 artifact**（也不会发布 Release——可能遗留草稿） |
-| **B · GitHub Release（正式交付）** | https://github.com/TYXH2024/Radiance-ios/releases/tag/pathtrace-v0.3 → `pathtrace-0.3.0.jar` | 幂等 `--clobber` 重传；若 Releases 页看不到，先检查页面底部"Drafts"区（被取消的运行可能遗留未发布草稿） |
+| **A · 工作流运行页成品文件** | Actions → `chapter2-pathtrace` → 任意绿勾运行 → 页面底部 **Artifacts** 区 → `pathtrace-jar` | 每次绿勾必有；zip 内含 `pathtrace-0.4.0.jar` + dylib + metallib。**运行中途被取消的运行没有 artifact**（也不会发布 Release——可能遗留草稿） |
+| **B · GitHub Release（正式交付）** | https://github.com/TYXH2024/Radiance-ios/releases/tag/pathtrace-v0.4 → `pathtrace-0.4.0.jar` | 幂等 `--clobber` 重传；若 Releases 页看不到，先检查页面底部"Drafts"区（被取消的运行可能遗留未发布草稿） |
 
 > v0.1 首发 workflow 遗漏了 artifact 上传步骤（2.0/2.1 均有）——导致"绿勾了但运行页看不到 jar"。v0.1.1 已补齐：**以后看绿勾运行页最下方的 Artifacts 即可直接下载**。
 
-## 使用
+## 使用（2.3 实时版）
 
-1. 删除 `mods/` 内旧探针 JAR（scene-ingestion / metal-rt-probe / rt-probe / 旧版 pathtrace），放入 `pathtrace-0.3.0.jar`——同存档、同启动器档位（Vulkan/MoltenVK 档，OSMesa 宿主实测兼容）。
-2. 进入世界后停留 **30–40s**（600 槽位全量摄取约 19s + 静置收口；报告出现 `[scene] shutdown — all GPU resources released` 后即可退出）。
-3. 回报 game 目录下两个文件：**`pathtrace_report.txt`**（全量报告）+ **`pathtrace_frame.png`**（480×270 / 24 spp / 2 bounces 首帧，眼见为实）。
+1. 删除 `mods/` 内旧探针 JAR（scene-ingestion / metal-rt-probe / rt-probe / 旧版 pathtrace），放入 `pathtrace-0.4.0.jar`——同存档、同启动器档位（Vulkan/MoltenVK 档，OSMesa 宿主实测兼容）。
+2. 进入世界后：摄取约 19s → 离屏首帧（2.2 链路原样跑一遍，落 `pathtrace_frame.png`）→ **实时会话自动开启（S8）——游戏画面自此被路径追踪帧整帧替换**（480×270 线性放大至窗口分辨率）。
+3. 建议动作序列（60s 观察窗内）：**静止 ~20s** 看噪点随累积收敛 → **缓慢转动视角** 看累积自动重置（重新变噪）→ **再静止 ~20s** 看重新收敛。移动整个身体（位移）同样触发重置。
+4. 停留 **≥75s**（60s 观察窗 + 判定收口），随后退出世界/游戏均可（会话资源随进程退出释放，报告在 windowDone 时已写全）。
+5. 回报 game 目录下四个文件：**`pathtrace_report.txt`**（全量报告，含 S8 实时判定块与 [live] 周期行）+ **`pathtrace_frame.png`**（离屏首帧）+ **`pathtrace_live.png`**（实时 15s 早期收敛快照）+ **`pathtrace_live_final.png`**（实时 55s 高 spp 收敛快照）。
 
-## 验证问题
+> 若合成疑似干扰排查：加 `-Dpathtrace.compose=false` 启动——累积/快照照常，仅不上屏（判定 `LIVE_OK_NO_COMPOSE`，语义即自证 A/B）。
+
+## 验证问题（2.3）
 
 | Q | 内容 |
 |---|---|
-| Q1 | 摄取链在 2.2 摆放契约（免 recentring + t=origin，等价 2.1 已验证的 recentring + translate(2·origin)）下是否复现健康度？ |
-| Q2 | 简化摆放真机等价性（整数格线抽查 + 哨兵）？ |
-| Q3 | 全链路径追踪能否渲染一帧可目检的图（相机 ray → TLAS → 重心插值 albedo → 太阳直射 + 阴影 ray → 漫反射弹射 → 累积 → Reinhard+gamma → PNG）？ |
-| Q4 | 实测吞吐（GPU atomic 计数器回读，非估算）？ |
+| Q1 | **实时累积**：静止相机下 `pathtrace_live.png`（~15s）→ `pathtrace_live_final.png`（~55s）信噪比是否单调改善（spp 计数与图像方差双证据）？ |
+| Q2 | **累积重置**：相机位移 >0.02 格或转角 >0.05° 是否正确触发重置（无拖影/鬼影，新姿态从噪点重新收敛）？ |
+| Q3 | **GL 合成**：mixin swapBuffers HEAD 注入是否稳定上屏（blit 帧计数 >0、GL 错误数 =0、判定 `LIVE_OK` 而非 `COMPOSE_DEAD`/`COMPOSE_INACTIVE`）？ |
+| Q4 | **atlas 采样**：GL 回读的方块 atlas 经 `uploadAtlasNative` 入 GPU 后，pathtrace_kernel 的 albedo 是否摆脱顶点色 distinct=16 寡色（对照 2.2 帧 greenish=904/white=0 的底色）？ |
+| Q5 | **实时吞吐与节流**：live 会话稳态 Mray/s、帧间隔（8ms 节流 + Metal 异步串行化）与 60s 窗内总 spp？ |
 
-## 判定表
+## 判定表（2.2 离屏首帧——v0.3 已回收 PATHTRACE_OK，历史保留）
 
 | 判定 | 语义 |
 |---|---|
@@ -42,7 +48,37 @@
 | `RENDER_FAIL` | 离屏渲染派发/回读失败 |
 | `IMAGE_DEGENERATE` | 渲染成功但图像统计退化（全黑/全白/无方差） |
 
-归因开关：`-Dpathtrace.disabled=true` 或 `PATHTRACE_DISABLED=1` → 只写环境快照、零原生调用（闪退 A/B 对照用）。
+归因开关：`-Dpathtrace.disabled=true` 或 `PATHTRACE_DISABLED=1` → 只写环境快照、零原生调用（闪退 A/B 对照用）；`-Dpathtrace.compose=false` → 实时累积照常、仅不上屏（合成通道 A/B 对照用）。
+
+## 2.3 实时判定表（S8 观察窗末写入报告）
+
+| 判定 | 语义 |
+|---|---|
+| `LIVE_OK` | 累积单调 + 合成活跃（blit>0）+ 零 GL 错误——2.3 全链成立 |
+| `LIVE_OK_WITH_GL_ERRORS` | 累积与上屏成立但 glGetError 非零累计 >0（blit 照常，看 [compose] 行归因） |
+| `LIVE_OK_NO_COMPOSE` | compose=false 主动关闭：累积/快照照常，仅不上屏（A/B 自证语义） |
+| `COMPOSE_INACTIVE` | 合成钩子未武装/未激活（mixin 未命中或 swap 心跳缺失——看 swapCount 证据计数） |
+| `COMPOSE_DEAD` | GL 合成器异常判死（游戏零影响，累积继续，仅上屏通道关闭） |
+| `ACCUM_STALLED` | 相机静止但 spp 不增（累积停滞——native 侧帧环或 TLAS 重锚异常） |
+| `LIVE_FAIL` | liveBeginNative 拒绝或会话未能开启（看 [live] 行根因） |
+
+## 2.3 架构增量
+
+```
+S8 实时会话（RT 工作线程，~30 Hz 相机轮询 + 8ms 帧节流）：
+  相机姿态反射读取（S6/S7 同链路）→ 位移>0.02格/转角>0.05° → liveResetNative
+  liveFrameNative — trace+present 单命令缓冲异步提交（store→accumulate 双模式）
+  每 5s liveRefreshNative（工作线程 TLAS 重锚——v0.3 实证纪律）+ [live] 进度行
+  15s/55s 快照 PNG（收敛双证据）→ 60s 观察窗末写判定块
+上屏（渲染线程，mixin swapBuffers HEAD）：
+  PathtraceWindowMixin → PathtraceHook（OFF/ARMED/ACTIVE/DEAD 状态机）
+  → livePresentNative() 取稳定快照 → GlComposer（GL 反射，无 LWJGL GL 类依赖）
+  → 纹理上传 + 整帧 blit（480×270 → 窗口分辨率线性放大）
+  双保险：mixins.json required=false + @Inject require=0 + 回调全 try/catch 判死
+atlas 采样：
+  GlComposer.captureAtlas — 渲染线程 GL 回读方块 atlas → liveAtlasBufferNative
+  → uploadAtlasNative 入 MTLBuffer → pathtrace_kernel UV 采样替代顶点色寡色
+```
 
 ## v0.3 实证修复 + 证据补齐（基于 v0.2 仪器定谳）
 
@@ -78,11 +114,12 @@ Fabric CLIENT_STARTED → 后台摄取线程（500ms 轮询，零 mixin/refmap�
     QUADS → uint32 索引展开 → 三角 BLAS
     TLAS instance = translate(origin)（2.1 已验证布局的等价简化）
     TLAS 随建 shading pools：逐三角 3 顶点色 + CPU 法线 + 实例基址表
-  pathtrace.metallib（metal3 ray_query，双 kernel）：
+  pathtrace.metallib（metal3 ray_query，三 kernel）：
     scene_trace_kernel — 2.1 原样（哨兵/抽查复用）
     pathtrace_kernel — 相机 ray → TLAS → 重心插值 albedo → 太阳直射 + 阴影 ray
-      → cosine 加权漫反射弹射 → spp 累积 → Reinhard + gamma → RGBA8
+      → cosine 加权漫反射弹射 → spp 累积（2.3 起累积模式 + atlas UV 采样）→ Reinhard + gamma → RGBA8
       atomic 计数器回读吞吐（Mray/s 实测）
+    present_kernel — 2.3 新增：累积 HDR → 呈现缓冲（tonemap + 上屏布局）
   PngWriter — 手写零依赖 PNG 编码器（不依赖 java.desktop）
 ```
 

@@ -13,15 +13,14 @@ permissions:
 
 jobs:
   # ------------------------------------------------------------------
-  # 第二章 2.2 阶段交付：pathtrace mod JAR。
+  # 第二章 2.3 阶段交付：pathtrace mod JAR（实时累积 + GL 合成 + atlas）。
   #   1. 交叉编译 libradiance_pathtrace.dylib (iphoneos arm64, JNI 场景
-  #      管理 + 离屏 pathtrace 派发)
+  #      管理 + 离屏 pathtrace + live 会话族)
   #   2. 编译 pathtrace.metallib (MSL metal3: scene_trace_kernel 2.1 原样
-  #      + pathtrace_kernel 全链路径追踪)
+  #      + pathtrace_kernel 累积模式 + present_kernel 2.3 新增)
   #   3. ad-hoc 签名（ldid / codesign 兜底）
-  #   4. Java 编译 + JAR 组装（资产内嵌）
+  #   4. Java 编译 + JAR 组装（资产 + mixin 类 + pathtrace.mixins.json）
   #   5. 运行页上传成品 artifact（jar + dylib + metallib）—— 绿勾即可就地下载
-  #      （v0.1 首发遗漏此步致运行页无成品，v0.1.1 补齐对齐 2.0/2.1 模式）
   #   6. 发预发布 Release（幂等：已存在则 --clobber 重传资产）
   # 本地无 macOS 无法构建原生部分 —— 全链在此产线完成。
   # ------------------------------------------------------------------
@@ -38,21 +37,21 @@ jobs:
           distribution: temurin
           java-version: '21'
 
-      - name: Build mod jar (natives + metallib + java)
+      - name: Build mod jar (natives + metallib + java + mixin)
         run: |
           set -ex
           chmod +x chapter2/pathtrace/build.sh
           bash chapter2/pathtrace/build.sh
-          JAR="chapter2/pathtrace/pathtrace-0.3.0.jar"
+          JAR="chapter2/pathtrace/pathtrace-0.4.0.jar"
           test -f "$JAR"
-          cp "$JAR" ./pathtrace-0.3.0.jar
+          cp "$JAR" ./pathtrace-0.4.0.jar
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: pathtrace-jar
           path: |
-            pathtrace-0.3.0.jar
+            pathtrace-0.4.0.jar
             chapter2/pathtrace/build/native/libradiance_pathtrace.dylib
             chapter2/pathtrace/build/native/pathtrace.metallib
           if-no-files-found: error
@@ -82,62 +81,79 @@ jobs:
             && echo "JNI_EXPORT_OK(renderPathtraceNative)"
           nm -gU "$DYLIB" | grep -q "Java_net_prisma_pathtrace_Native_refreshTlasNative" \
             && echo "JNI_EXPORT_OK(refreshTlasNative)"
+          # 2.3 live 会话族（11 个新入口）
+          for SYM in liveBeginNative liveFrameNative liveResetNative \
+                     livePresentNative liveReadbackNative liveStatsNative \
+                     liveDimsNative liveAtlasBufferNative uploadAtlasNative \
+                     liveRefreshNative liveEndNative; do
+            nm -gU "$DYLIB" | grep -q "Java_net_prisma_pathtrace_Native_${SYM}" \
+              && echo "JNI_EXPORT_OK(${SYM})"
+          done
           nm -gU "$DYLIB" | grep -q "Java_net_prisma_pathtrace_Native_shutdownNative" \
             && echo "JNI_EXPORT_OK(shutdownNative)"
-          # 2.1 已删的 v0.4 诊断矩阵入口不得在 2.2 dylib 中出现
+          # 2.1 已删的 v0.4 诊断矩阵入口不得在 dylib 中出现
           if nm -gU "$DYLIB" | grep -Eq "sceneInfoNative|setPlacementModeNative"; then
             echo "FATAL: stale 2.1 diagnostic entry points present"; exit 1
           fi
-          echo "JNI_SURFACE_CLEAN(2.2)"
-          # metallib 双 kernel 验证
+          echo "JNI_SURFACE_CLEAN(2.3)"
+          # metallib 三 kernel 验证（2.3: present_kernel 新增）
           METALLIB="chapter2/pathtrace/build/native/pathtrace.metallib"
           file "$METALLIB"
           test -s "$METALLIB"
+          # JAR 内容验证：mixin 类 + mixins.json 必须在包内
+          JAR="chapter2/pathtrace/pathtrace-0.4.0.jar"
+          unzip -l "$JAR" | grep -q "net/prisma/pathtrace/mixin/PathtraceWindowMixin.class" \
+            && echo "JAR_MIXIN_CLASS_OK"
+          unzip -l "$JAR" | grep -q "pathtrace.mixins.json" \
+            && echo "JAR_MIXIN_JSON_OK"
+          unzip -l "$JAR" | grep -q "fabric.mod.json" \
+            && echo "JAR_FABRIC_MOD_OK"
 
-      - name: Release (pathtrace-v0.3, prerelease)
+      - name: Release (pathtrace-v0.4, prerelease)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -ex
-          TAG="pathtrace-v0.3"
-          TITLE="pathtrace v0.3 — 探测线程 TLAS 重锚（S6 全 miss 实证修复 + A/B 复测自证）+ COLOR/albedo 回读仪器 + camHit% 相机命中率"
+          TAG="pathtrace-v0.4"
+          TITLE="pathtrace v0.4 — 2.3 实时化三件事：渐进累积 + GL 合成上屏 + atlas albedo（mixin swap 钩子）"
           NOTES_FILE=release-notes.md
           cat > "$NOTES_FILE" <<'EOF'
-          # pathtrace v0.3 — 实证修复 + 证据补齐版
+          # pathtrace v0.4 — 2.3 实时化（眼见为实）
 
-          **v0.2 真机回收判读**：摄取链全健康（174 重建/600 区块/157 BLAS/
-          168,982 三角——v0.2 覆盖修复实证生效，y=-64..112 全 12 层），哨兵
-          3/3 PASS，四台判别仪器定谳：**LIVE TLAS / BLAS / 矩阵 / 摆放全部
-          正确**（ISO=LIVE 完全一致，3/6 命中、3 条整数格线、脚下地板 1.62
-          ——hitPoint 27.00/91.00/6.00 与 2.1 v0.5 完全一致）。真正缺陷在
-          **S6 探针通道本身**：同一 TLAS 同一原点同一 ray，经 JNI
-          castRayNative 全 miss（v0.1/v0.2 两轮确定性复现），前面有新鲜
-          AS build 的电池全部命中。
+          **v0.3 真机判定 PATHTRACE_OK（2.2 闭环）**：摄取（600 区块/169k
+          三角/COLOR+UV0 双提取）、摆放（重锚后 3/6 命中、整数格线、脚下
+          地板）、渲染链（57% camHit、64.2 Mray/s 实测）全部验收。COLOR
+          审计行证据：distinct=16 寡色 ⇒ 2.3 换 atlas 采样。
 
-          **v0.3 内容**：
-          - **refreshTlasNative（探测线程重锚）**：射线电池/live 渲染前强制
-            重建 TLAS——复刻 2.1 v0.5 已验证模式（电池前 setPlacementMode+
-            frameTick 现场重建）。带 **A/B 复测自证**：首轮全 miss → 重锚 →
-            复测，两轮行都在报告里，机制当场坐实或证伪（零粉饰）。
-          - **live 渲染前同样重锚**：renderPathtraceNative 直查 g_tlas（与
-            S6 同通道），不重锚会渲染出纯天空帧——这就是全场景首帧的最后
-            一道门。
-          - **COLOR/albedo 回读仪器**：相机区块顶点色 + 池条目直接回读
-            （v0.2 帧 57% 相机命中但无绿无结构——albedo 通路需直接证据；
-            2.3 的 atlas 采样决策看这一行）。
-          - **camHit% 相机命中率**（第二 atomic）：一眼区分“全天空帧”与
-            “贴脸山坡”。
-          - 审计电池标签修正（dir[3]=-Y 曾误标 +Y(上)）+ LIVE 距离回显 +
-            分带亮度 + ISO 诊断帧专用门槛（结构判定仅对全场景帧生效）。
+          **v0.4 内容（2.3 三件事）**：
+          - **渐进累积**：Metal 侧持久 float4 累积缓冲 + 双 kernel
+            （pathtrace_kernel 累积模式 + present_kernel tonemap）；
+            相机静止收敛（每帧 4 spp，静止 5s ≈ 500+ spp）、移动/
+            场景变化自动重置；工作线程 ~30Hz 相机轮询。
+          - **GL 合成上屏**：mixin `Window.swapBuffers`(method_15998)
+            HEAD 钩子 → 反射 LWJGL GL（FBO + glBlitFramebuffer）整帧
+            替换游戏画面（480×270 → 窗口分辨率线性放大，y 翻转补偿）。
+            双保险零崩险：mixins.json `required:false` + `@Inject
+            (require=0)`；钩子 OFF 态一次 volatile 读零开销。
+          - **atlas albedo**：摄取期 UV0 提取（field_52109，(-1,-1)
+            哨兵回退）+ triUV 池；GL 侧读回块图集（glId 反射链 →
+            FBO attach → glReadPixels）→ MTLTexture → kernel
+            `atlasTex.sample(uv) × 顶点色`。采集失败自动回退纯顶点色
+            （2.2 等价路径，零回归）。
+          - 判定新增 LIVE_OK / COMPOSE_INACTIVE / COMPOSE_DEAD /
+            ACCUM_STALLED / LIVE_OK_WITH_GL_ERRORS；快照 PNG
+            pathtrace_live.png（15s）+ pathtrace_live_final.png（55s）。
 
-          **使用**：替换 mods/ 内旧 JAR → 进世界停留 30–40s → 回报
-          pathtrace_report.txt + pathtrace_frame.png。预期：S6 复测命中 →
-          摆放 PASS → **全场景路径追踪首帧**（PATHTRACE_OK）。
+          **使用**：替换 mods/ 内旧 JAR → 进世界停留 ~40s（摄取+S7）→
+          **原地不动看屏幕**：S8 开启后画面整帧变为路径追踪渲染
+          （移动会重置累积重新收敛，属预期）→ 60s 后回报
+          pathtrace_report.txt + pathtrace_live*.png。
+          若画面未变但报告 LIVE_OK——即 COMPOSE 判定问题，回报报告。
           EOF
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release upload "$TAG" ./pathtrace-0.3.0.jar --clobber --repo "$GITHUB_REPOSITORY"
+            gh release upload "$TAG" ./pathtrace-0.4.0.jar --clobber --repo "$GITHUB_REPOSITORY"
           else
-            gh release create "$TAG" ./pathtrace-0.3.0.jar \
+            gh release create "$TAG" ./pathtrace-0.4.0.jar \
                  --title "$TITLE" --notes-file "$NOTES_FILE" \
                  --prerelease --repo "$GITHUB_REPOSITORY"
           fi

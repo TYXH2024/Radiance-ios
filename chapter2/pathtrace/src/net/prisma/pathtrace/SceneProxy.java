@@ -55,6 +55,7 @@ final class SceneProxy {
     int polls = 0;
     int rebuilds = 0;
     private boolean colorOffsetEchoed = false;
+    private boolean uvElemEchoed = false;
     int invalidations = 0;
     int relocations = 0;
     int nonEmptyChunks = 0;
@@ -323,15 +324,32 @@ final class SceneProxy {
             List<Integer> counts = new ArrayList<>(buffers.size());
             List<Integer> strides = new ArrayList<>(buffers.size());
             List<Integer> colorOffsets = new ArrayList<>(buffers.size());
+            List<Integer> uvOffsets = new ArrayList<>(buffers.size());
             int totalVerts = 0;
 
             // VertexFormatElement.COLOR 静态实例（Mappings 审计过的 field_52108）。
             // MC 把方块染色（草绿/水蓝…）烘进顶点色 —— 它就是 2.2 的 albedo。
+            // 2.3：UV_0 静态实例（field_52109，软符号）—— atlas 采样的 UV 源；
+            // 任一缺失时该 layer uv=-1（kernel 回退纯顶点色 albedo）。
             Object colorElement = null;
             try {
                 colorElement = Mappings.get(null, Mappings.C_VERTEX_ELEM, Mappings.F_VE_COLOR);
             } catch (Throwable t) {
                 colorElement = null;
+            }
+            Object uvElement = null;
+            try {
+                java.lang.reflect.Field uvF = Mappings.resOpt(
+                        Mappings.C_VERTEX_ELEM + "#" + Mappings.F_VE_UV);
+                if (uvF != null) {
+                    uvElement = uvF.get(null);
+                } else if (!uvElemEchoed) {
+                    r.info("UV_0 元素符号缺失（[S8soft] 行）—— uv 提取禁用，"
+                            + "albedo 回退纯顶点色（2.3 atlas 采样不可用）");
+                    uvElemEchoed = true;
+                }
+            } catch (Throwable t) {
+                uvElement = null;
             }
 
             for (Object builtBuffer : buffers.values()) {
@@ -355,6 +373,19 @@ final class SceneProxy {
                         colorOff = -1;
                     }
                 }
+                int uvOff = -1;
+                if (uvElement != null) {
+                    try {
+                        Boolean has = (Boolean) Mappings.call(format, Mappings.C_VERTEX_FORMAT,
+                                Mappings.M_VF_HAS, uvElement);
+                        if (has != null && has) {
+                            uvOff = (Integer) Mappings.call(format, Mappings.C_VERTEX_FORMAT,
+                                    Mappings.M_VF_GET_OFFSET, uvElement);
+                        }
+                    } catch (Throwable t) {
+                        uvOff = -1;
+                    }
+                }
                 ByteBuffer buf = (ByteBuffer) Mappings.call(builtBuffer, Mappings.C_BUILT_BUFFER,
                         Mappings.M_BB_GET_BUFFER);
                 if (vertexCount <= 0 || buf == null) {
@@ -369,6 +400,7 @@ final class SceneProxy {
                 counts.add(vertexCount);
                 strides.add(stride);
                 colorOffsets.add(colorOff);
+                uvOffsets.add(uvOff);
                 totalVerts += vertexCount;
             }
 
@@ -377,11 +409,11 @@ final class SceneProxy {
                 StringBuilder ev = new StringBuilder();
                 for (int i = 0; i < colorOffsets.size(); i++) {
                     if (ev.length() > 0) { ev.append("  "); }
-                    ev.append(String.format("layer%d(stride=%d colorOff=%d)",
-                            i, strides.get(i), colorOffsets.get(i)));
+                    ev.append(String.format("layer%d(stride=%d colorOff=%d uvOff=%d)",
+                            i, strides.get(i), colorOffsets.get(i), uvOffsets.get(i)));
                 }
-                r.info("顶点格式取证: " + ev + "（COLOR 元素偏移由 VertexFormat.getOffset"
-                        + "(COLOR) 动态解析——2.2 albedo 提取通路）");
+                r.info("顶点格式取证: " + ev + "（COLOR/UV0 元素偏移由 VertexFormat"
+                        + ".getOffset 动态解析——2.2 albedo 通路 + 2.3 atlas 采样通路）");
             }
 
             long gen = generation.incrementAndGet();
@@ -389,7 +421,8 @@ final class SceneProxy {
             if (!vertexBuffers.isEmpty()) {
                 Native.rebuildSingleNative(ox, oy, oz, index, gen, vertexBuffers.size(),
                         vertexBuffers.toArray(new ByteBuffer[0]),
-                        toIntArray(counts), toIntArray(strides), toIntArray(colorOffsets));
+                        toIntArray(counts), toIntArray(strides), toIntArray(colorOffsets),
+                        toIntArray(uvOffsets));
                 submitted = true;
                 rebuilds++;
                 SlotState st = slots.get(index);

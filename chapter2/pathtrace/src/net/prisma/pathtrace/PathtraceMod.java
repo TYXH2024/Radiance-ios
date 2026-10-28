@@ -8,7 +8,8 @@ import java.nio.file.StandardCopyOption;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * 路径追踪主控 —— Radiance 移植第二章 2.2 阶段交付物（path tracing 引擎首帧）。
+ * 路径追踪主控 —— Radiance 移植第二章 2.2 阶段交付物（path tracing 引擎首帧）
+ * + 2.3 v0.4 实时会话（渐进累积 + GL 合成 + atlas albedo）。
  *
  * 验证问题（docs/chapter2-pathtrace-design.md）：
  *   Q1 摄取链在 2.2 摆放契约（免 recentring + t=origin）下是否复现 2.1 的
@@ -17,15 +18,21 @@ import java.util.concurrent.atomic.AtomicBoolean;
  *   Q3 全链路径追踪能否渲染出一帧可目检的图（相机 ray → TLAS → albedo →
  *      太阳直射+阴影 ray → 漫反射弹射 → 累积 → tonemap → PNG）？
  *   Q4 实测吞吐（atomic 计数器，非估算）是多少 Mray/s？
+ *   Q5（2.3）渐进累积 + GL 合成能否把 RT 画面真正叠进游戏帧（眼见为实）？
+ *   Q6（2.3）atlas 采样能否补全 albedo 色彩（v0.3 证据：distinct=16 寡色）？
  *
  * 执行序（报告 S 段）：
  *   S0 环境快照 → S1 解包 dylib/metallib → S2 System.load →
  *   S3 反射符号审计 → S4/S5 网格发现与摄取 → S5 统计汇总 →
  *   S6 场景摆放抽查（哨兵 + 相机姿态 + 整数格线）→
- *   S7 离屏路径追踪渲染（PNG 落盘 + 统计自证）→ VERDICT。
+ *   S7 离屏路径追踪渲染（PNG 落盘 + 统计自证）→ VERDICT →
+ *   S8 实时会话（mixin swap 钩子 + GL 合成器 + atlas 采集 + 累积循环 +
+ *   快照 + 实时判定；会话持续到游戏退出，不 shutdown）。
  *
  * 归因开关：-Dpathtrace.disabled=true / PATHTRACE_DISABLED=1
  * → 只写环境快照，零原生调用（闪退 A/B 对照）。
+ * 合成开关：-Dpathtrace.compose=false → S8 累积/快照照常，仅不上屏
+ * （mixin 已注入但钩子永远 OFF）。
  */
 public final class PathtraceMod {
 
@@ -40,13 +47,25 @@ public final class PathtraceMod {
     private static final int RENDER_H = 270;
     private static final int RENDER_SPP = 24;
     private static final int RENDER_BOUNCES = 2;
+    // 2.3 实时会话参数（可系统属性调优）。
+    private static final int LIVE_W = intProp("pathtrace.rtW", 480);
+    private static final int LIVE_H = intProp("pathtrace.rtH", 270);
+    private static final int LIVE_SPP = intProp("pathtrace.spp", 4);
+
+    static int intProp(String name, int dflt) {
+        try {
+            return Integer.parseInt(System.getProperty(name, "" + dflt).trim());
+        } catch (Throwable t) {
+            return dflt;
+        }
+    }
 
     static void runAll(String triggerSource) {
         if (!STARTED.compareAndSet(false, true)) {
             return;
         }
         ProbeReport r = new ProbeReport("pathtrace_report.txt");
-        r.header("路径追踪探针 (pathtrace 0.3.0)");
+        r.header("路径追踪探针 (pathtrace 0.4.0)");
         r.info("触发方式: " + triggerSource);
 
         if (isDisabled()) {
@@ -382,10 +401,68 @@ public final class PathtraceMod {
         }
         r.finish(verdict, message);
 
-        // ---- 收尾释放 ----
-        try {
-            Native.shutdownNative();
-        } catch (Throwable ignored) {
+        // =================================================================
+        // S8 实时会话（2.3 v0.4：渐进累积 + GL 合成 + atlas albedo）
+        // =================================================================
+        // 门槛：相机可读 + TLAS 已构建 + 有就绪 BLAS（摆设抽查失败也允许——
+        // 实时画面本身即诊断证据：出世界图 = 渲染链健康；纯天空 = 摆放问题
+        // 延续。哨兵失败除外——实例机制坏了，画面无意义）。
+        boolean liveEligible = cameraOk && tlasBuilds > 0 && readyBlas > 0
+                && sentinelOk;
+        boolean liveStarted = false;
+        if (liveEligible) {
+            r.stage("S8 实时会话（渐进累积 + GL 合成 + atlas albedo——眼见为实）");
+            try {
+                liveStarted = Native.liveBeginNative(LIVE_W, LIVE_H, LIVE_SPP,
+                        RENDER_BOUNCES);
+            } catch (Throwable t) {
+                r.fail("liveBeginNative 异常: " + t);
+            }
+            if (liveStarted) {
+                r.pass(String.format("[S8.0] 实时会话开启: %dx%d spp/帧=%d bounces=%d"
+                        + "（静止收敛 / 移动重置；场景变化 native 自检重置）",
+                        LIVE_W, LIVE_H, LIVE_SPP, RENDER_BOUNCES));
+                if (composeEnabled()) {
+                    PathtraceHook.arm(r);
+                } else {
+                    r.info("[S8.0] 合成关闭（pathtrace.compose=false）——累积与"
+                            + "快照照常，仅不上屏；mixin 钩子保持 OFF");
+                }
+                LiveSession live = new LiveSession(r);
+                Thread t = new Thread(live, "Pathtrace-Live");
+                t.setDaemon(true);
+                t.start();
+                // 等观察窗收口（报告完整性：用户随时拉取即含实时判定块）。
+                long deadline = System.nanoTime() + 100_000_000_000L;
+                while (!live.windowDone && System.nanoTime() < deadline) {
+                    try {
+                        Thread.sleep(500L);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        break;
+                    }
+                }
+                if (!live.windowDone) {
+                    r.info("[S8.6] 观察窗 100s 未收口（异常）——实时判定块可能"
+                            + "延迟，会话仍在运行");
+                }
+            } else {
+                r.fail("[S8.0] liveBeginNative 拒绝（见 [live] 行）——实时会话"
+                        + "未开启");
+            }
+        } else {
+            r.info("S8 跳过（相机/哨兵/场景门槛未过——见前序判定）");
+        }
+
+        // ---- 收尾释放（仅当实时会话未开启；开启则会话持续到游戏退出） ----
+        if (!liveStarted) {
+            try {
+                Native.shutdownNative();
+            } catch (Throwable ignored) {
+            }
+        } else {
+            r.info("[S8] 会话继续运行（不上屏即熄）——原生资源随游戏进程退出"
+                    + "释放");
         }
     }
 
@@ -544,7 +621,7 @@ public final class PathtraceMod {
         return ok;
     }
 
-    private static float[] cameraPose() throws Exception {
+    static float[] cameraPose() throws Exception {
         Object mc = Mappings.call(null, Mappings.C_MC, Mappings.M_MC_GET_INSTANCE);
         Object gameRenderer = Mappings.get(mc, Mappings.C_MC, Mappings.F_MC_GAME_RENDERER);
         Object camera = Mappings.get(gameRenderer, Mappings.C_GAME_RENDERER, Mappings.F_CAMERA_POS);
@@ -560,6 +637,11 @@ public final class PathtraceMod {
     private static boolean isDisabled() {
         return Boolean.getBoolean("pathtrace.disabled")
                 || "1".equals(System.getenv("PATHTRACE_DISABLED"));
+    }
+
+    /** 2.3：GL 合成开关（默认开；false → 累积/快照照常，仅不上屏）。 */
+    private static boolean composeEnabled() {
+        return !Boolean.getBoolean("pathtrace.compose");
     }
 
     private static void envSnapshot(ProbeReport r) {

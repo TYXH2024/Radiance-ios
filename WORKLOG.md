@@ -291,3 +291,35 @@ Stage Summary:
 - **2.2 契约真机闭环**：摄取（600 区块/169k 三角/COLOR 提取）+ 摆放（ISO=LIVE 一致、整数格线、脚下地板）+ 渲染链（57%+ 相机命中、62.4 Mray/s）全部验证正确——距 PATHTRACE_OK 只差 S6 通道重锚
 - v0.3 = 实证修复（非盲改）：重锚复刻三轮真机归纳的判别变量，A/B 复测让修复自带现场证明；albedo 疑点（无绿无结构）交给 COLOR 回读仪器，2.3 决策看证据
 - 待办：①CI 过绿 + Release pathtrace-v0.3 ②真机复跑预期：首轮全 miss → [refresh] → 复测 3/6（27.00/91.00/6.00）→ 摆放 PASS → 全场景渲染 → PATHTRACE_OK + 第一帧光 ③若复测仍全 miss：审计判别照常，回报 [refresh]/[audit] 行 ④albedo 证据行回收 → 2.3 方向决策（顶点色 vs atlas UV）
+
+## 2026-10-28（十五）· pathtrace v0.3 真机回收判读：PATHTRACE_OK——2.2 关闭
+
+Task: 回收 v0.3 真机报告 + 首帧 PNG → 判读定谳 → 2.2 收口
+
+Work Log:
+- 真机报告存证（upload/pathtrace_report.txt + pathtrace_frame.png，03:25 CST）：S0–S3 全 PASS 66 项零漂移；157 BLAS / 168,990 三角；哨兵位码=7（3/3）
+- **重锚机制当场坐实**：S6 首轮六向全 miss → [refresh] TLAS re-anchored on probe thread (instances=157, tlas builds=16) → 复测 +X/-Y/-Z 全命中整数格线（27.00/91.00/6.00 与 2.1 v0.5 完全一致），miss 三向 512 格内确无几何；ISO/LIVE 逐向一致——三轮真机归纳的判别变量（探测线程 AS build）被 A/B 复测现场证明
+- S7 离屏渲染：480×270 spp=24 bounces=2 → 77.7 ms、queries=4,990,055、camHit=45.7%、64.19 Mray/s 实测（v0.3 双 atomic 仪器）；PNG 落盘 107,082 B；分带亮度相等、greenish=904 / white=0（顶点色寡色证据——2.3 atlas 决策输入）
+- 最终判定: PATHTRACE_OK——2.2 全链（摄取→摆放→离屏路径追踪→出图）真机闭环
+- 黄三角伪影：用户判定为原版太阳 × OSMesa 软渲染接缝，与渲染器无关，忽略
+- 2.3 方向决策（据 COLOR 回读证据）：顶点色 distinct=16 寡色坐实 → atlas 采样路线
+
+Stage Summary:
+- 2.2 达成；2.3 开工：实时累积 + GL 合成 + atlas 采样
+
+## 2026-10-28（十六）· pathtrace v0.4：2.3 实时累积 + GL 合成 + atlas 采样
+
+Task: 2.3 三件套——离屏单帧 → 实时会话（渐进累积）→ 首次上屏叠进游戏画面
+
+Work Log:
+- LiveSession（RT 工作线程）：~30 Hz 相机姿态反射轮询（位移>0.02 格/转角>0.05° → liveResetNative 重置累积）；liveFrameNative 单命令缓冲异步提交（trace+present，store→accumulate 双模式，8ms 节流）；每 5s liveRefreshNative 工作线程 TLAS 重锚（v0.3 实证纪律）+ [live] 进度行；15s/55s 快照（pathtrace_live.png / pathtrace_live_final.png，收敛双证据）；60s 观察窗末写 S8 判定块；退出世界容错（world==null → 暂停，回世界自动恢复）
+- 上屏链（渲染线程）：PathtraceWindowMixin（class_1041/method_15998 swapBuffers HEAD，intermediary 字面名 + remap=false 零 refmap，yarn 1.21.4+build.8 离线核验）→ PathtraceHook 四态状态机（OFF/ARMED/ACTIVE/DEAD，OFF 期一行 volatile 读零负担，异常一次性判死游戏零影响）→ livePresentNative 稳定快照 → GlComposer（GL 全反射调用无 LWJGL GL 类依赖）纹理上传 + 整帧 blit（480×270 → 窗口分辨率线性放大）；双保险 = mixins.json required:false + @Inject require=0 + 回调全 try/catch
+- atlas 采样：GlComposer.captureAtlas 渲染线程 GL 回读方块 atlas → liveAtlasBufferNative 直写 native 环形缓冲 → uploadAtlasNative 入 MTLBuffer → pathtrace_kernel UV 采样替代顶点色寡色（distinct=16 → 连续纹理色）
+- native：26 JNI 入口（live 会话族 11 个：begin/frame/reset/present/readback/stats/dims/atlasBuffer/uploadAtlas/refresh/end）；present_kernel 新增（累积 HDR → tonemap → 呈现缓冲）；live 帧 GPU 帧环双缓冲（稳定快照与进行中帧解耦）
+- S8 判定七态：LIVE_OK / LIVE_OK_WITH_GL_ERRORS / LIVE_OK_NO_COMPOSE / COMPOSE_INACTIVE / COMPOSE_DEAD / ACCUM_STALLED / LIVE_FAIL；判死开关 -Dpathtrace.compose=false（累积照常仅不上屏，A/B 自证）
+- 构建链：build.sh + sponge-mixin 编译依赖（版本回退链）+ mixin 类/pathtrace.mixins.json 入 JAR；workflow 11 个 live 符号 nm 校验 + 0.4.0 产物上传；fabric.mod.json mixins 声明 + v0.4 描述
+- 版本链 bump 0.4.0；README 更新（2.3 使用指南/验证问题 Q1–Q5/实时判定表/架构增量 + v0.3 回收历史行）
+
+Stage Summary:
+- 2.3 首版完整：进世界 ~19s 摄取 → 离屏首帧（2.2 链路原样）→ 实时会话自动开启 → 游戏画面被路径追踪帧整帧替换 → 静止收敛/移动重置 → 60s 判定收口
+- 待办：①CI 过绿 + Release pathtrace-v0.4 ②真机复跑：预期 LIVE_OK（blit>0、GL 错误=0、15s→55s 快照收敛、重置无鬼影）③atlas 采样效果与 greenish 底色对照 ④回收后判定 2.3 是否收口或装下一轮仪器

@@ -1,6 +1,6 @@
 //
 //  metal_pathtrace.m
-//  Radiance iOS Port — Chapter 2 — Stage 2.2 — Path Tracing Engine (v0.1)
+//  Radiance iOS Port — Chapter 2 — Stage 2.3 — Live Path Tracing (v0.4)
 //
 //  Scene manager behind net.prisma.pathtrace.Native (JNI). Fork of the 2.1
 //  scene-ingestion manager (field-verified through v0.5 — SCENE_INGEST_OK)
@@ -41,6 +41,32 @@
 //                        pathtrace_kernel over the pixel grid, reads back the
 //                        RGBA8 image + an atomic ray counter (MEASURED rays/s
 //                        for the report, not an estimate).
+//
+//    [v0.4 additions]   2.3 live session (progressive accumulation + GL
+//                        compositing + atlas albedo):
+//                        - per-vertex UV0 extraction (like COLOR, offset
+//                          resolved dynamically Java-side; (-1,-1) sentinel
+//                          for layers without UV0) and a triUV shading pool
+//                          (3 x float2 per triangle, rebuilt with every TLAS);
+//                        - a persistent live render session: float4
+//                          accumulation buffer + present (tonemapped RGBA8)
+//                          image, refreshed by liveFrameNative on the RT worker
+//                          thread (camera-move auto-reset, TLAS-rebuild
+//                          auto-reset, per-thread TLAS re-anchor at start and
+//                          periodically — the v0.3 field-proven driver
+//                          pattern);
+//                        - atlas upload: the Java GL compositor reads the MC
+//                          block atlas back from GL into a native staging
+//                          buffer (liveAtlasBufferNative) and
+//                          uploadAtlasNative turns it into an MTLTexture
+//                          (private storage + blit copy — universally
+//                          supported); a 1x1 white fallback texture keeps
+//                          the vertex-color path when the atlas is
+//                          unavailable;
+//                        - livePresentNative hands the GL compositor a stable
+//                          snapshot (wait + memcpy to a staging buffer) so
+//                          the GL upload can never tear against an in-flight
+//                          present dispatch.
 //
 //    [removed vs 2.1]   The v0.4 diagnostic matrix (sceneInfoNative raw-AABB
 //                        audit, setPlacementModeNative dual-hypothesis mode) —
@@ -107,13 +133,15 @@ static double clockms(void) {
 @property (nonatomic, strong) id<MTLAccelerationStructure> blas;
 @property (nonatomic, strong) id<MTLBuffer> vertexBuffer; // section-local float3
 @property (nonatomic, strong) id<MTLBuffer> indexBuffer;  // uint32
-@property (nonatomic, strong) id<MTLBuffer> colorBuffer;  // uchar4 per vertex (albedo)
+@property (nonatomic, strong) id<MTLBuffer> colorBuffer;  // uchar4 per vertex (albedo tint)
+@property (nonatomic, strong) id<MTLBuffer> uvBuffer;     // 2.3: float2 per vertex (atlas UV; (-1,-1)=no UV0)
 @property (nonatomic) int32_t ox, oy, oz;
 @property (nonatomic) int64_t generation;
 @property (nonatomic) uint32_t vertexCount;
 @property (nonatomic) uint32_t indexCount;
 @property (nonatomic) BOOL ready;
 @property (nonatomic) BOOL hasColor;         // any layer carried COLOR
+@property (nonatomic) BOOL hasUv;           // 2.3: any layer carried UV0
 // v0.2: raw (as-extracted, pre-everything) AABB per slot — the 2.1 v0.5
 // vertex-space audit instrument, restored after the v0.1 field run lost it
 // (six-way all-miss with sentinel PASS and byte-identical extraction code).
@@ -135,15 +163,49 @@ static BOOL g_tlasDirty = NO;
 static id<MTLLibrary> g_library = nil;
 static id<MTLComputePipelineState> g_pipeline = nil;      // scene_trace_kernel
 static id<MTLComputePipelineState> g_ptPipeline = nil;    // pathtrace_kernel
+static id<MTLComputePipelineState> g_presentPipeline = nil; // 2.3: present_kernel
+static id<MTLTexture> g_atlasTexture = nil;   // 2.3: MC block atlas (or nil)
+static id<MTLTexture> g_whiteTexture = nil;  // 2.3: 1x1 white fallback
+static id<MTLSamplerState> g_sampler = nil;  // 2.3: linear / clamp-to-edge
 
 // ---- 2.2 shading pools (rebuilt with every TLAS; order == instance order) ----
 static id<MTLBuffer> g_triColorPool = nil;   // 3 x uchar4 per triangle
 static id<MTLBuffer> g_triNormalPool = nil;  // packed_float3 per triangle
 static id<MTLBuffer> g_instTriBase = nil;    // uint per instance
+static id<MTLBuffer> g_triUVPool = nil;      // 2.3: 3 x float2 per triangle
 static uint32_t g_poolTris = 0;              // triangles covered by the pools
 static uint64_t g_poolColorBytes = 0;
 static uint64_t g_poolNormalBytes = 0;
 static uint64_t g_ptRays = 0;                // last frame's measured ray count
+
+// -------------------------------------------------------------------
+// 2.3 live session state (progressive accumulation + presentation).
+// Threading contract: liveFrameNative runs on the RT worker thread;
+// livePresentNative / liveReadbackNative / liveStatsNative may run on the
+// game render thread (the GL compositor hook). All live session entry
+// points synchronize on g_liveLock — the only cross-thread Metal state.
+// -------------------------------------------------------------------
+static NSObject *g_liveLock = nil;
+static BOOL g_liveActive = NO;
+static uint32_t g_liveW = 0, g_liveH = 0, g_liveSpp = 4, g_liveBounces = 2;
+static id<MTLBuffer> g_liveAccum = nil;      // float4 per pixel
+static id<MTLBuffer> g_liveImage = nil;      // uchar4 per pixel (presented)
+static id<MTLBuffer> g_liveStaging = nil;    // uchar4 per pixel (stable snapshot)
+static id<MTLBuffer> g_liveUniform = nil;    // PtUniforms (shared)
+static id<MTLBuffer> g_liveStats = nil;      // 2 x uint32 atomics (per frame)
+static id<MTLCommandBuffer> g_liveCmd = nil; // last committed frame (accum+present)
+static uint32_t g_liveFrames = 0;            // frames accumulated
+static uint32_t g_liveSppTotal = 0;          // samples per pixel accumulated
+static uint32_t g_liveResets = 0;            // camera/scene resets
+static uint32_t g_liveRefreshes = 0;         // worker-thread TLAS re-anchors
+static uint64_t g_liveTlasBuilds = 0;        // TLAS build count at last frame
+static uint64_t g_liveTotalQueries = 0;
+static uint32_t g_liveLastQueries = 0;       // last COMPLETED frame's stats
+static uint32_t g_liveLastCamHits = 0;
+static double g_liveLastMs = 0.0;
+static int g_liveAtlasMode = 0;              // 0=white/vertex-color 1=atlas RGB
+static id<MTLBuffer> g_atlasStaging = nil;   // GL readback target (shared)
+static uint64_t g_atlasStagingBytes = 0;
 
 // v0.4: per-instance slot origins of the live TLAS (hit attribution).
 static int32_t (*g_instOrigins)[3] = NULL;
@@ -348,12 +410,14 @@ static void rebuild_tlas(void) {
         for (SceneSlot *s in ready) { totalTris += s.indexCount / 3; }
         uint8_t *colors = (uint8_t *)malloc((size_t)totalTris * 3 * 4);
         float *normals = (float *)malloc((size_t)totalTris * 3 * sizeof(float));
+        float *uvs = (float *)malloc((size_t)totalTris * 3 * 2 * sizeof(float)); // 2.3
         uint32_t *bases = (uint32_t *)malloc((size_t)n * sizeof(uint32_t));
-        if (colors == NULL || normals == NULL || bases == NULL) {
-            free(colors); free(normals); free(bases);
+        if (colors == NULL || normals == NULL || bases == NULL || uvs == NULL) {
+            free(colors); free(normals); free(bases); free(uvs);
             // Nil the pools: a stale pool would no longer match the new TLAS
             // instance order — rendering must refuse rather than shade wrong.
             g_triColorPool = nil; g_triNormalPool = nil; g_instTriBase = nil;
+            g_triUVPool = nil;
             g_poolTris = 0;
             rp("FATAL: shading pool allocation failed (tris=%llu)",
                (unsigned long long)totalTris);
@@ -366,17 +430,31 @@ static void rebuild_tlas(void) {
                 const uint32_t *idx = (const uint32_t *)s.indexBuffer.contents;
                 const simd_float3 *pos = (const simd_float3 *)s.vertexBuffer.contents;
                 const uint8_t *col = (const uint8_t *)s.colorBuffer.contents;
+                const float *uv = s.uvBuffer != nil
+                    ? (const float *)s.uvBuffer.contents : NULL;
                 for (uint32_t t = 0; t < tris; t++) {
                     const uint32_t i0 = idx[t * 3 + 0];
                     const uint32_t i1 = idx[t * 3 + 1];
                     const uint32_t i2 = idx[t * 3 + 2];
                     uint8_t *dstC = colors + ((size_t)(triBase + t) * 3) * 4;
+                    float *dstUV = uvs + ((size_t)(triBase + t) * 3) * 2;
                     for (int k = 0; k < 3; k++) {
                         const uint32_t vi = (k == 0) ? i0 : (k == 1) ? i1 : i2;
                         dstC[k * 4 + 0] = col[(size_t)vi * 4 + 0];
                         dstC[k * 4 + 1] = col[(size_t)vi * 4 + 1];
                         dstC[k * 4 + 2] = col[(size_t)vi * 4 + 2];
                         dstC[k * 4 + 3] = 255;
+                        // 2.3: per-triangle-vertex atlas UV; (-1,-1) sentinel
+                        // when the slot carries no UV0 (kernel: vertex-color
+                        // path — the sentinel is constant so barycentric
+                        // interpolation preserves it exactly).
+                        if (uv != NULL) {
+                            dstUV[k * 2 + 0] = uv[(size_t)vi * 2 + 0];
+                            dstUV[k * 2 + 1] = uv[(size_t)vi * 2 + 1];
+                        } else {
+                            dstUV[k * 2 + 0] = -1.0f;
+                            dstUV[k * 2 + 1] = -1.0f;
+                        }
                     }
                     simd_float3 e1 = vsub(pos[i1], pos[i0]);
                     simd_float3 e2 = vsub(pos[i2], pos[i0]);
@@ -404,18 +482,26 @@ static void rebuild_tlas(void) {
                 [g_device newBufferWithBytes:bases
                     length:(NSUInteger)(n * sizeof(uint32_t))
                     options:MTLResourceStorageModeShared];
-            free(colors); free(normals); free(bases);
-            if (colorPool == nil || normalPool == nil || basePool == nil) {
+            id<MTLBuffer> uvPool =
+                [g_device newBufferWithBytes:uvs
+                    length:(NSUInteger)(totalTris * 3 * 2 * sizeof(float))
+                    options:MTLResourceStorageModeShared];
+            free(colors); free(normals); free(bases); free(uvs);
+            if (colorPool == nil || normalPool == nil || basePool == nil
+                    || uvPool == nil) {
                 g_triColorPool = nil; g_triNormalPool = nil; g_instTriBase = nil;
+                g_triUVPool = nil;
                 g_poolTris = 0;
                 rp("FATAL: shading pool MTLBuffer allocation failed");
             } else {
                 if (g_triColorPool != nil) { [g_retired addObject:g_triColorPool]; }
                 if (g_triNormalPool != nil) { [g_retired addObject:g_triNormalPool]; }
                 if (g_instTriBase != nil) { [g_retired addObject:g_instTriBase]; }
+                if (g_triUVPool != nil) { [g_retired addObject:g_triUVPool]; }
                 g_triColorPool = colorPool;
                 g_triNormalPool = normalPool;
                 g_instTriBase = basePool;
+                g_triUVPool = uvPool;
                 g_poolTris = (uint32_t)totalTris;
                 g_poolColorBytes = totalTris * 3 * 4;
                 g_poolNormalBytes = totalTris * 3 * sizeof(float);
@@ -460,6 +546,7 @@ Java_net_prisma_pathtrace_Native_initNative(
             return;
         }
         g_queue = [g_device newCommandQueue];
+        g_liveLock = [[NSObject alloc] init];   // 2.3: live session mutex
         rp("[scene] device=%s raytracing=%s",
            g_device.name.UTF8String, g_device.supportsRaytracing ? "YES" : "NO");
         if (!g_device.supportsRaytracing) {
@@ -479,6 +566,7 @@ Java_net_prisma_pathtrace_Native_initNative(
                 if (s.blas != nil) { [g_retired addObject:s.blas]; }
                 if (s.vertexBuffer != nil) { [g_retired addObject:s.vertexBuffer]; }
                 if (s.indexBuffer != nil) { [g_retired addObject:s.indexBuffer]; }
+                if (s.uvBuffer != nil) { [g_retired addObject:s.uvBuffer]; }
             }
         }
         g_slots = [NSMutableArray arrayWithCapacity:(NSUInteger)numChunks];
@@ -545,7 +633,7 @@ Java_net_prisma_pathtrace_Native_rebuildSingleNative(
         JNIEnv *env, jclass cls, jint ox, jint oy, jint oz,
         jlong index, jlong generation, jint layerCount,
         jobjectArray vertices, jintArray counts, jintArray strides,
-        jintArray colorOffsets) {
+        jintArray colorOffsets, jintArray uvOffsets) {
     (void)cls;
 
     if (g_slots == nil || index < 0 || (NSUInteger)index >= g_slots.count) {
@@ -563,11 +651,15 @@ Java_net_prisma_pathtrace_Native_rebuildSingleNative(
     jint *cStrides = strides != NULL ? (*env)->GetIntArrayElements(env, strides, NULL) : NULL;
     jint *cColorOff = colorOffsets != NULL
         ? (*env)->GetIntArrayElements(env, colorOffsets, NULL) : NULL;
-    if (cCounts == NULL || cStrides == NULL || cColorOff == NULL || layerCount <= 0) {
+    jint *cUvOff = uvOffsets != NULL
+        ? (*env)->GetIntArrayElements(env, uvOffsets, NULL) : NULL;
+    if (cCounts == NULL || cStrides == NULL || cColorOff == NULL || cUvOff == NULL
+            || layerCount <= 0) {
         rp("[rebuild] reject: bad arrays @ index %lld", (long long)index);
         if (cCounts != NULL) { (*env)->ReleaseIntArrayElements(env, counts, cCounts, JNI_ABORT); }
         if (cStrides != NULL) { (*env)->ReleaseIntArrayElements(env, strides, cStrides, JNI_ABORT); }
         if (cColorOff != NULL) { (*env)->ReleaseIntArrayElements(env, colorOffsets, cColorOff, JNI_ABORT); }
+        if (cUvOff != NULL) { (*env)->ReleaseIntArrayElements(env, uvOffsets, cUvOff, JNI_ABORT); }
         return;
     }
 
@@ -598,22 +690,26 @@ Java_net_prisma_pathtrace_Native_rebuildSingleNative(
     // v0.5 sealed contract: SectionBuilder vertices are already local, no
     // recentring) + per-vertex uchar4 colors (from each layer's COLOR element,
     // offset resolved dynamically Java-side; < 0 = layer has no COLOR → white)
-    // + quad indices ----
+    // + 2.3 per-vertex float2 UVs (UV0 element; < 0 = no UV0 → (-1,-1)
+    // sentinel → kernel vertex-color path) + quad indices ----
     simd_float3 *verts =
         (simd_float3 *)malloc(totalVerts * sizeof(simd_float3));
     uint8_t *colors = (uint8_t *)malloc(totalVerts * 4);
+    float *uvs = (float *)malloc(totalVerts * 2 * sizeof(float));
     uint32_t *idx = (uint32_t *)malloc(totalIndices * sizeof(uint32_t));
-    if (verts == NULL || colors == NULL || idx == NULL) {
+    if (verts == NULL || colors == NULL || idx == NULL || uvs == NULL) {
         rp("FATAL: OOM in rebuild (verts=%llu)", (unsigned long long)totalVerts);
-        free(verts); free(colors); free(idx);
+        free(verts); free(colors); free(idx); free(uvs);
         (*env)->ReleaseIntArrayElements(env, counts, cCounts, JNI_ABORT);
         (*env)->ReleaseIntArrayElements(env, strides, cStrides, JNI_ABORT);
         (*env)->ReleaseIntArrayElements(env, colorOffsets, cColorOff, JNI_ABORT);
+        (*env)->ReleaseIntArrayElements(env, uvOffsets, cUvOff, JNI_ABORT);
         return;
     }
 
     uint64_t vBase = 0;
     BOOL anyColor = NO;
+    BOOL anyUv = NO;
     float rmin[3] = { +INFINITY, +INFINITY, +INFINITY };
     float rmax[3] = { -INFINITY, -INFINITY, -INFINITY };
     for (jint i = 0; i < layerCount; i++) {
@@ -643,14 +739,22 @@ Java_net_prisma_pathtrace_Native_rebuildSingleNative(
                "(cap=%lld need=%u) @ index %lld",
                i, (long long)srcCap, vc * stride, (long long)index);
             (*env)->DeleteLocalRef(env, bb);
-            free(verts); free(colors); free(idx);
+            free(verts); free(colors); free(idx); free(uvs);
             (*env)->ReleaseIntArrayElements(env, counts, cCounts, JNI_ABORT);
             (*env)->ReleaseIntArrayElements(env, strides, cStrides, JNI_ABORT);
             (*env)->ReleaseIntArrayElements(env, colorOffsets, cColorOff, JNI_ABORT);
+            (*env)->ReleaseIntArrayElements(env, uvOffsets, cUvOff, JNI_ABORT);
             return;
         }
+        uint32_t uvOff = (uint32_t)cUvOff[i];         // 0xFFFFFFFF = no UV0
+        BOOL layerUv = uvOff != 0xFFFFFFFFu;
+        if (layerUv) {
+            // UV0 element must fit inside the vertex stride (2 x f32).
+            if ((uint64_t)uvOff + 8 > stride) { layerUv = NO; }
+        }
         // Copy verbatim (section-local per the 2.1 v0.5 sealed contract:
-        // float3 @ offset 0, NO recentring) + per-vertex uchar4 COLOR.
+        // float3 @ offset 0, NO recentring) + per-vertex uchar4 COLOR
+        // + 2.3 per-vertex float2 UV0 (or the (-1,-1) sentinel).
         for (uint32_t v = 0; v < vc; v++) {
             const uint8_t *base = src + (size_t)v * stride;
             const float *p = (const float *)base;
@@ -673,6 +777,19 @@ Java_net_prisma_pathtrace_Native_rebuildSingleNative(
             } else {
                 c[0] = 255; c[1] = 255; c[2] = 255; c[3] = 255;
             }
+            float *uv = uvs + ((size_t)(vBase + v)) * 2;
+            if (layerUv) {
+                const float *u = (const float *)(base + uvOff);
+                uv[0] = u[0];
+                uv[1] = u[1];
+                if (isfinite(uv[0]) && isfinite(uv[1])) {
+                    anyUv = YES;
+                } else {
+                    uv[0] = -1.0f; uv[1] = -1.0f;
+                }
+            } else {
+                uv[0] = -1.0f; uv[1] = -1.0f;
+            }
         }
         // QUADS → 2 triangles each.
         uint32_t *out = idx + (vBase / 4) * 6;
@@ -687,6 +804,7 @@ Java_net_prisma_pathtrace_Native_rebuildSingleNative(
     (*env)->ReleaseIntArrayElements(env, counts, cCounts, JNI_ABORT);
     (*env)->ReleaseIntArrayElements(env, strides, cStrides, JNI_ABORT);
     (*env)->ReleaseIntArrayElements(env, colorOffsets, cColorOff, JNI_ABORT);
+    (*env)->ReleaseIntArrayElements(env, uvOffsets, cUvOff, JNI_ABORT);
 
     // ---- Upload + BLAS ----
     id<MTLBuffer> vertexBuffer =
@@ -698,7 +816,10 @@ Java_net_prisma_pathtrace_Native_rebuildSingleNative(
     id<MTLBuffer> colorBuffer =
         [g_device newBufferWithBytes:colors length:(NSUInteger)(totalVerts * 4)
                              options:MTLResourceStorageModeShared];
-    free(verts); free(colors); free(idx);
+    id<MTLBuffer> uvBuffer =
+        [g_device newBufferWithBytes:uvs length:(NSUInteger)(totalVerts * 2 * sizeof(float))
+                             options:MTLResourceStorageModeShared];
+    free(verts); free(colors); free(idx); free(uvs);
 
     double t0 = clockms();
     slot.ox = ox; slot.oy = oy; slot.oz = oz;
@@ -706,15 +827,17 @@ Java_net_prisma_pathtrace_Native_rebuildSingleNative(
     slot.vertexBuffer = vertexBuffer;
     slot.indexBuffer = indexBuffer;
     slot.colorBuffer = colorBuffer;
+    slot.uvBuffer = uvBuffer;
     slot.vertexCount = (uint32_t)totalVerts;
     slot.indexCount = (uint32_t)totalIndices;
     slot.hasColor = anyColor;
+    slot.hasUv = anyUv;
     slot.rawMinX = rmin[0]; slot.rawMinY = rmin[1]; slot.rawMinZ = rmin[2];
     slot.rawMaxX = rmax[0]; slot.rawMaxY = rmax[1]; slot.rawMaxZ = rmax[2];
     slot.rawValid = (rmin[0] <= rmax[0]);
 
     if (vertexBuffer == nil || indexBuffer == nil || colorBuffer == nil
-            || !build_blas(slot)) {
+            || uvBuffer == nil || !build_blas(slot)) {
         slot.ready = NO;
         rp("[rebuild] FAILED @ index %lld origin=(%d,%d,%d)",
            (long long)index, ox, oy, oz);
@@ -728,10 +851,10 @@ Java_net_prisma_pathtrace_Native_rebuildSingleNative(
     g_stats[5] += totalVerts * sizeof(simd_float3);
     g_stats[6] += totalIndices * sizeof(uint32_t);
     rp("[rebuild] index=%lld origin=(%d,%d,%d) layers=%d verts=%llu tris=%llu "
-       "color=%s (blas %.2f ms, total builds=%llu)",
+       "color=%s uv=%s (blas %.2f ms, total builds=%llu)",
        (long long)index, ox, oy, oz, layerCount,
        (unsigned long long)totalVerts, (unsigned long long)(totalIndices / 3),
-       anyColor ? "yes" : "WHITE",
+       anyColor ? "yes" : "WHITE", anyUv ? "yes" : "NONE",
        clockms() - t0, (unsigned long long)g_stats[4]);
 }
 
@@ -1534,16 +1657,12 @@ Java_net_prisma_pathtrace_Native_instanceOriginNative(JNIEnv *env, jclass cls, j
 //   screen-right = normalize(forward x worldUp)   [verified: facing south
 //   the right hand points west (-X)]; screen-up = right x forward.
 //   70 deg vertical FOV (MC default at slider 70).
-// Shared render core: identical dispatch for the live TLAS (S7) and the
-// v0.2 diagnostic isolated single-instance TLAS (renderIsolatedNative).
-static jintArray pt_render_core(JNIEnv *env,
-                                id<MTLAccelerationStructure> tlas,
-                                id<MTLBuffer> baseTable,
-                                uint32_t instCount,
-                                jfloat camX, jfloat camY, jfloat camZ,
-                                jfloat yawDeg, jfloat pitchDeg,
-                                jint width, jint height, jint spp, jint bounces,
-                                const char *tag) {
+// Shared camera-basis + uniform builder (2.3: also the live loop's writer).
+static void pt_fill_uniforms(void *dst, jfloat camX, jfloat camY, jfloat camZ,
+                             jfloat yawDeg, jfloat pitchDeg,
+                             jint width, jint height, jint spp, jint bounces,
+                             uint32_t instCount, uint32_t resetFlag,
+                             uint32_t sppTotal) {
     // ---- camera basis ----
     float pitch = pitchDeg;
     if (pitch > 89.5f) { pitch = 89.5f; }     // degenerate cross product guard
@@ -1568,23 +1687,139 @@ static jintArray pt_render_core(JNIEnv *env,
         float upX, upY, upZ;
         float tanHalfX, tanHalfY;
         uint32_t width, height, spp, maxBounces;
-        uint32_t instCount, pad0, pad1, pad2;
+        uint32_t instCount, resetFlag, sppTotal, pad2;
     } PtUniforms;
     _Static_assert(sizeof(PtUniforms) == 88, "PtUniforms must be 88 B (scalars only)");
-    PtUniforms u;
-    memset(&u, 0, sizeof(u));
-    u.camPosX = camX; u.camPosY = camY; u.camPosZ = camZ;
-    u.fwdX = fwd.x; u.fwdY = fwd.y; u.fwdZ = fwd.z;
-    u.rightX = right.x; u.rightY = right.y; u.rightZ = right.z;
-    u.upX = up.x; u.upY = up.y; u.upZ = up.z;
-    u.tanHalfX = tanHalfX; u.tanHalfY = tanHalfY;
-    u.width = (uint32_t)width; u.height = (uint32_t)height;
-    u.spp = (uint32_t)spp; u.maxBounces = (uint32_t)bounces;
-    u.instCount = instCount;
+    PtUniforms *u = (PtUniforms *)dst;
+    memset(u, 0, sizeof(*u));
+    u->camPosX = camX; u->camPosY = camY; u->camPosZ = camZ;
+    u->fwdX = fwd.x; u->fwdY = fwd.y; u->fwdZ = fwd.z;
+    u->rightX = right.x; u->rightY = right.y; u->rightZ = right.z;
+    u->upX = up.x; u->upY = up.y; u->upZ = up.z;
+    u->tanHalfX = tanHalfX; u->tanHalfY = tanHalfY;
+    u->width = (uint32_t)width; u->height = (uint32_t)height;
+    u->spp = (uint32_t)spp; u->maxBounces = (uint32_t)bounces;
+    u->instCount = instCount;
+    u->resetFlag = resetFlag;      // 2.3: 1 = store, 0 = add
+    u->sppTotal = sppTotal;        // 2.3: present kernel divisor
+}
 
-    id<MTLBuffer> ub =
-        [g_device newBufferWithBytes:&u length:sizeof(u)
+// Padded dispatch grid + kernel bounds guard (dispatchThreadgroups is
+// universally supported; dispatchThreads would need a capability check).
+static MTLSize pt_grid(jint width, jint height) {
+    return MTLSizeMake(((NSUInteger)width + 15) / 16 * 16,
+                       ((NSUInteger)height + 15) / 16 * 16, 1);
+}
+static const MTLSize kThreadgroup = { 16, 16, 1 };
+
+// 2.3: create an RGBA8 texture from host bytes — private storage + blit copy
+// from a staging shared buffer (universally supported, no shared-texture
+// storage capability question at all).
+static id<MTLTexture> make_texture_from_bytes(const void *bytes,
+                                              uint32_t w, uint32_t h) {
+    MTLTextureDescriptor *td =
+        [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatRGBA8Unorm
+                                                           width:(NSUInteger)w
+                                                          height:(NSUInteger)h
+                                                       mipmapped:NO];
+    if (td == nil) { return nil; }
+    td.usage = MTLTextureUsageShaderRead;
+    td.storageMode = MTLStorageModePrivate;
+    id<MTLTexture> tex = [g_device newTextureWithDescriptor:td];
+    if (tex == nil) { return nil; }
+    id<MTLBuffer> staging =
+        [g_device newBufferWithBytes:bytes length:(NSUInteger)w * h * 4
                              options:MTLResourceStorageModeShared];
+    if (staging == nil) { return nil; }
+    id<MTLCommandBuffer> cmd = [g_queue commandBuffer];
+    id<MTLBlitCommandEncoder> blit = [cmd blitCommandEncoder];
+    if (blit == nil) { return nil; }
+    [blit copyFromBuffer:staging sourceOffset:0 sourceBytesPerRow:(NSUInteger)w * 4
+        sourceBytesPerImage:0 sourceSize:MTLSizeMake((NSUInteger)w, (NSUInteger)h, 1)
+        toTexture:tex destinationSlice:0 destinationLevel:0
+        destinationOrigin:MTLOriginMake(0, 0, 0)];
+    [blit endEncoding];
+    [cmd commit];
+    [cmd waitUntilCompleted];
+    if (cmd.error != nil) {
+        rp("FATAL: texture blit upload failed: %s",
+           cmd.error.localizedDescription.UTF8String);
+        return nil;
+    }
+    return tex;
+}
+
+// 2.3: lazily create the shared pathtrace aux resources (present pipeline,
+// 1x1 white fallback texture, linear sampler). Idempotent; called from
+// pt_render_core (probe thread) and liveBeginNative before any live dispatch.
+static BOOL ensure_pt_resources(void) {
+    if (g_device == nil || g_library == nil) { return NO; }
+    if (g_presentPipeline == nil) {
+        NSError *error = nil;
+        id<MTLFunction> f = [g_library newFunctionWithName:@"present_kernel"];
+        if (f == nil) {
+            rp("FATAL: present_kernel not found in metallib — 2.3 cannot present");
+            return NO;
+        }
+        g_presentPipeline = [g_device newComputePipelineStateWithFunction:f error:&error];
+        if (g_presentPipeline == nil) {
+            rp("FATAL: present pipeline creation failed: %s",
+               error.localizedDescription.UTF8String);
+            return NO;
+        }
+    }
+    if (g_whiteTexture == nil) {
+        const uint8_t white[4] = { 255, 255, 255, 255 };
+        g_whiteTexture = make_texture_from_bytes(white, 1, 1);
+        if (g_whiteTexture == nil) {
+            rp("FATAL: 1x1 white fallback texture creation failed");
+            return NO;
+        }
+    }
+    if (g_sampler == nil) {
+        MTLSamplerDescriptor *sd = [MTLSamplerDescriptor new];
+        sd.minFilter = MTLSamplerMinMagFilterLinear;
+        sd.magFilter = MTLSamplerMinMagFilterLinear;
+        sd.sAddressMode = MTLSamplerAddressModeClampToEdge;
+        sd.tAddressMode = MTLSamplerAddressModeClampToEdge;
+        g_sampler = [g_device newSamplerStateWithDescriptor:sd];
+        if (g_sampler == nil) {
+            rp("FATAL: sampler creation failed");
+            return NO;
+        }
+    }
+    return YES;
+}
+
+// Shared render core: identical dispatch for the live TLAS (S7) and the
+// v0.2 diagnostic isolated single-instance TLAS (renderIsolatedNative).
+// 2.3: two dispatches in ONE command buffer — pathtrace_kernel accumulates
+// into a transient float4 buffer (resetFlag=1: one-shot), then
+// present_kernel tonemaps into the RGBA8 image. Compute dispatches within
+// a single command buffer are serialized, so the ordering is guaranteed.
+static jintArray pt_render_core(JNIEnv *env,
+                                id<MTLAccelerationStructure> tlas,
+                                id<MTLBuffer> baseTable,
+                                uint32_t instCount,
+                                jfloat camX, jfloat camY, jfloat camZ,
+                                jfloat yawDeg, jfloat pitchDeg,
+                                jint width, jint height, jint spp, jint bounces,
+                                const char *tag) {
+    if (!ensure_pt_resources() || g_triUVPool == nil) {
+        rp("[render] reject: aux resources / triUV pool not ready");
+        return NULL;
+    }
+
+    uint8_t ub[88];
+    pt_fill_uniforms(ub, camX, camY, camZ, yawDeg, pitchDeg,
+                     width, height, spp, bounces, instCount, 1u, (uint32_t)spp);
+
+    id<MTLBuffer> uniformBuf =
+        [g_device newBufferWithBytes:ub length:sizeof(ub)
+                             options:MTLResourceStorageModeShared];
+    id<MTLBuffer> accumBuf =
+        [g_device newBufferWithLength:(NSUInteger)((uint64_t)width * height * 16)
+                              options:MTLResourceStorageModeShared];
     id<MTLBuffer> imageBuf =
         [g_device newBufferWithLength:(NSUInteger)((uint64_t)width * height * 4)
                               options:MTLResourceStorageModeShared];
@@ -1596,7 +1831,7 @@ static jintArray pt_render_core(JNIEnv *env,
     id<MTLBuffer> rayBuf =
         [g_device newBufferWithLength:2 * sizeof(uint32_t)
                               options:MTLResourceStorageModeShared];
-    if (ub == nil || imageBuf == nil || rayBuf == nil) {
+    if (uniformBuf == nil || accumBuf == nil || imageBuf == nil || rayBuf == nil) {
         rp("FATAL: render buffer allocation failed");
         return NULL;
     }
@@ -1605,19 +1840,25 @@ static jintArray pt_render_core(JNIEnv *env,
     id<MTLCommandBuffer> cmd = [g_queue commandBuffer];
     id<MTLComputeCommandEncoder> enc = [cmd computeCommandEncoder];
     [enc setComputePipelineState:g_ptPipeline];
-    [enc setBuffer:ub offset:0 atIndex:0];
-    [enc setBuffer:imageBuf offset:0 atIndex:1];
+    [enc setBuffer:uniformBuf offset:0 atIndex:0];
+    [enc setBuffer:accumBuf offset:0 atIndex:1];
     [enc setAccelerationStructure:tlas atBufferIndex:2];
     [enc setBuffer:g_triColorPool offset:0 atIndex:3];
     [enc setBuffer:g_triNormalPool offset:0 atIndex:4];
     [enc setBuffer:baseTable offset:0 atIndex:5];
     [enc setBuffer:rayBuf offset:0 atIndex:6];
-    // Padded grid + kernel bounds guard (dispatchThreadgroups is universally
-    // supported; dispatchThreads would need a capability check).
-    MTLSize grid = MTLSizeMake(((NSUInteger)width + 15) / 16 * 16,
-                               ((NSUInteger)height + 15) / 16 * 16, 1);
-    MTLSize tg = MTLSizeMake(16, 16, 1);
-    [enc dispatchThreadgroups:grid threadsPerThreadgroup:tg];
+    [enc setBuffer:g_triUVPool offset:0 atIndex:7];
+    [enc setTexture:(g_atlasTexture != nil ? g_atlasTexture : g_whiteTexture)
+             atIndex:0];
+    [enc setSamplerState:g_sampler atIndex:0];
+    [enc dispatchThreadgroups:pt_grid(width, height)
+         threadsPerThreadgroup:kThreadgroup];
+    [enc setComputePipelineState:g_presentPipeline];
+    [enc setBuffer:uniformBuf offset:0 atIndex:0];
+    [enc setBuffer:accumBuf offset:0 atIndex:1];
+    [enc setBuffer:imageBuf offset:0 atIndex:2];
+    [enc dispatchThreadgroups:pt_grid(width, height)
+         threadsPerThreadgroup:kThreadgroup];
     [enc endEncoding];
 
     double t0 = clockms();
@@ -1666,7 +1907,7 @@ Java_net_prisma_pathtrace_Native_renderPathtraceNative(
     (void)cls;
     if (g_device == nil || g_ptPipeline == nil || g_tlas == nil
             || g_triColorPool == nil || g_triNormalPool == nil
-            || g_instTriBase == nil) {
+            || g_instTriBase == nil || g_triUVPool == nil) {
         rp("[render] reject: pipeline/TLAS/shading pools not ready");
         return NULL;
     }
@@ -1693,7 +1934,8 @@ Java_net_prisma_pathtrace_Native_renderIsolatedNative(
         jint width, jint height, jint spp, jint bounces) {
     (void)cls;
     if (g_device == nil || g_ptPipeline == nil
-            || g_triColorPool == nil || g_triNormalPool == nil) {
+            || g_triColorPool == nil || g_triNormalPool == nil
+            || g_triUVPool == nil) {
         rp("[render-iso] reject: pipeline/shading pools not ready");
         return NULL;
     }
@@ -1723,9 +1965,374 @@ Java_net_prisma_pathtrace_Native_renderIsolatedNative(
                           width, height, spp, bounces, "pathtrace-iso");
 }
 
+// ===================================================================
+// 2.3 live session (progressive accumulation + presentation)
+// ===================================================================
+// Threading: liveFrameNative is called from the RT worker thread
+// (LiveSession); livePresentNative / liveReadbackNative / liveStatsNative
+// are called from the game render thread (PathtraceHook → GlComposer).
+// All entry points synchronize on g_liveLock.
+
+JNIEXPORT jboolean JNICALL
+Java_net_prisma_pathtrace_Native_liveBeginNative(
+        JNIEnv *env, jclass cls, jint width, jint height,
+        jint sppPerFrame, jint bounces) {
+    (void)env; (void)cls;
+    @synchronized (g_liveLock) {
+        if (g_device == nil || g_queue == nil) {
+            rp("[live] begin reject: device/queue not initialized");
+            return JNI_FALSE;
+        }
+        if (g_tlas == nil || g_triColorPool == nil || g_triNormalPool == nil
+                || g_instTriBase == nil || g_triUVPool == nil) {
+            rp("[live] begin reject: TLAS/shading pools not ready");
+            return JNI_FALSE;
+        }
+        if (!ensure_pt_resources()) {
+            rp("[live] begin reject: aux resources failed");
+            return JNI_FALSE;
+        }
+        if (width <= 0 || height <= 0 || width > 4096 || height > 4096
+                || sppPerFrame <= 0 || sppPerFrame > 1024
+                || bounces < 0 || bounces > 8) {
+            rp("[live] begin reject: bad parameters %dx%d spp=%d bounces=%d",
+               width, height, sppPerFrame, bounces);
+            return JNI_FALSE;
+        }
+        // Fresh session (idempotent: a second begin reallocates).
+        g_liveAccum = nil; g_liveImage = nil; g_liveStaging = nil;
+        g_liveUniform = nil; g_liveStats = nil; g_liveCmd = nil;
+        const uint64_t pixels = (uint64_t)width * (uint64_t)height;
+        g_liveAccum =
+            [g_device newBufferWithLength:(NSUInteger)(pixels * 16)
+                                 options:MTLResourceStorageModeShared];
+        g_liveImage =
+            [g_device newBufferWithLength:(NSUInteger)(pixels * 4)
+                                 options:MTLResourceStorageModeShared];
+        g_liveStaging =
+            [g_device newBufferWithLength:(NSUInteger)(pixels * 4)
+                                 options:MTLResourceStorageModeShared];
+        g_liveUniform =
+            [g_device newBufferWithLength:88
+                                 options:MTLResourceStorageModeShared];
+        g_liveStats =
+            [g_device newBufferWithLength:2 * sizeof(uint32_t)
+                                 options:MTLResourceStorageModeShared];
+        if (g_liveAccum == nil || g_liveImage == nil || g_liveStaging == nil
+                || g_liveUniform == nil || g_liveStats == nil) {
+            g_liveAccum = nil; g_liveImage = nil; g_liveStaging = nil;
+            g_liveUniform = nil; g_liveStats = nil;
+            rp("[live] FATAL: session buffer allocation failed");
+            return JNI_FALSE;
+        }
+        memset(g_liveStats.contents, 0, 2 * sizeof(uint32_t));
+        g_liveW = (uint32_t)width; g_liveH = (uint32_t)height;
+        g_liveSpp = (uint32_t)sppPerFrame; g_liveBounces = (uint32_t)bounces;
+        g_liveFrames = 0; g_liveSppTotal = 0; g_liveResets = 0;
+        g_liveTotalQueries = 0; g_liveLastQueries = 0; g_liveLastCamHits = 0;
+        g_liveLastMs = 0.0;
+        g_liveTlasBuilds = g_stats[3];
+        g_liveActive = YES;
+        rp("[live] session begun: %dx%d spp/frame=%d bounces=%d "
+           "(atlas=%s)", width, height, sppPerFrame, bounces,
+           g_atlasTexture != nil ? "ATLAS_RGB" : "white-vertex-color");
+        return JNI_TRUE;
+    }
+}
+
+// RT worker thread: accumulate one frame (trace + present dispatches in one
+// command buffer, committed without waiting). Returns the stats of the last
+// COMPLETED frame as jint[2] {queries, camHits} (read after waiting for the
+// previous command buffer — the natural serialization point).
+JNIEXPORT jintArray JNICALL
+Java_net_prisma_pathtrace_Native_liveFrameNative(
+        JNIEnv *env, jclass cls,
+        jfloat camX, jfloat camY, jfloat camZ, jfloat yawDeg, jfloat pitchDeg) {
+    (void)cls;
+    jint out[2] = { 0, 0 };
+    jintArray result = (*env)->NewIntArray(env, 2);
+    @synchronized (g_liveLock) {
+        if (result != NULL) { (*env)->SetIntArrayRegion(env, result, 0, 2, out); }
+        if (!g_liveActive || g_device == nil || g_ptPipeline == nil) {
+            return result;
+        }
+        // 1. Wait for the previous frame (uniform/stats/accum buffers idle —
+        //    the previous kernel must not read the uniforms we are about to
+        //    rewrite or the stats we are about to memset).
+        if (g_liveCmd != nil) {
+            [g_liveCmd waitUntilCompleted];
+            if (g_liveCmd.error != nil) {
+                rp("[live] FATAL: frame dispatch failed: %s",
+                   g_liveCmd.error.localizedDescription.UTF8String);
+                g_liveActive = NO;
+                return result;
+            }
+            const uint32_t *stats = (const uint32_t *)g_liveStats.contents;
+            g_liveLastQueries = stats[0];
+            g_liveLastCamHits = stats[1];
+            g_liveTotalQueries += stats[0];
+            out[0] = (jint)g_liveLastQueries;
+            out[1] = (jint)g_liveLastCamHits;
+            if (result != NULL) { (*env)->SetIntArrayRegion(env, result, 0, 2, out); }
+        }
+        // 2. Scene-change auto-reset: any TLAS rebuild since the last frame
+        //    invalidates the accumulated image (instance/triangle indices
+        //    shift under the pools).
+        if (g_stats[3] != g_liveTlasBuilds) {
+            g_liveFrames = 0;
+            g_liveSppTotal = 0;
+            g_liveResets++;
+            g_liveTlasBuilds = g_stats[3];
+            rp("[live] reset: TLAS rebuilt (builds=%llu)",
+               (unsigned long long)g_stats[3]);
+        }
+        // 3. Per-frame stats reset (safe: no kernel in flight).
+        memset(g_liveStats.contents, 0, 2 * sizeof(uint32_t));
+        // 4. Uniforms (shared buffer contents write — CPU-side).
+        const uint32_t resetFlag = (g_liveFrames == 0) ? 1u : 0u;
+        const uint32_t sppTotalNext = g_liveSppTotal + g_liveSpp;
+        pt_fill_uniforms(g_liveUniform.contents, camX, camY, camZ,
+                         yawDeg, pitchDeg, (jint)g_liveW, (jint)g_liveH,
+                         (jint)g_liveSpp, (jint)g_liveBounces,
+                         g_instOriginCount, resetFlag, sppTotalNext);
+        // 5. Encode trace + present in one command buffer, commit async.
+        id<MTLCommandBuffer> cmd = [g_queue commandBuffer];
+        id<MTLComputeCommandEncoder> enc = [cmd computeCommandEncoder];
+        [enc setComputePipelineState:g_ptPipeline];
+        [enc setBuffer:g_liveUniform offset:0 atIndex:0];
+        [enc setBuffer:g_liveAccum offset:0 atIndex:1];
+        [enc setAccelerationStructure:g_tlas atBufferIndex:2];
+        [enc setBuffer:g_triColorPool offset:0 atIndex:3];
+        [enc setBuffer:g_triNormalPool offset:0 atIndex:4];
+        [enc setBuffer:g_instTriBase offset:0 atIndex:5];
+        [enc setBuffer:g_liveStats offset:0 atIndex:6];
+        [enc setBuffer:g_triUVPool offset:0 atIndex:7];
+        [enc setTexture:(g_atlasTexture != nil ? g_atlasTexture : g_whiteTexture)
+                 atIndex:0];
+        [enc setSamplerState:g_sampler atIndex:0];
+        [enc dispatchThreadgroups:pt_grid((jint)g_liveW, (jint)g_liveH)
+             threadsPerThreadgroup:kThreadgroup];
+        [enc setComputePipelineState:g_presentPipeline];
+        [enc setBuffer:g_liveUniform offset:0 atIndex:0];
+        [enc setBuffer:g_liveAccum offset:0 atIndex:1];
+        [enc setBuffer:g_liveImage offset:0 atIndex:2];
+        [enc dispatchThreadgroups:pt_grid((jint)g_liveW, (jint)g_liveH)
+             threadsPerThreadgroup:kThreadgroup];
+        [enc endEncoding];
+        double t0 = clockms();
+        [cmd commit];
+        g_liveCmd = cmd;
+        g_liveLastMs = clockms() - t0;
+        g_liveFrames++;
+        g_liveSppTotal = sppTotalNext;
+        return result;
+    }
+}
+
+JNIEXPORT void JNICALL
+Java_net_prisma_pathtrace_Native_liveResetNative(JNIEnv *env, jclass cls) {
+    (void)env; (void)cls;
+    @synchronized (g_liveLock) {
+        if (!g_liveActive) { return; }
+        if (g_liveFrames != 0) {
+            g_liveFrames = 0;
+            g_liveSppTotal = 0;
+            g_liveResets++;
+        }
+    }
+}
+
+// Render thread (GL compositor): wait for the last committed frame, snapshot
+// the tonemapped image into the staging buffer and return a direct ByteBuffer
+// aliasing it. The snapshot is stable — a subsequently committed frame can
+// never tear the bytes the GL upload is reading.
+JNIEXPORT jobject JNICALL
+Java_net_prisma_pathtrace_Native_livePresentNative(JNIEnv *env, jclass cls) {
+    (void)cls;
+    @synchronized (g_liveLock) {
+        if (!g_liveActive || g_liveCmd == nil || g_liveStaging == nil) {
+            return NULL;
+        }
+        [g_liveCmd waitUntilCompleted];
+        if (g_liveCmd.error != nil) {
+            rp("[live] present: last frame failed: %s",
+               g_liveCmd.error.localizedDescription.UTF8String);
+            return NULL;
+        }
+        memcpy(g_liveStaging.contents, g_liveImage.contents,
+               (size_t)g_liveW * g_liveH * 4);
+        return (*env)->NewDirectByteBuffer(env, g_liveStaging.contents,
+                                           (jlong)((size_t)g_liveW * g_liveH * 4));
+    }
+}
+
+// RT worker thread: read the current presentation snapshot as an ARGB jint
+// array for the PNG evidence writer.
+JNIEXPORT jintArray JNICALL
+Java_net_prisma_pathtrace_Native_liveReadbackNative(JNIEnv *env, jclass cls) {
+    (void)cls;
+    @synchronized (g_liveLock) {
+        if (!g_liveActive || g_liveCmd == nil) { return NULL; }
+        [g_liveCmd waitUntilCompleted];
+        if (g_liveCmd.error != nil) { return NULL; }
+        const uint8_t *px = (const uint8_t *)g_liveImage.contents;
+        const jsize n = (jsize)((uint64_t)g_liveW * g_liveH);
+        jintArray result = (*env)->NewIntArray(env, n);
+        if (result == NULL) { return NULL; }
+        jint *tmp = (jint *)malloc((size_t)n * sizeof(jint));
+        if (tmp == NULL) { return NULL; }
+        for (jsize i = 0; i < n; i++) {
+            tmp[i] = ((jint)255 << 24)
+                   | ((jint)px[i * 4 + 0] << 16)
+                   | ((jint)px[i * 4 + 1] << 8)
+                   |  (jint)px[i * 4 + 2];
+        }
+        (*env)->SetIntArrayRegion(env, result, 0, n, tmp);
+        free(tmp);
+        return result;
+    }
+}
+
+// Live counters for the report. Returns jlong[8]: frames, sppTotal, resets,
+// refreshes, totalQueries, lastQueries, lastCamHits, atlasMode(0/1).
+JNIEXPORT jlongArray JNICALL
+Java_net_prisma_pathtrace_Native_liveStatsNative(JNIEnv *env, jclass cls) {
+    (void)cls;
+    jlong out[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
+    @synchronized (g_liveLock) {
+        out[0] = (jlong)g_liveFrames;
+        out[1] = (jlong)g_liveSppTotal;
+        out[2] = (jlong)g_liveResets;
+        out[3] = (jlong)g_liveRefreshes;
+        out[4] = (jlong)g_liveTotalQueries;
+        out[5] = (jlong)g_liveLastQueries;
+        out[6] = (jlong)g_liveLastCamHits;
+        out[7] = (jlong)(g_atlasTexture != nil ? 1 : 0);
+    }
+    jlongArray result = (*env)->NewLongArray(env, 8);
+    if (result != NULL) { (*env)->SetLongArrayRegion(env, result, 0, 8, out); }
+    return result;
+}
+
+// Live session dims for the GL compositor: jint[2] {w, h}, null if inactive.
+JNIEXPORT jintArray JNICALL
+Java_net_prisma_pathtrace_Native_liveDimsNative(JNIEnv *env, jclass cls) {
+    (void)cls;
+    jint out[2] = { 0, 0 };
+    BOOL active = NO;
+    @synchronized (g_liveLock) {
+        active = g_liveActive;
+        out[0] = (jint)g_liveW;
+        out[1] = (jint)g_liveH;
+    }
+    if (!active) { return NULL; }
+    jintArray result = (*env)->NewIntArray(env, 2);
+    if (result != NULL) { (*env)->SetIntArrayRegion(env, result, 0, 2, out); }
+    return result;
+}
+
+// Allocate the shared staging buffer the Java GL compositor will glReadPixels
+// the block atlas into. Returns a direct ByteBuffer aliasing it.
+JNIEXPORT jobject JNICALL
+Java_net_prisma_pathtrace_Native_liveAtlasBufferNative(
+        JNIEnv *env, jclass cls, jint bytes) {
+    (void)cls;
+    @synchronized (g_liveLock) {
+        if (g_device == nil || bytes < 4 || bytes > 64 * 1024 * 1024) {
+            rp("[live] atlas buffer reject: bad size %d", bytes);
+            return NULL;
+        }
+        g_atlasStaging =
+            [g_device newBufferWithLength:(NSUInteger)bytes
+                                 options:MTLResourceStorageModeShared];
+        if (g_atlasStaging == nil) {
+            rp("[live] FATAL: atlas staging allocation failed (%d B)", bytes);
+            return NULL;
+        }
+        memset(g_atlasStaging.contents, 0, (size_t)bytes);
+        g_atlasStagingBytes = (uint64_t)bytes;
+        return (*env)->NewDirectByteBuffer(env, g_atlasStaging.contents,
+                                           (jlong)bytes);
+    }
+}
+
+// Turn the staged atlas bytes into an MTLTexture and switch the live albedo
+// path to ATLAS_RGB. The next dispatched frame samples it.
+JNIEXPORT jboolean JNICALL
+Java_net_prisma_pathtrace_Native_uploadAtlasNative(
+        JNIEnv *env, jclass cls, jint width, jint height) {
+    (void)env; (void)cls;
+    @synchronized (g_liveLock) {
+        if (g_atlasStaging == nil) {
+            rp("[live] atlas upload reject: no staging buffer");
+            return JNI_FALSE;
+        }
+        if (width <= 0 || height <= 0
+                || (uint64_t)width * height * 4 > g_atlasStagingBytes) {
+            rp("[live] atlas upload reject: dims %dx%d exceed staging (%llu B)",
+               width, height, (unsigned long long)g_atlasStagingBytes);
+            return JNI_FALSE;
+        }
+        id<MTLTexture> tex =
+            make_texture_from_bytes(g_atlasStaging.contents,
+                                    (uint32_t)width, (uint32_t)height);
+        if (tex == nil) { return JNI_FALSE; }
+        if (g_atlasTexture != nil) { [g_retired addObject:g_atlasTexture]; }
+        g_atlasTexture = tex;
+        g_liveAtlasMode = 1;
+        rp("[live] atlas uploaded: %dx%d RGBA8 -> MTLTexture "
+           "(albedo path: ATLAS_RGB x vertex tint)", width, height);
+        return JNI_TRUE;
+    }
+}
+
+// Worker-thread periodic re-anchor (v0.3 field-proven pattern: a fresh AS
+// build on the calling thread before its ray dispatches).
+JNIEXPORT void JNICALL
+Java_net_prisma_pathtrace_Native_liveRefreshNative(JNIEnv *env, jclass cls) {
+    (void)env; (void)cls;
+    @synchronized (g_liveLock) {
+        if (!g_liveActive) { return; }
+    }
+    const uint64_t before = g_stats[3];
+    g_tlasDirty = YES;
+    rebuild_tlas();
+    if (g_stats[3] > before) {
+        g_liveRefreshes++;
+        rp("[live] TLAS re-anchored on worker thread (builds=%llu, "
+           "refreshes=%u)", (unsigned long long)g_stats[3], g_liveRefreshes);
+    }
+}
+
+JNIEXPORT void JNICALL
+Java_net_prisma_pathtrace_Native_liveEndNative(JNIEnv *env, jclass cls) {
+    (void)env; (void)cls;
+    @synchronized (g_liveLock) {
+        if (!g_liveActive) { return; }
+        if (g_liveCmd != nil) { [g_liveCmd waitUntilCompleted]; }
+        g_liveCmd = nil;
+        g_liveAccum = nil; g_liveImage = nil; g_liveStaging = nil;
+        g_liveUniform = nil; g_liveStats = nil;
+        g_liveActive = NO;
+        rp("[live] session ended (frames=%u spp=%u resets=%u)",
+           g_liveFrames, g_liveSppTotal, g_liveResets);
+    }
+}
+
 JNIEXPORT void JNICALL
 Java_net_prisma_pathtrace_Native_shutdownNative(JNIEnv *env, jclass cls) {
     (void)env; (void)cls;
+    // 2.3: if a live session is running, tear it down first (its buffers
+    // must not outlive the device/queue references we are about to drop).
+    @synchronized (g_liveLock) {
+        if (g_liveActive) {
+            if (g_liveCmd != nil) { [g_liveCmd waitUntilCompleted]; }
+            g_liveCmd = nil;
+            g_liveAccum = nil; g_liveImage = nil; g_liveStaging = nil;
+            g_liveUniform = nil; g_liveStats = nil;
+            g_liveActive = NO;
+        }
+    }
     if (g_slots != nil) {
         for (SceneSlot *s in g_slots) { s.ready = NO; }
         g_slots = nil;
@@ -1734,10 +2341,18 @@ Java_net_prisma_pathtrace_Native_shutdownNative(JNIEnv *env, jclass cls) {
     g_instanceBuffer = nil;
     g_pipeline = nil;
     g_ptPipeline = nil;
+    g_presentPipeline = nil;
     g_library = nil;
     g_triColorPool = nil;
     g_triNormalPool = nil;
+    g_triUVPool = nil;
     g_instTriBase = nil;
+    g_atlasTexture = nil;
+    g_whiteTexture = nil;
+    g_sampler = nil;
+    g_atlasStaging = nil;
+    g_atlasStagingBytes = 0;
+    g_liveAtlasMode = 0;
     g_poolTris = 0;
     g_tlasDirty = NO;
     if (g_instOrigins != NULL) {

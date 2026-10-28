@@ -10,11 +10,16 @@ import java.nio.ByteBuffer;
  *
  * 与 2.1 scene-ingestion 的差异（docs/chapter2-pathtrace-design.md）：
  *   - rebuildSingleNative 增传 colorOffsets（逐 layer 的 COLOR 元素字节偏移；
- *     −1 = 该 layer 顶点格式无 COLOR，native 回退白色）
+ *     −1 = 该 layer 顶点格式无 COLOR，native 回退白色）与 uvOffsets
+ *     （2.3：逐 layer 的 UV0 元素字节偏移；−1 = 无 UV0 → (-1,-1) 哨兵，
+ *     kernel 回退纯顶点色 albedo）
  *   - 顶点不再 recentre：SectionBuilder 顶点本就是 section 局部坐标
  *     （2.1 v0.5 真机定谳），BLAS 原样存储，TLAS instance = translate(origin)
  *   - 删除 sceneInfoNative/setPlacementModeNative（2.1 诊断矩阵已完成使命）
  *   - 新增 renderPathtraceNative：离屏路径追踪渲染一帧，返回 0xAARRGGBB
+ *   - 2.3 新增 live 会话族：liveBegin/liveFrame/liveReset/livePresent/
+ *     liveReadback/liveStats/liveDims/liveAtlasBuffer/uploadAtlas/liveRefresh/
+ *     liveEnd（渐进累积 + 呈现 + atlas 上传；线程契约见 metal_pathtrace.m）
  */
 final class Native {
 
@@ -26,14 +31,17 @@ final class Native {
 
     /**
      * 单区块重建：所有 RenderLayer 的顶点缓冲 → 拼接 section-local float3 +
-     * 逐顶点 uchar4 COLOR → quad 索引展开 → 三角 BLAS → 槽位就绪，TLAS 置脏。
+     * 逐顶点 uchar4 COLOR + 逐顶点 float2 UV0 → quad 索引展开 → 三角 BLAS →
+     * 槽位就绪，TLAS 置脏。
      *
      * @param generation 槽位代数（Java 侧维护，单调递增；native 拒绝过期写入）
      * @param colorOffsets 逐 layer COLOR 元素偏移（−1 = 无 COLOR → 白色回退）
+     * @param uvOffsets 逐 layer UV0 元素偏移（−1 = 无 UV0 → 哨兵，kernel 顶点色路径）
      */
     static native void rebuildSingleNative(int originX, int originY, int originZ,
             long index, long generation, int layerCount,
-            ByteBuffer[] vertices, int[] vertexCounts, int[] strides, int[] colorOffsets);
+            ByteBuffer[] vertices, int[] vertexCounts, int[] strides,
+            int[] colorOffsets, int[] uvOffsets);
 
     /** 区块失效（空网格/卸载）。 */
     static native void invalidateSingle(long index, int originX, int originY, int originZ,
@@ -120,4 +128,56 @@ final class Native {
 
     /** 全资源释放（退役列表延迟释放后 shutdown）。 */
     static native void shutdownNative();
+
+    // ---- 2.3 live 会话（渐进累积 + 呈现；线程契约见 metal_pathtrace.m） ----
+
+    /**
+     * 开启实时会话：分配持久累积/呈现缓冲，加载 present 管线与白色回退纹理。
+     * 仅需 TLAS 与 shading 池就绪；atlas 可后续异步上传。
+     */
+    static native boolean liveBeginNative(int width, int height,
+            int sppPerFrame, int bounces);
+
+    /**
+     * 累积一帧（RT 工作线程）：trace+present 双派发单命令缓冲异步提交。
+     * 返回上一已完成帧的 int[2] {queries, camHits}（统计于等待点自然回读）。
+     * 相机移动由 Java 侧检测后 liveResetNative；场景变化由 native 自检
+     * （TLAS 重建计数前进 → 自动重置累积）。
+     */
+    static native int[] liveFrameNative(float camX, float camY, float camZ,
+            float yawDeg, float pitchDeg);
+
+    /** 重置累积（相机移动/手动）。下一帧 store 模式覆写。 */
+    static native void liveResetNative();
+
+    /**
+     * 呈现快照（GL 合成线程）：等待最后命令缓冲 → 拷贝入稳定 staging →
+     * 返回直接 ByteBuffer（RGBA8，w*h*4，行主序）。快照不可撕裂。
+     */
+    static native ByteBuffer livePresentNative();
+
+    /** 呈现图像回读（0xAARRGGBB，PNG 证据写入用；RT 工作线程）。 */
+    static native int[] liveReadbackNative();
+
+    /** 会话计数器：long[8] {frames, sppTotal, resets, refreshes, totalQueries,
+     * lastQueries, lastCamHits, atlasMode(0=白色/顶点色, 1=ATLAS_RGB)}。 */
+    static native long[] liveStatsNative();
+
+    /** 会话尺寸 int[2] {w, h}；未开启返回 null。 */
+    static native int[] liveDimsNative();
+
+    /**
+     * 分配 atlas 读回暂存缓冲（GL 合成线程的 glReadPixels 目标），返回其
+     * 直接 ByteBuffer 别名。后续 uploadAtlasNative 将其内容变为 MTLTexture。
+     */
+    static native ByteBuffer liveAtlasBufferNative(int bytes);
+
+    /** 将暂存缓冲中的块图集像素（RGBA8）上传为 MTLTexture，切换 ATLAS_RGB。 */
+    static native boolean uploadAtlasNative(int width, int height);
+
+    /** 工作线程周期性 TLAS 重锚（v0.3 实证模式：射线前新鲜 AS build）。 */
+    static native void liveRefreshNative();
+
+    /** 结束会话（释放会话缓冲）。 */
+    static native void liveEndNative();
 }

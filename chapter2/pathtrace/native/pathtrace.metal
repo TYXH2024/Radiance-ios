@@ -1,8 +1,8 @@
 //
 //  pathtrace.metal
-//  Radiance iOS Port — Chapter 2 — Stage 2.2 — Path Tracing Engine (v0.1)
+//  Radiance iOS Port — Chapter 2 — Stage 2.3 — Live Path Tracing (v0.4)
 //
-//  Two kernels in one metallib:
+//  Three kernels in one metallib:
 //
 //    scene_trace_kernel — single-ray query against the chunk TLAS.
 //                         Inherited VERBATIM from 2.1 (proven on device in the
@@ -11,17 +11,31 @@
 //                         center-ray cross-instrument check) and
 //                         sentinelProbeNative (instance machinery proof).
 //
-//    pathtrace_kernel   — full offscreen path-traced frame:
-//                         camera rays -> TLAS traversal -> MC vertex-color
-//                         albedo (barycentric) -> sun direct + shadow ray ->
-//                         cosine-weighted diffuse bounces -> accumulation ->
-//                         Reinhard tonemap + gamma -> RGBA8.
+//    pathtrace_kernel   — 2.3 ACCUMULATE mode: radiance is summed into a
+//                         persistent float4 buffer across frames (progressive
+//                         accumulation). u.resetFlag=1 stores (first frame
+//                         after a camera move / scene change), 0 adds.
+//                         Albedo is now atlas-textured: barycentric UV ->
+//                         texture2d sample, multiplied by the MC vertex color
+//                         (biome tint + baked face shading). A UV sentinel of
+//                         (-1,-1) (layer without UV0) falls back to pure
+//                         vertex color. When no atlas texture is bound the
+//                         host binds a 1x1 white texture — identical to the
+//                         2.2 vertex-color path by construction.
+//
+//    present_kernel     — 2.3 NEW: tonemap pass. Reads the accumulated float4
+//                         buffer, divides by the accumulated sample count,
+//                         applies Reinhard + gamma 2.2 and writes the RGBA8
+//                         presentation image. Split from the trace kernel so
+//                         tracing and presentation can be dispatched at
+//                         different cadences (and so the S7 one-shot render
+//                         reuses the exact same math: reset=1, sppTotal=spp).
 //
 //  Shading data pools (built CPU-side during every TLAS rebuild; pool order
 //  == instance order, see metal_pathtrace.m rebuild_tlas):
 //    buffer(3): triColors   — 3 x uchar4 per triangle. MC bakes block tinting
 //                              (grass green, water blue, ...) into vertex
-//                              colors — they ARE the albedo, no atlas needed.
+//                              colors — multiplied with the atlas texel.
 //    buffer(4): triNormals  — 1 x packed_float3 per triangle (geometric face
 //                              normal, computed CPU-side from the same vertex
 //                              positions the BLAS was built from — zero MSL
@@ -30,14 +44,22 @@
 //                              first triangle in the pools.
 //    buffer(6): rayStats    — TWO atomic_uints: [0] every issued intersection
 //                              query (the report's Mray/s is a MEASURED
-//                              number); [1] camera-segment hits (v0.3 — the
-//                              camHit% line that separates "all-sky frame"
-//                              from "terrain point-blank").
+//                              number); [1] camera-segment hits (camHit%).
+//                              Reset by the host between frames (only while
+//                              no kernel is in flight — see metal_pathtrace.m).
+//    buffer(7): triUVs      — 2.3 NEW: 3 x packed_float2 per triangle
+//                              (barycentric-interpolated atlas UVs, gathered
+//                              from the vertex UV0 element through the
+//                              quad-expanded index buffer; (-1,-1) per vertex
+//                              for layers whose format lacks UV0).
+//    texture(0): atlas      — 2.3 NEW: the MC block atlas (RGBA8), or the
+//                              1x1 white fallback. Sampled with
+//                              sampler(0) (linear, clamp-to-edge).
 //
 //  MSL raytracing API surface (triangle_data queries):
 //    proven in 2.0/2.1: get_committed_intersection_type / _distance /
 //                       _instance_id
-//    new in 2.2:        get_committed_primitive_id,
+//    proven in 2.2:      get_committed_primitive_id,
 //                       get_committed_triangle_barycentric_coords
 //
 //  Placement contract (2.1 field-verified, v0.5): SectionBuilder vertices are
@@ -94,11 +116,14 @@ kernel void scene_trace_kernel(
 }
 
 // =====================================================================
-// pathtrace_kernel — 2.2 new
+// pathtrace_kernel — 2.2 trace core + 2.3 accumulation & atlas albedo
 // =====================================================================
 
 // All-scalar layout — byte-identical to the C side in metal_pathtrace.m
 // (no vector members: no C-vs-MSL padding surprises).
+// 2.3 repurposes the padding scalars:
+//   pad0 -> resetFlag   (1 = store, 0 = add; first frame after reset)
+//   pad1 -> sppTotal    (accumulated samples per pixel — present_kernel)
 struct PtUniforms {
     float camPosX, camPosY, camPosZ;
     float fwdX, fwdY, fwdZ;         // normalized camera forward
@@ -106,7 +131,7 @@ struct PtUniforms {
     float upX, upY, upZ;            // normalized screen-up
     float tanHalfX, tanHalfY;       // tan(vfov/2)*aspect, tan(vfov/2)
     uint32_t width, height, spp, maxBounces;
-    uint32_t instCount, pad0, pad1, pad2;
+    uint32_t instCount, resetFlag, sppTotal, pad2;
 };
 
 static inline uint32_t pcg_hash(uint32_t s) {
@@ -171,12 +196,15 @@ static inline float3 cosineDir(float3 n, thread uint32_t &seed) {
 
 kernel void pathtrace_kernel(
     constant PtUniforms &u [[buffer(0)]],
-    device uchar4 *image [[buffer(1)]],
+    device float4 *accum [[buffer(1)]],                       // 2.3: radiance accumulator
     raytracing::acceleration_structure<raytracing::instancing> scene [[buffer(2)]],
     device const uchar4 *triColors [[buffer(3)]],
     device const packed_float3 *triNormals [[buffer(4)]],
     device const uint *instTriBase [[buffer(5)]],
     device atomic_uint *rayStats [[buffer(6)]],
+    device const packed_float2 *triUVs [[buffer(7)]],         // 2.3: atlas UVs
+    texture2d<float> atlasTex [[texture(0)]],                  // 2.3: block atlas / white
+    sampler atlasSampler [[sampler(0)]],
     uint2 gid [[thread_position_in_grid]])
 {
     if (gid.x >= u.width || gid.y >= u.height) { return; }
@@ -229,13 +257,32 @@ kernel void pathtrace_kernel(
             float3 n = float3(triNormals[tri]);
             if (dot(n, dir) > 0.0f) { n = -n; }   // two-sided
 
-            // Albedo — barycentric interpolation of MC vertex colors.
+            // Vertex color — barycentric interpolation (MC tint + face shade).
             float w0 = 1.0f - bary.x - bary.y;
-            float3 albedo =
+            float3 vcol =
                   float3(triColors[tri * 3 + 0].rgb) * (w0      * (1.0f / 255.0f))
                 + float3(triColors[tri * 3 + 1].rgb) * (bary.x  * (1.0f / 255.0f))
                 + float3(triColors[tri * 3 + 2].rgb) * (bary.y  * (1.0f / 255.0f));
-            albedo = clamp(albedo, 0.0f, 1.0f);
+            vcol = clamp(vcol, 0.0f, 1.0f);
+
+            // 2.3: atlas albedo — interpolated UV -> texture sample x vertex
+            // color. UV sentinel (-1,-1) on any vertex of the triangle (the
+            // sentinel is constant across the layer's vertices, so the
+            // interpolation stays exactly (-1,-1)) selects the pure
+            // vertex-color path. With no atlas bound the host binds a 1x1
+            // white texture: texel == 1 and the product degenerates to the
+            // 2.2 path by construction.
+            float2 uv0 = float2(triUVs[tri * 3 + 0]);
+            float2 uv1 = float2(triUVs[tri * 3 + 1]);
+            float2 uv2 = float2(triUVs[tri * 3 + 2]);
+            float2 uv = uv0 * w0 + uv1 * bary.x + uv2 * bary.y;
+            float3 albedo;
+            if (uv.x < 0.0f) {
+                albedo = vcol;
+            } else {
+                float3 texel = atlasTex.sample(atlasSampler, uv).rgb;
+                albedo = clamp(texel * vcol, 0.0f, 1.0f);
+            }
 
             const float3 hitP = origin + dir * dist;
 
@@ -259,13 +306,37 @@ kernel void pathtrace_kernel(
         acc += radiance;
     }
 
-    float3 c = acc / (float)u.spp;
+    // 2.3: accumulate into the persistent buffer (one thread per pixel —
+    // exclusive access, no atomics needed). resetFlag=1 stores.
+    const uint32_t idx = (uint32_t)gid.y * u.width + (uint32_t)gid.x;
+    if (u.resetFlag != 0u) {
+        accum[idx] = float4(acc, 1.0f);
+    } else {
+        accum[idx] += float4(acc, 1.0f);
+    }
+}
+
+// =====================================================================
+// present_kernel — 2.3 NEW: accumulation -> tonemapped RGBA8
+// =====================================================================
+// Divides by the accumulated sample count, applies Reinhard + gamma 2.2.
+// The S7 one-shot render dispatches this with resetFlag=1/sppTotal=spp —
+// numerically identical to the 2.2 inline tonemap.
+kernel void present_kernel(
+    constant PtUniforms &u [[buffer(0)]],
+    device const float4 *accum [[buffer(1)]],
+    device uchar4 *image [[buffer(2)]],
+    uint2 gid [[thread_position_in_grid]])
+{
+    if (gid.x >= u.width || gid.y >= u.height) { return; }
+    const uint32_t idx = (uint32_t)gid.y * u.width + (uint32_t)gid.x;
+    const float n = (float)(u.sppTotal < 1u ? 1u : u.sppTotal);
+    float3 c = accum[idx].rgb / n;
     c = c / (1.0f + c);                       // Reinhard
     c = pow(c, float3(1.0f / 2.2f));          // gamma
     c = clamp(c, 0.0f, 1.0f);
-    image[(uint32_t)gid.y * u.width + (uint32_t)gid.x] =
-        uchar4((uchar)(c.r * 255.0f + 0.5f),
-               (uchar)(c.g * 255.0f + 0.5f),
-               (uchar)(c.b * 255.0f + 0.5f),
-               255u);
+    image[idx] = uchar4((uchar)(c.r * 255.0f + 0.5f),
+                        (uchar)(c.g * 255.0f + 0.5f),
+                        (uchar)(c.b * 255.0f + 0.5f),
+                        255u);
 }
