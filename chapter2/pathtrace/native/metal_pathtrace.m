@@ -191,6 +191,15 @@ static uint32_t g_liveW = 0, g_liveH = 0, g_liveSpp = 4, g_liveBounces = 2;
 static id<MTLBuffer> g_liveAccum = nil;      // float4 per pixel
 static id<MTLBuffer> g_liveImage = nil;      // uchar4 per pixel (presented)
 static id<MTLBuffer> g_liveStaging = nil;    // uchar4 per pixel (stable snapshot)
+// v0.4.3: staging 有效数据起点（= contents + kGuardPad，头尾各 64KB
+// guard）。GL 像素传输的源/目标指针可能被遗留的 UNPACK/PACK SKIP_*
+// 状态或驱动内部分块路径平移出缓冲边界（v0.4.2 现场 SIGSEGV：hs_err
+// 渲染线程 GlComposer.present → glTexSubImage2D → _platform_memmove
+// 读源 SEGV_ACCERR，317216+201184=518400 恰为整帧字节数——源被平移
+// 出尾部）。guard 让 ≤64KB 的残余平移落在有效内存内：脏像素可容忍，
+// 进程死亡不可容忍。Java 侧同步四重防御（分段上传/容量闸门/完整
+// 五元组重置/污染取证行）见 GlComposer.present。
+static uint8_t *g_liveStagingData = NULL;
 static id<MTLBuffer> g_liveUniform = nil;    // PtUniforms (shared)
 static id<MTLBuffer> g_liveStats = nil;      // 2 x uint32 atomics (per frame)
 static id<MTLCommandBuffer> g_liveCmd = nil; // last committed frame (accum+present)
@@ -205,7 +214,10 @@ static uint32_t g_liveLastCamHits = 0;
 static double g_liveLastMs = 0.0;
 static int g_liveAtlasMode = 0;              // 0=white/vertex-color 1=atlas RGB
 static id<MTLBuffer> g_atlasStaging = nil;   // GL readback target (shared)
+static uint8_t *g_atlasStagingData = NULL;   // v0.4.3: contents + kGuardPad
 static uint64_t g_atlasStagingBytes = 0;
+/** v0.4.3: staging 头尾 guard pad（字节）。 */
+static const NSUInteger kGuardPad = 64 * 1024;
 
 // v0.4: per-instance slot origins of the live TLAS (hit attribution).
 static int32_t (*g_instOrigins)[3] = NULL;
@@ -2052,6 +2064,7 @@ Java_net_prisma_pathtrace_Native_liveBeginNative(
         }
         // Fresh session (idempotent: a second begin reallocates).
         g_liveAccum = nil; g_liveImage = nil; g_liveStaging = nil;
+        g_liveStagingData = NULL;
         g_liveUniform = nil; g_liveStats = nil; g_liveCmd = nil;
         const uint64_t pixels = (uint64_t)width * (uint64_t)height;
         g_liveAccum =
@@ -2060,9 +2073,13 @@ Java_net_prisma_pathtrace_Native_liveBeginNative(
         g_liveImage =
             [g_device newBufferWithLength:(NSUInteger)(pixels * 4)
                                  options:MTLResourceStorageModeShared];
+        // v0.4.3: 头尾 guard（GL 上传源指针防越界——见声明区注释）。
         g_liveStaging =
-            [g_device newBufferWithLength:(NSUInteger)(pixels * 4)
+            [g_device newBufferWithLength:(NSUInteger)(2 * kGuardPad + pixels * 4)
                                  options:MTLResourceStorageModeShared];
+        if (g_liveStaging != nil) {
+            g_liveStagingData = (uint8_t *)g_liveStaging.contents + kGuardPad;
+        }
         g_liveUniform =
             [g_device newBufferWithLength:88
                                  options:MTLResourceStorageModeShared];
@@ -2072,6 +2089,7 @@ Java_net_prisma_pathtrace_Native_liveBeginNative(
         if (g_liveAccum == nil || g_liveImage == nil || g_liveStaging == nil
                 || g_liveUniform == nil || g_liveStats == nil) {
             g_liveAccum = nil; g_liveImage = nil; g_liveStaging = nil;
+            g_liveStagingData = NULL;
             g_liveUniform = nil; g_liveStats = nil;
             rp("[live] FATAL: session buffer allocation failed");
             return JNI_FALSE;
@@ -2227,7 +2245,8 @@ JNIEXPORT jobject JNICALL
 Java_net_prisma_pathtrace_Native_livePresentNative(JNIEnv *env, jclass cls) {
     (void)cls;
     @synchronized (g_liveLock) {
-        if (!g_liveActive || g_liveCmd == nil || g_liveStaging == nil) {
+        if (!g_liveActive || g_liveCmd == nil || g_liveStaging == nil
+                || g_liveStagingData == NULL) {
             return NULL;
         }
         [g_liveCmd waitUntilCompleted];
@@ -2236,9 +2255,9 @@ Java_net_prisma_pathtrace_Native_livePresentNative(JNIEnv *env, jclass cls) {
                g_liveCmd.error.localizedDescription.UTF8String);
             return NULL;
         }
-        memcpy(g_liveStaging.contents, g_liveImage.contents,
+        memcpy(g_liveStagingData, g_liveImage.contents,
                (size_t)g_liveW * g_liveH * 4);
-        return (*env)->NewDirectByteBuffer(env, g_liveStaging.contents,
+        return (*env)->NewDirectByteBuffer(env, g_liveStagingData,
                                            (jlong)((size_t)g_liveW * g_liveH * 4));
     }
 }
@@ -2319,16 +2338,21 @@ Java_net_prisma_pathtrace_Native_liveAtlasBufferNative(
             rp("[live] atlas buffer reject: bad size %d", bytes);
             return NULL;
         }
+        // v0.4.3: 头尾 guard（glReadPixels 写目标防 PACK SKIP_* 平移越界）。
         g_atlasStaging =
-            [g_device newBufferWithLength:(NSUInteger)bytes
+            [g_device newBufferWithLength:(NSUInteger)(2 * kGuardPad
+                                                         + (uint64_t)bytes)
                                  options:MTLResourceStorageModeShared];
         if (g_atlasStaging == nil) {
+            g_atlasStagingData = NULL;
             rp("[live] FATAL: atlas staging allocation failed (%d B)", bytes);
             return NULL;
         }
-        memset(g_atlasStaging.contents, 0, (size_t)bytes);
+        memset(g_atlasStaging.contents, 0,
+               (size_t)(2 * kGuardPad + (uint64_t)bytes));
         g_atlasStagingBytes = (uint64_t)bytes;
-        return (*env)->NewDirectByteBuffer(env, g_atlasStaging.contents,
+        g_atlasStagingData = (uint8_t *)g_atlasStaging.contents + kGuardPad;
+        return (*env)->NewDirectByteBuffer(env, g_atlasStagingData,
                                            (jlong)bytes);
     }
 }
@@ -2360,7 +2384,7 @@ Java_net_prisma_pathtrace_Native_uploadAtlasNative(
     // ---- GPU work outside the lock (render thread; once per session) ----
     const void *staged;
     @synchronized (g_liveLock) {
-        staged = g_atlasStaging.contents;
+        staged = (const void *)g_atlasStagingData;
     }
     id<MTLTexture> tex =
         make_texture_from_bytes(staged, (uint32_t)width, (uint32_t)height);
@@ -2406,6 +2430,7 @@ Java_net_prisma_pathtrace_Native_liveEndNative(JNIEnv *env, jclass cls) {
         if (g_liveCmd != nil) { [g_liveCmd waitUntilCompleted]; }
         g_liveCmd = nil;
         g_liveAccum = nil; g_liveImage = nil; g_liveStaging = nil;
+        g_liveStagingData = NULL;
         g_liveUniform = nil; g_liveStats = nil;
         g_liveActive = NO;
         rp("[live] session ended (frames=%u spp=%u resets=%u)",
@@ -2423,6 +2448,7 @@ Java_net_prisma_pathtrace_Native_shutdownNative(JNIEnv *env, jclass cls) {
             if (g_liveCmd != nil) { [g_liveCmd waitUntilCompleted]; }
             g_liveCmd = nil;
             g_liveAccum = nil; g_liveImage = nil; g_liveStaging = nil;
+            g_liveStagingData = NULL;
             g_liveUniform = nil; g_liveStats = nil;
             g_liveActive = NO;
         }
@@ -2445,6 +2471,7 @@ Java_net_prisma_pathtrace_Native_shutdownNative(JNIEnv *env, jclass cls) {
     g_whiteTexture = nil;
     g_sampler = nil;
     g_atlasStaging = nil;
+    g_atlasStagingData = NULL;
     g_atlasStagingBytes = 0;
     g_liveAtlasMode = 0;
     g_poolTris = 0;

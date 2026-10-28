@@ -42,16 +42,16 @@ jobs:
           set -ex
           chmod +x chapter2/pathtrace/build.sh
           bash chapter2/pathtrace/build.sh
-          JAR="chapter2/pathtrace/pathtrace-0.4.2.jar"
+          JAR="chapter2/pathtrace/pathtrace-0.4.3.jar"
           test -f "$JAR"
-          cp "$JAR" ./pathtrace-0.4.2.jar
+          cp "$JAR" ./pathtrace-0.4.3.jar
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: pathtrace-jar
           path: |
-            pathtrace-0.4.2.jar
+            pathtrace-0.4.3.jar
             chapter2/pathtrace/build/native/libradiance_pathtrace.dylib
             chapter2/pathtrace/build/native/pathtrace.metallib
           if-no-files-found: error
@@ -101,7 +101,7 @@ jobs:
           file "$METALLIB"
           test -s "$METALLIB"
           # JAR 内容验证：mixin 类 + mixins.json 必须在包内
-          JAR="chapter2/pathtrace/pathtrace-0.4.2.jar"
+          JAR="chapter2/pathtrace/pathtrace-0.4.3.jar"
           unzip -l "$JAR" | grep -q "net/prisma/pathtrace/mixin/PathtraceWindowMixin.class" \
             && echo "JAR_MIXIN_CLASS_OK"
           unzip -l "$JAR" | grep -q "pathtrace.mixins.json" \
@@ -109,65 +109,66 @@ jobs:
           unzip -l "$JAR" | grep -q "fabric.mod.json" \
             && echo "JAR_FABRIC_MOD_OK"
 
-      - name: Release (pathtrace-v0.4.2, prerelease)
+      - name: Release (pathtrace-v0.4.3, prerelease)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -ex
-          TAG="pathtrace-v0.4.2"
-          TITLE="pathtrace v0.4.2 — v0.4.1 真机判读仪器+防御修复：探针交叉复测 + atlas 二分开关 + GL 错误分类学 + 场景锁 + 墙钟统计"
+          TAG="pathtrace-v0.4.3"
+          TITLE="pathtrace v0.4.3 — v0.4.2 真机 camHit 恢复 35.7% + live ~1.5s SIGSEGV 定谳：UNPACK SKIP_* 污染归一修复 + 上传四重防御"
           NOTES_FILE=release-notes.md
           cat > "$NOTES_FILE" <<'EOF'
-          # pathtrace v0.4.2 — v0.4.1 判读 LIVE_OK_WITH_GL_ERRORS + 全 miss 定谳的仪器与防御包
+          # pathtrace v0.4.3 — v0.4.2 真机回收定谳与闪退根治
 
-          **v0.4.1 真机判定**：`LIVE_OK_WITH_GL_ERRORS`（blit=3565——上屏管道
-          活）但 camHit 在 (1s,2s) 窗口内从 100% 永久归零，worker 哨兵
-          2s/12s/32s 全 0/6，探针 30s 重锚无效；55s PNG=天空+太阳
-          （俯视视角却见天=射线全穿透）。GL 侧 glErrors=10 实为计数器
-          封顶值 + 屏幕底部 ~1/10 花屏条。
+          **v0.4.2 真机判定**：TLAS 构建职责迁移修复坐实——camHit=35.7%
+          （v0.4.1 永久 0.0% → 恢复），atlas 上传前后哨兵均 3/6（bind
+          冲突/相机污染两假说双排除），102 f/s / 82.89 Mray/s，真噪点
+          出屏。**但 live ~1.5s 后 SIGSEGV 闪退**（用户视觉：刚看到噪点
+          就闪退）。
 
-          **本版六件套**：
+          **闪退归因（hs_err 铁证）**：渲染线程
+          `GlComposer.present → glTexSubImage2D → OSMesa/zink
+          _platform_memmove` **读源侧** SEGV_ACCERR；寄存器拼图
+          x27=480(宽) x6=270(高) x21=1920(行字节) x19=518400(整帧字节)，
+          317216+201184=518400 恰为整帧字节数——源指针被正向平移出
+          缓冲尾部。LWJGL 3 不做 buffer 边界检查，native 越界直接杀
+          进程。
 
-          1. **探针线程交叉复测 [probe-sentinel]**：worker 哨兵 0/6 时，
-             探针线程对同一 TLAS 打同一组六轴 ray——probe 命中 + worker
-             全 miss = worker 派发路径坏（线程归责定谳）；双 miss =
-             AS 内容坏（BLAS/TLAS 毒化）。S8.4 重锚后同样复测。v0.4.1
-             全程探针线程在 S6.5 后再没打过任何 ray——正是缺失的关键 A/B。
-          2. **atlas 二分开关** `-Dpathtrace.atlas=false`：跳过 GL readback
-             + Metal 纹理上传整条链（albedo 回退顶点色）。camHit 恢复
-             非零 = 上传链凶手坐实。atlas epoch 前后即时哨兵括号
-             （t≈0 前基线 / epoch 后 ≤8ms / 1.5s 加密点）+ 哨兵行姿态
-             回显（NaN/漂移现形）。
-          3. **GL 错误分类学**：逐操作错误码+命名（texSubImage2D / blit
-             分开探）+ 首帧几何行（RT/win/dst/src/viewport/scissor——
-             底部花屏条直指 dst 矩形 vs 帧缓冲尺寸错位或 blit 失败）+
-             LINEAR blit 出错自动 NEAREST 重试（自愈）+ init 前排空
-             游戏侧遗留错误 + glErrors 计数去掉封顶。
-          4. **场景锁 g_sceneLock**：castRayNative 此前读 g_tlas 完全
-             无锁（探针线程 rebuild 换装/退役 TLAS 与 worker 读并发
-             = use-after-free 窗口）；rebuild 换装段、worker 帧编码
-             （快照 TLAS+pools）、castRay 快照全部上锁（锁序 L→S，
-             死锁审计过）。uploadAtlasNative 的 GPU wait 移出会话锁。
-          5. **开关语义修复**：`Boolean.getBoolean` 反转——
-             `-Dpathtrace.compose=false` 实际上从未关掉过合成（v0.4/v0.4.1
-             的归因开关是坏的；两轮真机未触发此路径故未污染现场）。
-             统一字符串判定，atlas 开关同款。
-          6. **墙钟统计**：[live] 行新增 wall f/s（Java 侧计帧差分——
-             免疫重置风暴）+ loopHz（GPU 锁死/线程饥饿现形）；since-reset
-             span 下限 200ms（杀掉 89000 f/s 假值）。
+          **统一根因**：v0.4.2 只重置 UNPACK ROW_LENGTH/ALIGNMENT、
+          **漏 SKIP_PIXELS/SKIP_ROWS**——GL 规范中 SKIP_* 把 texSubImage2D
+          源指针正向平移 skip 像素/行；MC/字体图集路径遗留 SKIP 不
+          清理 → 上传错位（v0.4 底部花屏条）→ 平移超缓冲尾部（v0.4.2
+          保护页必崩）——同源渐进恶化。
+
+          **本版四重防御**：
+
+          1. **完整 UNPACK/PACK 五元组归零**：ROW_LENGTH + ALIGNMENT +
+             SKIP_PIXELS + SKIP_ROWS + SWAP_BYTES，保存/重置/恢复全链
+             （present 上传侧 + captureAtlas 回读侧）——消灭平移源。
+          2. **Java 容量闸门**：remaining() < W×H×4 直接跳帧留行（LWJGL
+             不查边界，Java 侧查）。
+          3. **分段上传**：每段 ≤64 行（122,880B，低于 zink glthread
+             /transfer 常见 128KB 分块粒度）；段级 glGetError + 首错
+             留行（重置后仍错 ⇒ 驱动侧坐实）。
+          4. **native guard pad**：live/atlas staging 头尾各 64KB
+             （NewDirectByteBuffer 仍报有效长度）——残余平移最多脏像素、
+             不杀进程。
+
+          **新增仪器**：[compose] 捕获时像素传输状态行（skipPx/skipRows
+          非 0 即 SKIP 污染坐实——现行犯证据）+ [compose] 心跳行（每 256
+          帧——若再闪退即崩溃前最后可见状态）。
 
           **使用**：替换 mods/ 内旧 JAR → 进世界停留 ~40s（摄取+S7）→
-          静止/转向随意（观察窗 60s）→ 坐满 70s 回报
-          pathtrace_report.txt（重点：[probe-sentinel]、[live-sentinel]
-          各行、[live] camHit 曲线、[compose] 首帧几何与错误码行、
-          [S8.2] atlas 行）+ pathtrace_live*.png + 屏幕目检描述。
-          若首跑 camHit 仍归零：加 `-Dpathtrace.atlas=false` 再跑一轮
-          （A/B 二分——无需改 JAR）。
+          实时会话开启 → 静止看收敛（观察窗 60s）→ 坐满 75s 回报
+          pathtrace_report.txt（重点：[compose] 捕获时像素传输状态行、
+          [live] camHit、心跳行）+ pathtrace_live*.png。**若再闪退**：
+          hs_err_pid*.log + fatal_trace.txt 一并回报（v0.4.3 已按读源
+          越界加固——若仍崩，崩溃栈会指向新位置）。
           EOF
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release upload "$TAG" ./pathtrace-0.4.2.jar --clobber --repo "$GITHUB_REPOSITORY"
+            gh release upload "$TAG" ./pathtrace-0.4.3.jar --clobber --repo "$GITHUB_REPOSITORY"
           else
-            gh release create "$TAG" ./pathtrace-0.4.2.jar \
+            gh release create "$TAG" ./pathtrace-0.4.3.jar \
                  --title "$TITLE" --notes-file "$NOTES_FILE" \
                  --prerelease --repo "$GITHUB_REPOSITORY"
           fi

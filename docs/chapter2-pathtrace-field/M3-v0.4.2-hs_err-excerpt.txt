@@ -1,0 +1,130 @@
+#
+# A fatal error has been detected by the Java Runtime Environment:
+#
+#  SIGSEGV (0xb) at pc=0x00000001ab39b000, pid=22696, tid=38691
+#
+# JRE version: OpenJDK Runtime Environment (21.0.8) (build 21.0.8-internal-adhoc.ci.openjdk-21)
+# Java VM: OpenJDK 64-Bit Server VM (21.0.8-internal-adhoc.ci.openjdk-21, mixed mode, tiered, compressed oops, g1 gc, bsd-aarch64)
+# Problematic frame:
+# C  [libsystem_platform.dylib+0x1000]  _platform_memmove+0x60
+#
+# No core dump will be written. Core dumps have been disabled. To enable core dumping, try "ulimit -c unlimited" before starting Java again
+#
+# If you would like to submit a bug report, please visit:
+#   https://bugreport.java.com/bugreport/crash.jsp
+# The crash happened outside the Java Virtual Machine in native code.
+# See problematic frame for where to report the bug.
+#
+
+---------------  S U M M A R Y ------------
+
+Command Line: -Djava.system.class.loader=net.kdt.pojavlaunch.PojavClassLoader -Xms128M -Xmx4096M -Xlog:gc,safepoint:stdout:time,uptime -Djava.library.path=/private/var/containers/Bundle/Application/BE3401AA-F668-4E8E-936D-1768C8F36225/AngelAuraAmethyst.app/Frameworks -Dorg.lwjgl.openal.libname=/private/var/containers/Bundle/Application/BE3401AA-F668-4E8E-936D-1768C8F36225/AngelAuraAmethyst.app/Frameworks/libopenal.dylib -Duser.dir=/var/mobile/Containers/Data/Application/8BCCCFC1-5C33-44BA-811F-FC58EE9FCC6E/Documents/instances/default/versions/fabric-loader-0.20.1-1.21.4/game -Duser.home=/private/var/mobile/Containers/Data/Application/8BCCCFC1-5C33-44BA-811F-FC58EE9FCC6E/Documents -Duser.timezone=Asia/Shanghai -DUIScreen.maximumFramesPerSecond=120 -Dmetallum.ios.view.pointer=0x124cff2c0 -Dmetallum.ios.screen.scale=3 -Dame.launcher.lang=zh_cn -Dorg.lwjgl.glfw.checkThread0=false -Dorg.lwjgl.system.allocator=system -Dlog4j2.formatMsgNoLookups=true -Djna.boot.library.path=/private/var/containers/Bundle/Application/BE3401AA-F668-4E8E-936D-1768C8F36225/AngelAuraAmethyst.app/Frameworks -Dmax.fps=260 -Dorg.lwjgl.opengl.libname=OSMesa.8 -Dorg.lwjgl.vulkan.libname=MoltenVK -Dorg.lwjgl.spvc.libname=spirv-cross-c-shared.0 -javaagent:/private/var/containers/Bundle/Application/BE3401AA-F668-4E8E-936D-1768C8F36225/AngelAuraAmethyst.app/libs/patchjna_agent.jar= -javaagent:/private/var/containers/Bundle/Application/BE3401AA-F668-4E8E-936D-1768C8F36225/AngelAuraAmethyst.app/libs/arc_dns_injector.jar=23.95.137.176 -javaagent:/private/var/containers/Bundle/Application/BE3401AA-F668-4E8E-936D-1768C8F36225/AngelAuraAmethyst.app/libs/patchsvc.jar= -Dame.game.session=1 -javaagent:/private/var/containers/Bundle/Application/BE3401AA-F668-4E8E-936D-1768C8F36225/AngelAuraAmethyst.app/libs/showdown_agent.jar -Dame.showdown.home=/var/mobile/Containers/Data/Application/8BCCCFC1-5C33-44BA-811F-FC58EE9FCC6E/Documents/instances/default/versions/fabric-loader-0.20.1-1.21.4/game -Dlink.e4mc.native_path=/nonexistent.ame259.quic-disabled -XX:+UnlockExperimentalVMOptions -XX:+DisablePrimordialThreadGuardPages -XX:ReservedCodeCacheSize=64m -XX:InitialCodeCacheSize=48m -XX:CodeCacheExpansionSize=8m -XX:+MirrorMappedCodeCache -Dfml.earlyprogresswindow=false -Dneoforge.enabledEarlyDisplay=false -Dforge.disableEarlyDisplay=true -XX:+UseG1GC -XX:MaxGCPauseMillis=50 -XX:+UseStringDeduplication -XX:SoftRefLRUPolicyMSPerMB=250 -Xss32M -XX:ErrorFile=/private/var/mobile/Containers/Data/Application/8BCCCFC1-5C33-44BA-811F-FC58EE9FCC6E/Documents/hs_err_pid%p.log -Djava.awt.headless=false -Dcacio.font.fontmanager=sun.awt.X11FontManager -Dcacio.font.fontscaler=sun.font.FreetypeFontScaler -Dcacio.managed.screensize=2796x1290 -Dswing.defaultlaf=javax.swing.plaf.metal.MetalLookAndFeel --add-opens=java.base/java.net=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED -Dawt.toolkit=com.github.caciocavallosilano.cacio.ctc.CTCToolkit -Djava.awt.graphicsenv=com.github.caciocavallosilano.cacio.ctc.CTCGraphicsEnvironment -Dio.netty.transport.noNative=true --add-exports=java.desktop/java.awt=ALL-UNNAMED --add-exports=java.desktop/java.awt.peer=ALL-UNNAMED --add-exports=java.desktop/sun.awt.image=ALL-UNNAMED --add-exports=java.desktop/sun.java2d=ALL-UNNAMED --add-exports=java.desktop/java.awt.dnd.peer=ALL-UNNAMED --add-exports=java.desktop/sun.awt=ALL-UNNAMED --add-exports=java.desktop/sun.awt.event=ALL-UNNAMED --add-exports=java.desktop/sun.awt.datatransfer=ALL-UNNAMED --add-exports=java.desktop/sun.font=ALL-UNNAMED --add-exports=java.base/sun.security.action=ALL-UNNAMED --add-opens=java.base/java.util=ALL-UNNAMED --add-opens=java.desktop/java.awt=ALL-UNNAMED --add-opens=java.desktop/sun.font=ALL-UNNAMED --add-opens=java.desktop/sun.java2d=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED --add-exports=cpw.mods.bootstraplauncher/cpw.mods.bootstraplauncher=ALL-UNNAMED -Xbootclasspath/a:/private/var/containers/Bundle/Application/BE3401AA-F668-4E8E-936D-1768C8F36225/AngelAuraAmethyst.app/libs_caciocavallo17/cacio-shared-1.18-SNAPSHOT.jar:/private/var/containers/Bundle/Application/BE3401AA-F668-4E8E-936D-1768C8F36225/AngelAuraAmethyst.app/libs_caciocavallo17/cacio-tta-1.18-SNAPSHOT.jar -XX:-UseCompressedClassPointers -DFabricMcEmu= net.minecraft.client.main.Main  -Dpojav.lwjgl.version=333 net.kdt.pojavlaunch.PojavLauncher B9CBC19F-55E2-485D-B7B2-5E49FC6A5DF1 fabric-loader-0.20.1-1.21.4 
+
+Host: "V64sAP" iPhone19,7, 6 cores, 11G, Darwin 27.0.0, macOS 27.0.1 (24A446)
+Time: Wed Oct 28 17:56:13 2026 CST elapsed time: 43.600891 seconds (0d 0h 0m 43s)
+
+---------------  T H R E A D  ---------------
+
+Current thread (0x0000000123cb6a00):  JavaThread "Render thread"        [_thread_in_native, id=38691, stack(0x000000016fbac000,0x0000000171baf000) (32780K)]
+
+Stack: [0x000000016fbac000,0x0000000171baf000],  sp=0x0000000171bad280,  free space=32772k
+Native frames: (J=compiled Java code, j=interpreted, Vv=VM code, C=native code)
+C  [libsystem_platform.dylib+0x1000]  _platform_memmove+0x60
+C  [libOSMesa.8.dylib+0x239608]  glFramebufferTextureMultisampleMultiviewOVR+0x223ad4
+C  [libOSMesa.8.dylib+0x1c56a4]  glFramebufferTextureMultisampleMultiviewOVR+0x1afb70
+C  [libOSMesa.8.dylib+0x1c633c]  glFramebufferTextureMultisampleMultiviewOVR+0x1b0808
+j  org.lwjgl.opengl.GL11C.nglTexSubImage2D(IIIIIIIIJ)V+0
+j  org.lwjgl.opengl.GL11C.glTexSubImage2D(IIIIIIIILjava/nio/ByteBuffer;)V+17
+j  org.lwjgl.opengl.GL11.glTexSubImage2D(IIIIIIIILjava/nio/ByteBuffer;)V+14
+j  java.lang.invoke.LambdaForm$DMH+0x0000007f8a7fdbc0.invokeStatic(Ljava/lang/Object;IIIIIIIILjava/lang/Object;)V+26 java.base@21.0.8-internal
+j  java.lang.invoke.LambdaForm$MH+0x0000007f8a801d10.invoke(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;+193 java.base@21.0.8-internal
+J 34290 c2 jdk.internal.reflect.DirectMethodHandleAccessor.invoke(Ljava/lang/Object;[Ljava/lang/Object;)Ljava/lang/Object; java.base@21.0.8-internal (92 bytes) @ 0x0000000151ee9df8 [0x0000000151ee9c40+0x00000000000001b8]
+j  java.lang.reflect.Method.invoke(Ljava/lang/Object;[Ljava/lang/Object;)Ljava/lang/Object;+102 java.base@21.0.8-internal
+j  net.prisma.pathtrace.GlComposer.call(Ljava/lang/reflect/Method;[Ljava/lang/Object;)V+3
+j  net.prisma.pathtrace.GlComposer.present(Ljava/nio/ByteBuffer;)V+555
+j  net.prisma.pathtrace.PathtraceHook.onPreSwap()V+103
+J 32951 c1 net.minecraft.class_1041.method_15998(Lnet/minecraft/class_10219;)V (42 bytes) @ 0x0000000151899380 [0x0000000151899280+0x0000000000000100]
+J 32715 c1 net.minecraft.class_310.method_1523(Z)V (1051 bytes) @ 0x00000001533adc30 [0x00000001533a95c0+0x0000000000004670]
+j  net.minecraft.class_310.method_1514()V+102
+j  net.minecraft.client.main.Main.main([Ljava/lang/String;)V+1668
+j  java.lang.invoke.LambdaForm$DMH+0x000000015eea83b0.invokeStaticInit(Ljava/lang/Object;Ljava/lang/Object;)V+10 java.base@21.0.8-internal
+j  java.lang.invoke.LambdaForm$MH+0x000000015e901bd8.invokeExact_MT(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)V+19 java.base@21.0.8-internal
+j  net.fabricmc.loader.impl.game.minecraft.MinecraftGameProvider.launch(Ljava/lang/ClassLoader;)V+74
+j  net.fabricmc.loader.impl.launch.knot.Knot.launch([Ljava/lang/String;Lnet/fabricmc/api/EnvType;)V+40
+j  net.fabricmc.loader.impl.launch.knot.KnotClient.main([Ljava/lang/String;)V+4
+j  java.lang.invoke.LambdaForm$DMH+0x000000015e7073b0.invokeStatic(Ljava/lang/Object;Ljava/lang/Object;)V+10 java.base@21.0.8-internal
+j  java.lang.invoke.LambdaForm$MH+0x000000015e7093e0.invoke(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;+33 java.base@21.0.8-internal
+j  java.lang.invoke.Invokers$Holder.invokeExact_MT(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;+20 java.base@21.0.8-internal
+j  jdk.internal.reflect.DirectMethodHandleAccessor.invokeImpl(Ljava/lang/Object;[Ljava/lang/Object;)Ljava/lang/Object;+55 java.base@21.0.8-internal
+j  jdk.internal.reflect.DirectMethodHandleAccessor.invoke(Ljava/lang/Object;[Ljava/lang/Object;)Ljava/lang/Object;+23 java.base@21.0.8-internal
+j  java.lang.reflect.Method.invoke(Ljava/lang/Object;[Ljava/lang/Object;)Ljava/lang/Object;+102 java.base@21.0.8-internal
+j  net.kdt.pojavlaunch.Tools.launchMinecraft(Lnet/kdt/pojavlaunch/value/MinecraftAccount;Lnet/kdt/pojavlaunch/JMinecraftVersionList$Version;Ljava/lang/String;)V+203
+j  net.kdt.pojavlaunch.PojavLauncher.launchMinecraft([Ljava/lang/String;)V+1681
+j  net.kdt.pojavlaunch.PojavLauncher.main([Ljava/lang/String;)V+102
+v  ~StubRoutines::call_stub 0x00000001511c4154
+V  [libjvm.dylib+0x4affb4]  JavaCalls::call_helper(JavaValue*, methodHandle const&, JavaCallArguments*, JavaThread*)+0x308
+V  [libjvm.dylib+0x52a224]  jni_invoke_static(JNIEnv_*, JavaValue*, _jobject*, JNICallType, _jmethodID*, JNI_ArgumentPusher*, JavaThread*)+0x14c
+V  [libjvm.dylib+0x52d820]  jni_CallStaticVoidMethod+0xf8
+C  [libjli.dylib+0xb130]  JavaMain+0xa04
+C  [libjli.dylib+0xdc48]  ThreadJavaMain+0xc
+C  [libsystem_pthread.dylib+0x3f0c]  _pthread_start+0x74
+Java frames: (J=compiled Java code, j=interpreted, Vv=VM code)
+j  org.lwjgl.opengl.GL11C.nglTexSubImage2D(IIIIIIIIJ)V+0
+j  org.lwjgl.opengl.GL11C.glTexSubImage2D(IIIIIIIILjava/nio/ByteBuffer;)V+17
+j  org.lwjgl.opengl.GL11.glTexSubImage2D(IIIIIIIILjava/nio/ByteBuffer;)V+14
+j  java.lang.invoke.LambdaForm$DMH+0x0000007f8a7fdbc0.invokeStatic(Ljava/lang/Object;IIIIIIIILjava/lang/Object;)V+26 java.base@21.0.8-internal
+j  java.lang.invoke.LambdaForm$MH+0x0000007f8a801d10.invoke(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;+193 java.base@21.0.8-internal
+J 34290 c2 jdk.internal.reflect.DirectMethodHandleAccessor.invoke(Ljava/lang/Object;[Ljava/lang/Object;)Ljava/lang/Object; java.base@21.0.8-internal (92 bytes) @ 0x0000000151ee9df8 [0x0000000151ee9c40+0x00000000000001b8]
+j  java.lang.reflect.Method.invoke(Ljava/lang/Object;[Ljava/lang/Object;)Ljava/lang/Object;+102 java.base@21.0.8-internal
+j  net.prisma.pathtrace.GlComposer.call(Ljava/lang/reflect/Method;[Ljava/lang/Object;)V+3
+j  net.prisma.pathtrace.GlComposer.present(Ljava/nio/ByteBuffer;)V+555
+j  net.prisma.pathtrace.PathtraceHook.onPreSwap()V+103
+J 32951 c1 net.minecraft.class_1041.method_15998(Lnet/minecraft/class_10219;)V (42 bytes) @ 0x0000000151899380 [0x0000000151899280+0x0000000000000100]
+J 32715 c1 net.minecraft.class_310.method_1523(Z)V (1051 bytes) @ 0x00000001533adc30 [0x00000001533a95c0+0x0000000000004670]
+j  net.minecraft.class_310.method_1514()V+102
+j  net.minecraft.client.main.Main.main([Ljava/lang/String;)V+1668
+j  java.lang.invoke.LambdaForm$DMH+0x000000015eea83b0.invokeStaticInit(Ljava/lang/Object;Ljava/lang/Object;)V+10 java.base@21.0.8-internal
+j  java.lang.invoke.LambdaForm$MH+0x000000015e901bd8.invokeExact_MT(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)V+19 java.base@21.0.8-internal
+j  net.fabricmc.loader.impl.game.minecraft.MinecraftGameProvider.launch(Ljava/lang/ClassLoader;)V+74
+j  net.fabricmc.loader.impl.launch.knot.Knot.launch([Ljava/lang/String;Lnet/fabricmc/api/EnvType;)V+40
+j  net.fabricmc.loader.impl.launch.knot.KnotClient.main([Ljava/lang/String;)V+4
+j  java.lang.invoke.LambdaForm$DMH+0x000000015e7073b0.invokeStatic(Ljava/lang/Object;Ljava/lang/Object;)V+10 java.base@21.0.8-internal
+j  java.lang.invoke.LambdaForm$MH+0x000000015e7093e0.invoke(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;+33 java.base@21.0.8-internal
+j  java.lang.invoke.Invokers$Holder.invokeExact_MT(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;+20 java.base@21.0.8-internal
+j  jdk.internal.reflect.DirectMethodHandleAccessor.invokeImpl(Ljava/lang/Object;[Ljava/lang/Object;)Ljava/lang/Object;+55 java.base@21.0.8-internal
+j  jdk.internal.reflect.DirectMethodHandleAccessor.invoke(Ljava/lang/Object;[Ljava/lang/Object;)Ljava/lang/Object;+23 java.base@21.0.8-internal
+j  java.lang.reflect.Method.invoke(Ljava/lang/Object;[Ljava/lang/Object;)Ljava/lang/Object;+102 java.base@21.0.8-internal
+j  net.kdt.pojavlaunch.Tools.launchMinecraft(Lnet/kdt/pojavlaunch/value/MinecraftAccount;Lnet/kdt/pojavlaunch/JMinecraftVersionList$Version;Ljava/lang/String;)V+203
+j  net.kdt.pojavlaunch.PojavLauncher.launchMinecraft([Ljava/lang/String;)V+1681
+j  net.kdt.pojavlaunch.PojavLauncher.main([Ljava/lang/String;)V+102
+v  ~StubRoutines::call_stub 0x00000001511c4154
+
+siginfo: si_signo: 11 (SIGSEGV), si_code: 2 (SEGV_ACCERR), si_addr: 0x0000007f93914000
+
+Registers:
+ x0=0x0000007f68880000  x1=0x0000007f93914000  x2=0x00000000000312e0  x3=0x0000007f688cd600
+ x4=0x000000002b046a00  x5=0x0000000000000020  x6=0x000000000000010e  x7=0x0000007f938c6a00
+ x8=0x0000000000000780  x9=0x0000000000000000 x10=0x0000000000000004 x11=0x0000000000000001
+x12=0x000000000000010e x13=0x0000007f938c6a00 x14=0x0000000000000000 x15=0x0000007f68880000
+x16=0x00000001ab39afa0 x17=0x0000000000000000 x18=0x0000000000000000 x19=0x000000000007e900
+x20=0x000000000007e900 x21=0x0000000000000780 x22=0x0000007f938c6a00 x23=0x0000007f68880000
+x24=0x0000000000000035 x25=0x000000000000010e x26=0x0000000000000780 x27=0x00000000000001e0
+x28=0x0000000000000001  fp=0x0000000171bad2f0  lr=0x000000013b359f24  sp=0x0000000171bad280
+pc=0x00000001ab39b000 cpsr=0x0000000020000000
+
+Register to memory mapping:
+
+x0 =0x0000007f68880000 points into unknown readable memory: 0xff6fa682ff6fa882 | 82 a8 6f ff 82 a6 6f ff
+x1 =0x0000007f93914000 is an unknown value
+x2 =0x00000000000312e0 is an unknown value
+x3 =0x0000007f688cd600 points into unknown readable memory: 0x0000000000000000 | 00 00 00 00 00 00 00 00
+x4 =0x000000002b046a00 is an unknown value
+x5 =0x0000000000000020 is an unknown value
+x6 =0x000000000000010e is an unknown value
+x7 =0x0000007f938c6a00 points into unknown readable memory: 0xff6fa682ff6fa882 | 82 a8 6f ff 82 a6 6f ff
+x8 =0x0000000000000780 is an unknown value
+x9 =0x0 is null
+x10=0x0000000000000004 is an unknown value
+x11=0x0000000000000001 is an unknown value
+x12=0x000000000000010e is an unknown value
+x13=0x0000007f938c6a00 points into unknown readable memory: 0xff6fa682ff6fa882 | 82 a8 6f ff 82 a6 6f ff

@@ -12,14 +12,17 @@ import java.nio.ByteBuffer;
  *
  *   init          创建 RT 纹理（w×h RGBA8）+ 只读 FBO；记录 GL
  *                 vendor/version 证据行；保存/恢复 GL 状态纪律（active
- *                 texture、纹理绑定、FB 绑定、scissor、pixel store）
+ *                 texture、纹理绑定、FB 绑定、scissor、完整像素传输五元组）
  *   captureAtlas  反射链取块图集 GL 纹理 id（mc.getTextureManager() →
  *                 Identifier.of → getTexture → glId）→ 挂 FBO →
- *                 glReadPixels 回读到 native 暂存缓冲 → uploadAtlasNative
- *                 变 MTLTexture；任一环失败 → 降级纯顶点色（2.2 等价路径）
- *   present       每帧：glTexSubImage2D 上传 RT 快照 → glBlitFramebuffer
- *                 整帧替换默认帧缓冲（RT → 窗口分辨率，dst y 翻转补偿
- *                 GL 左下原点）
+ *                 glReadPixels 回读到 native 暂存缓冲（PACK 五元组重置 +
+ *                 native guard pad）→ uploadAtlasNative 变 MTLTexture；
+ *                 任一环失败 → 降级纯顶点色（2.2 等价路径）
+ *   present       每帧：分段 glTexSubImage2D 上传 RT 快照（每段 ≤64 行；
+ *                 完整 UNPACK 状态归零——SKIP_* 遗留平移是 v0.4 花屏条
+ *                 与 v0.4.2 SIGSEGV 的统一根因；Java 侧容量闸门）→
+ *                 glBlitFramebuffer 整帧替换默认帧缓冲（RT → 窗口
+ *                 分辨率，dst y 翻转补偿 GL 左下原点）
  *
  * GL 常量硬编码（GL 规范固定值，注释标注）——避免对 LWJGL 常量类的
  * 反射面扩大到字段级。
@@ -56,6 +59,21 @@ final class GlComposer {
     private static final int GL_TEXTURE_HEIGHT = 0x1001;
     private static final int GL_UNPACK_ROW_LENGTH = 0x0CF2;
     private static final int GL_UNPACK_ALIGNMENT = 0x0CF5;
+    /** v0.4.3: SKIP_* 把 glTexSubImage2D 的源指针正向平移 skip 像素/行（规范
+     * 固定值 0x0CF3/0x0CF4）——v0.4.2 只重置 ROW_LENGTH/ALIGNMENT 漏了它们。
+     * MC/字体图集路径遗留的 SKIP 会把上传源平移出缓冲尾部：错位行（v0.4
+     * 底部花屏条）与读源越界（v0.4.2 SIGSEGV，hs_err _platform_memmove
+     * SEGV_ACCERR，317216+201184=518400 拼合铁证）同源。 */
+    private static final int GL_UNPACK_SKIP_ROWS = 0x0CF3;
+    private static final int GL_UNPACK_SKIP_PIXELS = 0x0CF4;
+    /** v0.4.3: 字节交换遗留同样污染传输（RGBA8+UBYTE 下无意义但状态仍在）。 */
+    private static final int GL_UNPACK_SWAP_BYTES = 0x0CF0;
+    /** v0.4.3: PACK 侧四元组（glReadPixels 的写目标同样会被 SKIP_* 平移
+     * ——atlas 采集写越界的同源防御）。 */
+    private static final int GL_PACK_SWAP_BYTES = 0x0D00;
+    private static final int GL_PACK_ROW_LENGTH = 0x0D02;
+    private static final int GL_PACK_SKIP_ROWS = 0x0D03;
+    private static final int GL_PACK_SKIP_PIXELS = 0x0D04;
     private static final int GL_PACK_ALIGNMENT = 0x0D05;
     private static final int GL_VENDOR = 0x1F00;
     private static final int GL_RENDERER = 0x1F01;
@@ -108,6 +126,16 @@ final class GlComposer {
     private int blitErrCount = 0;
     private int texSubErrLogged = 0;
     private int blitErrLogged = 0;
+    /** v0.4.3: 分段上传行数（64 行 × 1920B = 122,880B/段——低于 zink
+     * glthread marshal / transfer 路径常见的 128KB 分块粒度；v0.4.2 现场
+     * 崩在单次 518,400B 大包上传。 */
+    private static final int UPLOAD_ROWS_PER_CHUNK = 64;
+    /** v0.4.3: 快照缓冲不足跳帧计数（LWJGL 3 不做 buffer 边界检查——
+     * Java 侧闸门是防 SIGSEGV 的第一道）。 */
+    private int shortBufCount = 0;
+    private int shortBufLogged = 0;
+    /** v0.4.3: present 计数（心跳行分子——SIGSEGV 前的最后可见状态）。 */
+    private int presentCount = 0;
     /** 报告引用（init 时保存——present 的错误/几何留行用）。 */
     private ProbeReport rpt;
 
@@ -333,10 +361,20 @@ final class GlComposer {
                 return;
             }
             int savedReadFb = callI(mGetInteger, GL_READ_FRAMEBUFFER_BINDING);
+            // v0.4.3: PACK 五元组重置（SKIP_* 平移 glReadPixels 写目标——
+            // atlas 采集写越界与 texSubImage 读越界同源同防）。
+            int savedPackRow = callI(mGetInteger, GL_PACK_ROW_LENGTH);
             int savedPackAlign = callI(mGetInteger, GL_PACK_ALIGNMENT);
+            int savedPackSkipPx = callI(mGetInteger, GL_PACK_SKIP_PIXELS);
+            int savedPackSkipRows = callI(mGetInteger, GL_PACK_SKIP_ROWS);
+            int savedPackSwap = callI(mGetInteger, GL_PACK_SWAP_BYTES);
             int savedScissor = callZ(mIsEnabled, GL_SCISSOR_TEST) ? 1 : 0;
             try {
                 call(mPixelStorei, GL_PACK_ALIGNMENT, 4);
+                call(mPixelStorei, GL_PACK_ROW_LENGTH, 0);
+                call(mPixelStorei, GL_PACK_SKIP_PIXELS, 0);
+                call(mPixelStorei, GL_PACK_SKIP_ROWS, 0);
+                call(mPixelStorei, GL_PACK_SWAP_BYTES, 0);
                 if (savedScissor != 0) {
                     call(mDisable, GL_SCISSOR_TEST);
                 }
@@ -356,6 +394,10 @@ final class GlComposer {
                         GL_TEXTURE_2D, rtTex, 0);
                 call(mBindFramebuffer, GL_READ_FRAMEBUFFER, savedReadFb);
                 call(mPixelStorei, GL_PACK_ALIGNMENT, savedPackAlign);
+                call(mPixelStorei, GL_PACK_ROW_LENGTH, savedPackRow);
+                call(mPixelStorei, GL_PACK_SKIP_PIXELS, savedPackSkipPx);
+                call(mPixelStorei, GL_PACK_SKIP_ROWS, savedPackSkipRows);
+                call(mPixelStorei, GL_PACK_SWAP_BYTES, savedPackSwap);
                 if (savedScissor != 0) {
                     call(mEnable, GL_SCISSOR_TEST);
                 }
@@ -392,14 +434,33 @@ final class GlComposer {
         }
         final int dstW = winW > 0 ? winW : rtW;
         final int dstH = winH > 0 ? winH : rtH;
+        presentCount++;
+
+        // ---- v0.4.3: 污染取证（重置前捕获完整 UNPACK 状态）----
+        // SKIP_* 非 0 = 现行犯：遗留 SKIP 把上传源指针平移 skip 像素/行——
+        // v0.4 底部花屏条（错位行）与 v0.4.2 SIGSEGV（平移出缓冲尾部撞
+        // 保护页）同源。首帧钉在报告里，读报告即知污染是否存在。
+        final int preRow = callI(mGetInteger, GL_UNPACK_ROW_LENGTH);
+        final int preAlign = callI(mGetInteger, GL_UNPACK_ALIGNMENT);
+        final int preSkipPx = callI(mGetInteger, GL_UNPACK_SKIP_PIXELS);
+        final int preSkipRows = callI(mGetInteger, GL_UNPACK_SKIP_ROWS);
+        if (firstPresentDone == 0) {
+            firstPresentDone = 1;
+            report().pass(String.format(
+                    "[compose] 捕获时像素传输状态: row=%d align=%d skipPx=%d "
+                            + "skipRows=%d%s",
+                    preRow, preAlign, preSkipPx, preSkipRows,
+                    (preSkipPx != 0 || preSkipRows != 0)
+                            ? "  ⚠ SKIP 污染坐实（花屏条/SIGSEGV 同源——本帧起归零重置）"
+                            : "（skip=0——本轮上传源无平移）"));
+        }
 
         // v0.4.2: 首帧几何取证一行——底部花屏条（v0.4.1 现场 ~1/10 屏高
         // 粉/黑/彩条纹）的两个头号嫌疑：dst 矩形 ≠ 实际帧缓冲尺寸（点/像素
         // 或缩放系数错位 → blit 只盖住部分）；或 blit 本身 GL_INVALID_*
         // 失败（残留旧画面/未初始化区）。此行把 src/dst/viewport/scissor
         // 全部钉在报告里，读图即知覆盖区与缺口。
-        if (firstPresentDone == 0) {
-            firstPresentDone = 1;
+        if (presentCount == 1) {
             report().pass(String.format(
                     "[compose] 首帧几何: RT=%dx%d win=%d(%s) dst=%dx%d "
                             + "blit_src=(0,0,%d,%d) blit_dst=(0,%d,%d,0)%s%s",
@@ -408,11 +469,38 @@ final class GlComposer {
                     viewportSuffix(), scissorSuffix()));
         }
 
-        // ---- 状态保存 ----
+        // v0.4.3 心跳：每 256 帧一行——SIGSEGV 若复发，崩溃前最后可见状态。
+        if (presentCount % 256 == 0) {
+            report().info(String.format(
+                    "[compose] 心跳 #%d: texSubErr=%d blitErr=%d shortBuf=%d "
+                            + "(RT=%dx%d chunks=%d行/段)",
+                    presentCount, texSubErrCount, blitErrCount, shortBufCount,
+                    rtW, rtH, UPLOAD_ROWS_PER_CHUNK));
+        }
+
+        // ---- v0.4.3: 容量闸门（LWJGL 3 不做 buffer 边界检查——不足即跳帧）----
+        final int need = rtW * rtH * 4;
+        if (rgba == null || rgba.remaining() < need) {
+            shortBufCount++;
+            if (shortBufLogged < 3) {
+                shortBufLogged++;
+                report().fail(String.format(
+                        "[compose] 跳帧：快照缓冲不足 remaining=%d < %d "
+                                + "(RT=%dx%dx4)——不调 GL（LWJGL 不查边界，"
+                                + "native 读越界即 SIGSEGV）",
+                        rgba != null ? rgba.remaining() : -1, need, rtW, rtH));
+            }
+            return;
+        }
+
+        // ---- 状态保存（v0.4.3: 完整 UNPACK 五元组）----
         int savedActive = callI(mGetInteger, GL_ACTIVE_TEXTURE);
         int savedBinding = callI(mGetInteger, GL_TEXTURE_BINDING_2D);
-        int savedUnpackRow = callI(mGetInteger, GL_UNPACK_ROW_LENGTH);
-        int savedUnpackAlign = callI(mGetInteger, GL_UNPACK_ALIGNMENT);
+        int savedUnpackRow = preRow;
+        int savedUnpackAlign = preAlign;
+        int savedUnpackSkipPx = preSkipPx;
+        int savedUnpackSkipRows = preSkipRows;
+        int savedUnpackSwap = callI(mGetInteger, GL_UNPACK_SWAP_BYTES);
         int savedReadFb = callI(mGetInteger, GL_READ_FRAMEBUFFER_BINDING);
         int savedDrawFb = callI(mGetInteger, GL_DRAW_FRAMEBUFFER_BINDING);
         boolean savedScissor = callZ(mIsEnabled, GL_SCISSOR_TEST);
@@ -420,17 +508,32 @@ final class GlComposer {
         try {
             call(mPixelStorei, GL_UNPACK_ROW_LENGTH, 0);
             call(mPixelStorei, GL_UNPACK_ALIGNMENT, 4);
+            call(mPixelStorei, GL_UNPACK_SKIP_PIXELS, 0);
+            call(mPixelStorei, GL_UNPACK_SKIP_ROWS, 0);
+            call(mPixelStorei, GL_UNPACK_SWAP_BYTES, 0);
             if (savedScissor) {
                 call(mDisable, GL_SCISSOR_TEST);
             }
 
-            // ---- 上传 RT 快照 ----
+            // ---- 上传 RT 快照（v0.4.3: 分段——单次 518KB 大包是 v0.4.2
+            // SIGSEGV 现场；每段 ≤64 行×1920B=122,880B，低于 zink
+            // glthread/transfer 常见 128KB 分块粒度；残余平移由 native
+            // 头尾 64KB guard pad 吸收——脏像素可容忍，进程死不可容忍）----
             call(mBindTexture, GL_TEXTURE_2D, rtTex);
-            call(mTexSubImage2D, GL_TEXTURE_2D, 0, 0, 0, rtW, rtH,
-                    GL_RGBA, GL_UNSIGNED_BYTE, rgba);
-            int errUpload = callI(mGetError);
-            if (errUpload != 0) {
-                noteGlError("texSubImage2D", errUpload, rgba);
+            final int rowBytes = rtW * 4;
+            for (int y = 0; y < rtH; y += UPLOAD_ROWS_PER_CHUNK) {
+                final int rows = Math.min(UPLOAD_ROWS_PER_CHUNK, rtH - y);
+                ByteBuffer chunk = rgba.duplicate();
+                chunk.position(y * rowBytes);
+                chunk.limit(y * rowBytes + rows * rowBytes);
+                call(mTexSubImage2D, GL_TEXTURE_2D, 0, 0, y, rtW, rows,
+                        GL_RGBA, GL_UNSIGNED_BYTE, chunk);
+                int errChunk = callI(mGetError);
+                if (errChunk != 0) {
+                    noteGlError(String.format("texSubImage2D[y=%d rows=%d]",
+                            y, rows), errChunk, chunk);
+                    break; // 本帧放弃后续段（RT 纹理保留旧内容，blit 照常）
+                }
             }
 
             // ---- blit 整帧替换（dst y 翻转：GL 左下原点 vs 图像上下行主序）----
@@ -478,23 +581,30 @@ final class GlComposer {
             call(mActiveTexture, savedActive);
             call(mPixelStorei, GL_UNPACK_ROW_LENGTH, savedUnpackRow);
             call(mPixelStorei, GL_UNPACK_ALIGNMENT, savedUnpackAlign);
+            call(mPixelStorei, GL_UNPACK_SKIP_PIXELS, savedUnpackSkipPx);
+            call(mPixelStorei, GL_UNPACK_SKIP_ROWS, savedUnpackSkipRows);
+            call(mPixelStorei, GL_UNPACK_SWAP_BYTES, savedUnpackSwap);
             if (savedScissor) {
                 call(mEnable, GL_SCISSOR_TEST);
             }
         }
     }
 
-    /** texSubImage2D 错误留行（首例带参数与缓冲规格——上传错儿的一手现场）。 */
+    /** texSubImage2D 错误留行（首例带段几何与缓冲规格——上传错儿的一手现场）。 */
     private void noteGlError(String op, int err, ByteBuffer rgba) {
         PathtraceHook.glErrors++;
         texSubErrCount++;
         if (texSubErrLogged < 10) {
             texSubErrLogged++;
             int cap = rgba != null ? rgba.capacity() : -1;
+            int rem = rgba != null ? rgba.remaining() : -1;
             report().fail(String.format(
                     "[compose] %s GL 错误 %s(0x%04X) 第 %d 次"
-                            + "（tex=%d 规格=%dx%d RGBA8 buf=%dB row=0 align=4）",
-                    op, errName(err), err, texSubErrCount, rtTex, rtW, rtH, cap));
+                            + "（tex=%d 规格=%dx%d 段 buf=%dB/%dB row=0 "
+                            + "skipPx=0 skipRows=0 align=4——重置后仍错 "
+                            + "⇒ 驱动侧坐实）",
+                    op, errName(err), err, texSubErrCount, rtTex, rtW, rtH,
+                    rem, cap));
         }
     }
 
