@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "id": "pathtrace",
-  "version": "0.4.3",
+  "version": "0.4.4",
   "name": "Path Tracing Engine (Radiance iOS Chapter 2.2/2.3)",
   "description": "Live path tracing from the real Minecraft world: ingests chunk meshes + vertex-color/UV albedo into Metal acceleration structures (2.1 sealed contract), renders progressively accumulated frames (sun direct + shadow rays + diffuse bounces) and composites them onto the game framebuffer via a Window.swapBuffers mixin + GL blit (2.3), with atlas-textured albedo read back from GL. Chapter 2 stage 2.3 acceptance probe for the Radiance iOS port.",
   "authors": ["Radiance iOS Port"],

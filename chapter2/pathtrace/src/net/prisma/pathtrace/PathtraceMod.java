@@ -78,7 +78,7 @@ public final class PathtraceMod {
             return;
         }
         ProbeReport r = new ProbeReport("pathtrace_report.txt");
-        r.header("路径追踪探针 (pathtrace 0.4.3)");
+        r.header("路径追踪探针 (pathtrace 0.4.4)");
         r.info("触发方式: " + triggerSource);
 
         if (isDisabled()) {
@@ -453,7 +453,7 @@ public final class PathtraceMod {
                 // 前后对比自证）。
                 boolean anchored = false;
                 long deadline = System.nanoTime() + 100_000_000_000L;
-                boolean probeAcked = false; // v0.4.2: 首次 0/6 交叉复测是否已执行
+                int healExecuted = 0; // v0.4.4: 自愈重锚执行计数（[S8.7] 行序号）
                 while (!live.windowDone && System.nanoTime() < deadline) {
                     try {
                         Thread.sleep(500L);
@@ -479,11 +479,30 @@ public final class PathtraceMod {
                             r.fail("[S8.4] 重锚异常: " + tx);
                         }
                     }
-                    // v0.4.2: worker 哨兵 0/6 → 探针线程交叉复测（只打一次，
-                    // 消费后置 probeAcked；后续哨兵行不再重复请求）。
-                    if (!probeAcked && probeBatteryReq) {
-                        probeAcked = true;
-                        probeBattery(r, "worker 0/6 触发的交叉复测");
+                    // v0.4.2→v0.4.4: worker 哨兵 0/6 → 探针线程交叉复测（冷却
+                    // 式，5s 一发——30s 重锚后仍有新鲜对照）。
+                    if (probeBatteryReq) {
+                        probeBatteryReq = false;
+                        probeCrossCount++;
+                        probeBattery(r, "worker 0/6 交叉复测#" + probeCrossCount);
+                    }
+                    // v0.4.4: 自愈重锚——LiveSession 检出 camHit 连续归零 + 哨兵
+                    // 双死后置位。探针线程重建（v0.4.1 实证职责划分）；重建
+                    // 触发 [live] reset，恢复即真噪点，再归零即持续型毒化铁证。
+                    if (reanchorReq) {
+                        reanchorReq = false;
+                        healExecuted++;
+                        try {
+                            Native.refreshTlasNative();
+                            r.pass(String.format(
+                                    "[S8.7] 自愈重锚 #%d（探针线程执行——camHit"
+                                            + " 连续归零 + 哨兵双死触发；对比重建"
+                                            + " 前后 [live] 行 tlas=build# 与"
+                                            + " camHit）", healExecuted));
+                            probeBattery(r, "自愈重锚后（探针线程）");
+                        } catch (Throwable tx) {
+                            r.fail("[S8.7] 自愈重锚异常: " + tx);
+                        }
                     }
                 }
                 if (!live.windowDone) {
@@ -729,7 +748,15 @@ public final class PathtraceMod {
     // worker 派发路径坏（线程归责定谳）；两者皆 miss ⇒ AS 内容坏
     // （BLAS/TLAS 毒化——重锚后的复测再分新旧）。v0.4.1 全程缺失的
     // 关键 A/B：S6.5 之后探针线程再没打过任何一条 ray。
+    // v0.4.4：冷却式重复触发（每 5s 可再请求一次，v0.4.3 一次性导致
+    // 30s 重锚后无对照）；探针侧带序号消费。
     static volatile boolean probeBatteryReq = false;
+    /** v0.4.4: 交叉复测序号（[probe-sentinel ...#N] 行——多轮对照可区分）。 */
+    static volatile int probeCrossCount = 0;
+    /** v0.4.4: 自愈重锚请求（LiveSession 检出 camHit 连续归零 + 哨兵双死
+     * ⇒ 置位；本类探针线程轮询消费：refreshTlasNative 重建（worker 不建
+     * ——v0.4.1 实证）。重建后 [live] reset + 前置电池恢复即用户可见噪点。 */
+    static volatile boolean reanchorReq = false;
     /** atlas 采集完成计数（成功/降级/跳过均 +1——LiveSession 据此括号探测）。 */
     static volatile int atlasEpoch = 0;
 

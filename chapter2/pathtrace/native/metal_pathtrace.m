@@ -160,6 +160,16 @@ static NSMutableArray<id> *g_retired = nil;   // old BLAS/buffers (delayed relea
 static id<MTLAccelerationStructure> g_tlas = nil;
 static id<MTLBuffer> g_instanceBuffer = nil;
 static BOOL g_tlasDirty = NO;
+// v0.4.4: 最近一次成功构建并换装的 TLAS 句柄快照（rebuild_tlas_locked 内
+// 与 g_tlas 同锁写入）。目的：判离 v0.4.3 现场的"探针 2/6 / worker 0/6"
+// 悖论——worker 哨兵同时直查 g_tlas 与 g_verifiedTlas 并回显两个句柄的
+// build 号与指针身份：
+//   g_tlas=0/6 + verified=N/6 ⇒ worker 的 g_tlas 读出了旧/悬空句柄
+//   （线程可见性/换装间隙问题——句柄传递方式需修）；
+//   双 0/6 而探针线程同对象刚命中 ⇒ GPU/驱动层线程现象（升级战场）；
+//   双 N/6 ⇒ TLAS 健康，all-miss 出在渲染通路（相机基/uniforms）。
+static id<MTLAccelerationStructure> g_verifiedTlas = nil;
+static uint64_t g_verifiedTlasBuild = 0;
 static id<MTLLibrary> g_library = nil;
 static id<MTLComputePipelineState> g_pipeline = nil;      // scene_trace_kernel
 static id<MTLComputePipelineState> g_ptPipeline = nil;    // pathtrace_kernel
@@ -430,6 +440,10 @@ static void rebuild_tlas_locked(void) {
     g_stats[3]++;
     g_stats[7] = sizes.accelerationStructureSize;
     g_tlasDirty = NO;
+    // v0.4.4: 换装即记 verified 快照（与 g_tlas 同锁同刻）——worker 哨兵的
+    // 双句柄 A/B 基准点。
+    g_verifiedTlas = tlas;
+    g_verifiedTlasBuild = g_stats[3];
 
     // ---- 2.2 shading pools (same slot order as the instances above) ----
     // triColors: 3 x uchar4 per triangle (via the quad-expanded index buffer,
@@ -1034,15 +1048,18 @@ static BOOL normalize_dir(float *dx, float *dy, float *dz) {
     return YES;
 }
 
-JNIEXPORT jfloatArray JNICALL
-Java_net_prisma_pathtrace_Native_castRayNative(
-        JNIEnv *env, jclass cls, jfloat ox, jfloat oy, jfloat oz,
-        jfloat dx, jfloat dy, jfloat dz, jfloat maxDist) {
-    (void)cls;
+// v0.4.4: castRayNative 的双句柄内核——useVerified=NO 查 g_tlas（现行），
+// YES 查 g_verifiedTlas（最近换装快照）。同一 ray/同一锁/同一派发路径，
+// 唯一变量是句柄来源——worker 哨兵的双电池直接判离"句柄陈旧 vs GPU 层
+// 线程现象 vs 渲染通路"三假设。
+static jfloatArray cast_ray_live(JNIEnv *env, BOOL useVerified,
+                                 jfloat ox, jfloat oy, jfloat oz,
+                                 jfloat dx, jfloat dy, jfloat dz, jfloat maxDist) {
     jfloat out[3] = {0.0f, -1.0f, -1.0f}; // hitFlag, distance, instanceIndex
     jfloatArray result = (*env)->NewFloatArray(env, 3);
 
-    if (g_device == nil || g_pipeline == nil || g_tlas == nil) {
+    if (g_device == nil || g_pipeline == nil
+            || (useVerified ? g_verifiedTlas : g_tlas) == nil) {
         if (result != NULL) { (*env)->SetFloatArrayRegion(env, result, 0, 3, out); }
         return result;
     }
@@ -1061,7 +1078,7 @@ Java_net_prisma_pathtrace_Native_castRayNative(
     // buffer additionally retains it once bound).
     id<MTLAccelerationStructure> tlas;
     @synchronized (g_sceneLock) {
-        tlas = g_tlas;
+        tlas = useVerified ? g_verifiedTlas : g_tlas;
     }
     if (tlas != nil
             && trace_ray(tlas, simd_make_float3(ox, oy, oz),
@@ -1072,6 +1089,42 @@ Java_net_prisma_pathtrace_Native_castRayNative(
         out[2] = (jfloat)instIdx;
     }
     if (result != NULL) { (*env)->SetFloatArrayRegion(env, result, 0, 3, out); }
+    return result;
+}
+
+JNIEXPORT jfloatArray JNICALL
+Java_net_prisma_pathtrace_Native_castRayNative(
+        JNIEnv *env, jclass cls, jfloat ox, jfloat oy, jfloat oz,
+        jfloat dx, jfloat dy, jfloat dz, jfloat maxDist) {
+    (void)cls;
+    return cast_ray_live(env, NO, ox, oy, oz, dx, dy, dz, maxDist);
+}
+
+// v0.4.4: 直查最近换装的 verified TLAS（与 castRayNative 同锁同路径）。
+JNIEXPORT jfloatArray JNICALL
+Java_net_prisma_pathtrace_Native_castRayVerifiedNative(
+        JNIEnv *env, jclass cls, jfloat ox, jfloat oy, jfloat oz,
+        jfloat dx, jfloat dy, jfloat dz, jfloat maxDist) {
+    (void)cls;
+    return cast_ray_live(env, YES, ox, oy, oz, dx, dy, dz, maxDist);
+}
+
+// v0.4.4: TLAS 句柄身份（同一把 g_sceneLock 下快照）——[live-sentinel] 行
+// 回显，句柄漂移/陈旧一眼定谳。返回 long[4]：
+//   [0]=g_tlas 指针身份 [1]=g_verifiedTlas 指针身份
+//   [2]=当前 build 计数 [3]=verified 快照的 build 号
+JNIEXPORT jlongArray JNICALL
+Java_net_prisma_pathtrace_Native_tlasIdentityNative(JNIEnv *env, jclass cls) {
+    (void)cls;
+    jlong out[4] = {0, 0, 0, 0};
+    @synchronized (g_sceneLock) {
+        out[0] = (jlong)(uintptr_t)g_tlas;
+        out[1] = (jlong)(uintptr_t)g_verifiedTlas;
+        out[2] = (jlong)g_stats[3];
+        out[3] = (jlong)g_verifiedTlasBuild;
+    }
+    jlongArray result = (*env)->NewLongArray(env, 4);
+    if (result != NULL) { (*env)->SetLongArrayRegion(env, result, 0, 4, out); }
     return result;
 }
 
@@ -2289,12 +2342,16 @@ Java_net_prisma_pathtrace_Native_liveReadbackNative(JNIEnv *env, jclass cls) {
     }
 }
 
-// Live counters for the report. Returns jlong[8]: frames, sppTotal, resets,
-// refreshes, totalQueries, lastQueries, lastCamHits, atlasMode(0/1).
+// Live counters for the report. Returns jlong[9]: frames, sppTotal, resets,
+// refreshes, totalQueries, lastQueries, lastCamHits, atlasMode(0/1),
+// tlasBuilds(v0.4.4).
 JNIEXPORT jlongArray JNICALL
 Java_net_prisma_pathtrace_Native_liveStatsNative(JNIEnv *env, jclass cls) {
     (void)cls;
-    jlong out[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
+    // v0.4.4: [8] = TLAS build 计数（g_stats[3] 的宽恕竞读——与 liveFrameNative
+    // 的重置检测同级别的提示读；[live] 行打出 tlas=build#N，camHit 衰减与
+    // build 年龄的相关性一眼可见）。
+    jlong out[9] = { 0, 0, 0, 0, 0, 0, 0, 0, 0 };
     @synchronized (g_liveLock) {
         out[0] = (jlong)g_liveFrames;
         out[1] = (jlong)g_liveSppTotal;
@@ -2304,9 +2361,10 @@ Java_net_prisma_pathtrace_Native_liveStatsNative(JNIEnv *env, jclass cls) {
         out[5] = (jlong)g_liveLastQueries;
         out[6] = (jlong)g_liveLastCamHits;
         out[7] = (jlong)(g_atlasTexture != nil ? 1 : 0);
+        out[8] = (jlong)g_stats[3];
     }
-    jlongArray result = (*env)->NewLongArray(env, 8);
-    if (result != NULL) { (*env)->SetLongArrayRegion(env, result, 0, 8, out); }
+    jlongArray result = (*env)->NewLongArray(env, 9);
+    if (result != NULL) { (*env)->SetLongArrayRegion(env, result, 0, 9, out); }
     return result;
 }
 
@@ -2459,6 +2517,8 @@ Java_net_prisma_pathtrace_Native_shutdownNative(JNIEnv *env, jclass cls) {
     }
     g_tlas = nil;
     g_instanceBuffer = nil;
+    g_verifiedTlas = nil;
+    g_verifiedTlasBuild = 0;
     g_pipeline = nil;
     g_ptPipeline = nil;
     g_presentPipeline = nil;

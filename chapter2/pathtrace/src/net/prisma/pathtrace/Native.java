@@ -86,6 +86,20 @@ final class Native {
             float dx, float dy, float dz, float maxDist);
 
     /**
+     * v0.4.4：直查最近换装的 verified TLAS 快照（与 castRayNative 同锁同派发
+     * 路径，唯一变量 = 句柄来源）。worker 哨兵双电池 A/B 用：
+     * g_tlas=0 + verified=N ⇒ 句柄陈旧；双 0 ⇒ GPU 层现象；双 N ⇒ 渲染通路。
+     */
+    static native float[] castRayVerifiedNative(float ox, float oy, float oz,
+            float dx, float dy, float dz, float maxDist);
+
+    /**
+     * v0.4.4：TLAS 句柄身份快照。返回 long[4]：
+     * [0]=g_tlas 指针 [1]=verified 指针 [2]=当前 build 数 [3]=verified build 号。
+     */
+    static native long[] tlasIdentityNative();
+
+    /**
      * 哨兵求交（2.1 v0.5 真机验证的原样保留）：隔离的单三角 BLAS + 双实例
      * TLAS（单位 + 平移 K=(4096,0,4096)），三条 ray（两阳一阴）。
      * 返回位码：b0 单位实例命中 / b1 平移实例命中 / b2 阴性对照正确 miss。

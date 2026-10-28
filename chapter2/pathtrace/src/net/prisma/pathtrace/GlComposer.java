@@ -136,6 +136,26 @@ final class GlComposer {
     private int shortBufLogged = 0;
     /** v0.4.3: present 计数（心跳行分子——SIGSEGV 前的最后可见状态）。 */
     private int presentCount = 0;
+    // ---- v0.4.4 错误归因与黑屏根治 ----
+    // v0.4.3 现场：texSubErr=2815/2816 帧全灭 ⇒ RT 纹理永黑（用户"黑块"）。
+    // 直接成因：present 缺预排空 + 段级 break——进队早于本帧的错误（游戏侧
+    // 渲染/上一帧恢复序列/本类 v0.4.3 新增的五元组读写）被本帧段 0 后的
+    // 第一个 glGetError 误记到 texSubImage2D 头上，随即 break 弃帧。
+    // v0.4.2 同类采样 89s 仅 10 错、v0.4.3 每帧必错——时间线直指每帧新增
+    // 调用。本版四件套：预排空 / pname 掩码探测 / 首帧调用归因梯 / 段级
+    // 重试（误记自愈，真失败才计——不再整帧弃帧）。
+    private int drainCount = 0;
+    private int drainLogged = 0;
+    private int retryOkCount = 0;
+    private int retryLogged = 0;
+    private int chunkFailCount = 0;
+    private boolean pnameProbeDone = false;
+    /** v0.4.4: 驱动拒绝的 UNPACK pname 位掩码（b0=SKIP_PIXELS b1=SKIP_ROWS b2=SWAP_BYTES）。
+     * 被拒的 pname 不可能持有污染值（驱动不受理写入）——读/重置/恢复三连全跳过。 */
+    private int maskedPnames = 0;
+    private static final int PN_SKIP_PX = 1;
+    private static final int PN_SKIP_ROWS = 2;
+    private static final int PN_SWAP = 4;
     /** 报告引用（init 时保存——present 的错误/几何留行用）。 */
     private ProbeReport rpt;
 
@@ -161,6 +181,26 @@ final class GlComposer {
 
     private boolean callZ(Method m, Object... args) throws Exception {
         return (Boolean) m.invoke(null, args);
+    }
+
+    /** v0.4.4: 排空错误队列（最多 max 条；返回排空条数——这些错误不归因后续操作）。 */
+    private int drainErrors(int max) throws Exception {
+        int n = 0;
+        while (n < max) {
+            if (callI(mGetError) == 0) {
+                break;
+            }
+            n++;
+        }
+        return n;
+    }
+
+    private boolean pnMasked(int bit) {
+        return (maskedPnames & bit) != 0;
+    }
+
+    private static String hex(int e) {
+        return String.format("0x%04X", e);
     }
 
     private static Method method(Class<?> c, String name, Class<?>... params)
@@ -379,6 +419,26 @@ final class GlComposer {
                     call(mDisable, GL_SCISSOR_TEST);
                 }
                 call(mBindFramebuffer, GL_READ_FRAMEBUFFER, rtFbo);
+                // ---- v0.4.4: 排空 + PACK 回读验证——状态不可控就不读 ----
+                // glReadPixels 的写目标若被 SKIP_* 平移，越界量级（行×宽×4）
+                // 可远超 native 头尾 64KB guard，会打坏同设备 GPU 堆邻居
+                // （TLAS 毒化悬案的头号嫌疑）——宁缺毋滥，直接顶点色回退。
+                // 注：此处位于 rtFbo 绑定之后（finally 的重挂目标正确）。
+                drainErrors(8);
+                int vRow = callI(mGetInteger, GL_PACK_ROW_LENGTH);
+                int vSkipPx = callI(mGetInteger, GL_PACK_SKIP_PIXELS);
+                int vSkipRows = callI(mGetInteger, GL_PACK_SKIP_ROWS);
+                int vErr = callI(mGetError);
+                if (vErr != 0 || vRow != 0 || vSkipPx != 0 || vSkipRows != 0) {
+                    r.fail(String.format(
+                            "[S8.2] atlas 采集中止：PACK 状态不可控（row=%d "
+                                    + "skipPx=%d skipRows=%d err=%s）——"
+                                    + "glReadPixels 写目标被平移会打坏 GPU 堆"
+                                    + "邻居（TLAS 毒化头号嫌疑），宁缺毋滥"
+                                    + " → 顶点色回退",
+                            vRow, vSkipPx, vSkipRows, hex(vErr)));
+                    return;
+                }
                 call(mFramebufferTexture2D, GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
                         GL_TEXTURE_2D, glId, 0);
                 int status = callI(mCheckFramebufferStatus, GL_READ_FRAMEBUFFER);
@@ -436,23 +496,98 @@ final class GlComposer {
         final int dstH = winH > 0 ? winH : rtH;
         presentCount++;
 
-        // ---- v0.4.3: 污染取证（重置前捕获完整 UNPACK 状态）----
+        // ---- v0.4.4: 预排空（进队早于本帧的错误一律不归因本类）----
+        // 上见字段区注释——v0.4.3 的每帧 INVALID_ENUM → break 弃帧 = 黑屏。
+        final int drained = drainErrors(8);
+        if (drained > 0) {
+            drainCount += drained;
+            if (drainLogged < 2) {
+                drainLogged++;
+                report().info(String.format(
+                        "[compose] 预排空 %d 条（进队早于本帧——游戏侧/恢复序列"
+                                + "遗留，不归因上传；v0.4.3 把这类错误记到"
+                                + " texSubImage2D 头上并弃帧 = 黑屏直接成因）",
+                        drained));
+            }
+        }
+
+        // ---- 污染取证（v0.4.4: 逐 pname 探错——读被拒即掩码，值不可信置 0）----
         // SKIP_* 非 0 = 现行犯：遗留 SKIP 把上传源指针平移 skip 像素/行——
         // v0.4 底部花屏条（错位行）与 v0.4.2 SIGSEGV（平移出缓冲尾部撞
         // 保护页）同源。首帧钉在报告里，读报告即知污染是否存在。
         final int preRow = callI(mGetInteger, GL_UNPACK_ROW_LENGTH);
         final int preAlign = callI(mGetInteger, GL_UNPACK_ALIGNMENT);
-        final int preSkipPx = callI(mGetInteger, GL_UNPACK_SKIP_PIXELS);
-        final int preSkipRows = callI(mGetInteger, GL_UNPACK_SKIP_ROWS);
+        int preSkipPx = 0;
+        int preSkipRows = 0;
+        int preSwap = 0;
+        if (!pnMasked(PN_SKIP_PX)) {
+            preSkipPx = callI(mGetInteger, GL_UNPACK_SKIP_PIXELS);
+            if (callI(mGetError) != 0) {
+                maskedPnames |= PN_SKIP_PX;
+                preSkipPx = 0;
+            }
+        }
+        if (!pnMasked(PN_SKIP_ROWS)) {
+            preSkipRows = callI(mGetInteger, GL_UNPACK_SKIP_ROWS);
+            if (callI(mGetError) != 0) {
+                maskedPnames |= PN_SKIP_ROWS;
+                preSkipRows = 0;
+            }
+        }
+        if (!pnMasked(PN_SWAP)) {
+            preSwap = callI(mGetInteger, GL_UNPACK_SWAP_BYTES);
+            if (callI(mGetError) != 0) {
+                maskedPnames |= PN_SWAP;
+                preSwap = 0;
+            }
+        }
         if (firstPresentDone == 0) {
             firstPresentDone = 1;
+            String skipPxStr = pnMasked(PN_SKIP_PX)
+                    ? "N/A(拒读掩码)" : String.valueOf(preSkipPx);
+            String skipRowsStr = pnMasked(PN_SKIP_ROWS)
+                    ? "N/A(拒读掩码)" : String.valueOf(preSkipRows);
             report().pass(String.format(
-                    "[compose] 捕获时像素传输状态: row=%d align=%d skipPx=%d "
-                            + "skipRows=%d%s",
-                    preRow, preAlign, preSkipPx, preSkipRows,
-                    (preSkipPx != 0 || preSkipRows != 0)
+                    "[compose] 捕获时像素传输状态: row=%d align=%d skipPx=%s "
+                            + "skipRows=%s%s",
+                    preRow, preAlign, skipPxStr, skipRowsStr,
+                    ((!pnMasked(PN_SKIP_PX) && preSkipPx != 0)
+                            || (!pnMasked(PN_SKIP_ROWS) && preSkipRows != 0))
                             ? "  ⚠ SKIP 污染坐实（花屏条/SIGSEGV 同源——本帧起归零重置）"
                             : "（skip=0——本轮上传源无平移）"));
+        }
+
+        // ---- v0.4.4 首帧：exotic pname 写侧探测（值已捕获，恢复有据）----
+        // 写被拒 = 该 pname 驱动不受理 → 不可能被污染 → 读/重置/恢复三连
+        // 全掩码。若 v0.4.3 的每帧 INVALID_ENUM 源于此，掩码即根治；若不是，
+        // 下方首帧归因梯会点名真正的出生地。
+        if (!pnameProbeDone) {
+            pnameProbeDone = true;
+            int[] pnConsts = {GL_UNPACK_SKIP_PIXELS, GL_UNPACK_SKIP_ROWS,
+                    GL_UNPACK_SWAP_BYTES};
+            int[] pnBits = {PN_SKIP_PX, PN_SKIP_ROWS, PN_SWAP};
+            String[] pnNames = {"SKIP_PIXELS", "SKIP_ROWS", "SWAP_BYTES"};
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < pnConsts.length; i++) {
+                if (pnMasked(pnBits[i])) {
+                    sb.append(pnNames[i]).append("=拒读→掩码 ");
+                    continue;
+                }
+                call(mPixelStorei, pnConsts[i], 0);
+                int e = callI(mGetError);
+                if (e != 0) {
+                    maskedPnames |= pnBits[i];
+                    sb.append(String.format("%s=拒写(%s)→掩码 ",
+                            pnNames[i], hex(e)));
+                } else {
+                    sb.append(pnNames[i]).append("=ok ");
+                }
+            }
+            report().info(String.format(
+                    "[compose] pname 支持探测: %s——掩码=0x%X"
+                            + "（被拒 pname 跳过读/重置/恢复三连；被拒即"
+                            + "不可能被污染，无残留风险）",
+                    sb.toString().trim(), maskedPnames));
         }
 
         // v0.4.2: 首帧几何取证一行——底部花屏条（v0.4.1 现场 ~1/10 屏高
@@ -469,12 +604,16 @@ final class GlComposer {
                     viewportSuffix(), scissorSuffix()));
         }
 
-        // v0.4.3 心跳：每 256 帧一行——SIGSEGV 若复发，崩溃前最后可见状态。
+        // ---- v0.4.3 心跳：每 256 帧一行——SIGSEGV 若复发，崩溃前最后可见状态。
+        // v0.4.4: 新增 drained/retryOk/chunkFail/mask 四计数——黑屏/自愈/真失败
+        // 的区分度直接上桌。----
         if (presentCount % 256 == 0) {
             report().info(String.format(
                     "[compose] 心跳 #%d: texSubErr=%d blitErr=%d shortBuf=%d "
+                            + "drained=%d retryOk=%d chunkFail=%d mask=0x%X "
                             + "(RT=%dx%d chunks=%d行/段)",
                     presentCount, texSubErrCount, blitErrCount, shortBufCount,
+                    drainCount, retryOkCount, chunkFailCount, maskedPnames,
                     rtW, rtH, UPLOAD_ROWS_PER_CHUNK));
         }
 
@@ -493,14 +632,15 @@ final class GlComposer {
             return;
         }
 
-        // ---- 状态保存（v0.4.3: 完整 UNPACK 五元组）----
+        // ---- 状态保存（v0.4.4: 掩码感知——被拒 pname 不读不恢复；
+        // SKIP/SWAP 值已在顶部预排空后捕获，可信）----
         int savedActive = callI(mGetInteger, GL_ACTIVE_TEXTURE);
         int savedBinding = callI(mGetInteger, GL_TEXTURE_BINDING_2D);
         int savedUnpackRow = preRow;
         int savedUnpackAlign = preAlign;
         int savedUnpackSkipPx = preSkipPx;
         int savedUnpackSkipRows = preSkipRows;
-        int savedUnpackSwap = callI(mGetInteger, GL_UNPACK_SWAP_BYTES);
+        int savedUnpackSwap = preSwap;
         int savedReadFb = callI(mGetInteger, GL_READ_FRAMEBUFFER_BINDING);
         int savedDrawFb = callI(mGetInteger, GL_DRAW_FRAMEBUFFER_BINDING);
         boolean savedScissor = callZ(mIsEnabled, GL_SCISSOR_TEST);
@@ -508,18 +648,33 @@ final class GlComposer {
         try {
             call(mPixelStorei, GL_UNPACK_ROW_LENGTH, 0);
             call(mPixelStorei, GL_UNPACK_ALIGNMENT, 4);
-            call(mPixelStorei, GL_UNPACK_SKIP_PIXELS, 0);
-            call(mPixelStorei, GL_UNPACK_SKIP_ROWS, 0);
-            call(mPixelStorei, GL_UNPACK_SWAP_BYTES, 0);
+            if (!pnMasked(PN_SKIP_PX)) {
+                call(mPixelStorei, GL_UNPACK_SKIP_PIXELS, 0);
+            }
+            if (!pnMasked(PN_SKIP_ROWS)) {
+                call(mPixelStorei, GL_UNPACK_SKIP_ROWS, 0);
+            }
+            if (!pnMasked(PN_SWAP)) {
+                call(mPixelStorei, GL_UNPACK_SWAP_BYTES, 0);
+            }
             if (savedScissor) {
                 call(mDisable, GL_SCISSOR_TEST);
             }
 
-            // ---- 上传 RT 快照（v0.4.3: 分段——单次 518KB 大包是 v0.4.2
-            // SIGSEGV 现场；每段 ≤64 行×1920B=122,880B，低于 zink
-            // glthread/transfer 常见 128KB 分块粒度；残余平移由 native
-            // 头尾 64KB guard pad 吸收——脏像素可容忍，进程死不可容忍）----
+            // ---- 上传 RT 快照（v0.4.3: 分段；v0.4.4: 段级重试——
+            // 首错先排空重打一次，误记错误自愈；重试仍错才计真失败并
+            // 继续后续段（部分帧 >> 零帧——v0.4.3 的 break 是黑屏直接成因）----
+            // v0.4.4 首帧归因梯：预排空后每步独立采样（0=净）——下一轮
+            // 真机报告直接点名 INVALID_ENUM 的出生地（重置段/bind/段上传）。
+            final boolean ladder = (presentCount == 1);
+            int ladReset = 0, ladBind = 0, ladC0 = 0, ladC0r = 0, ladC1 = 0;
+            if (ladder) {
+                ladReset = callI(mGetError);
+            }
             call(mBindTexture, GL_TEXTURE_2D, rtTex);
+            if (ladder) {
+                ladBind = callI(mGetError);
+            }
             final int rowBytes = rtW * 4;
             for (int y = 0; y < rtH; y += UPLOAD_ROWS_PER_CHUNK) {
                 final int rows = Math.min(UPLOAD_ROWS_PER_CHUNK, rtH - y);
@@ -529,11 +684,47 @@ final class GlComposer {
                 call(mTexSubImage2D, GL_TEXTURE_2D, 0, 0, y, rtW, rows,
                         GL_RGBA, GL_UNSIGNED_BYTE, chunk);
                 int errChunk = callI(mGetError);
-                if (errChunk != 0) {
-                    noteGlError(String.format("texSubImage2D[y=%d rows=%d]",
-                            y, rows), errChunk, chunk);
-                    break; // 本帧放弃后续段（RT 纹理保留旧内容，blit 照常）
+                if (ladder) {
+                    if (y == 0) {
+                        ladC0 = errChunk;
+                    } else if (y == UPLOAD_ROWS_PER_CHUNK) {
+                        ladC1 = errChunk;
+                    }
                 }
+                if (errChunk != 0) {
+                    // 排空后重试一次——排空前入队的错误不判刑
+                    drainErrors(4);
+                    call(mTexSubImage2D, GL_TEXTURE_2D, 0, 0, y, rtW, rows,
+                            GL_RGBA, GL_UNSIGNED_BYTE, chunk);
+                    int errRetry = callI(mGetError);
+                    if (ladder && y == 0) {
+                        ladC0r = errRetry;
+                    }
+                    if (errRetry == 0) {
+                        retryOkCount++;
+                        if (retryLogged < 3) {
+                            retryLogged++;
+                            report().pass(String.format(
+                                    "[compose] 段上传误记自愈: y=%d rows=%d "
+                                            + "重试后成功（首错 %s 为排空前"
+                                            + "遗留误记，非上传失败）",
+                                    y, rows, hex(errChunk)));
+                        }
+                    } else {
+                        noteGlError(String.format("texSubImage2D[y=%d rows=%d]",
+                                y, rows), errRetry, chunk);
+                        chunkFailCount++;
+                        // 不 break：该段跳过，其余段继续（部分帧 >> 零帧）
+                    }
+                }
+            }
+            if (ladder) {
+                report().pass(String.format(
+                        "[compose] 首帧调用归因梯: 重置=%s bind=%s 段0=%s "
+                                + "段0重试=%s 段1=%s（0=净；非 0 即该步被"
+                                + "驱动拒——INVALID_ENUM 出生地一步定谳）",
+                        hex(ladReset), hex(ladBind), hex(ladC0),
+                        hex(ladC0r), hex(ladC1)));
             }
 
             // ---- blit 整帧替换（dst y 翻转：GL 左下原点 vs 图像上下行主序）----
@@ -581,16 +772,25 @@ final class GlComposer {
             call(mActiveTexture, savedActive);
             call(mPixelStorei, GL_UNPACK_ROW_LENGTH, savedUnpackRow);
             call(mPixelStorei, GL_UNPACK_ALIGNMENT, savedUnpackAlign);
-            call(mPixelStorei, GL_UNPACK_SKIP_PIXELS, savedUnpackSkipPx);
-            call(mPixelStorei, GL_UNPACK_SKIP_ROWS, savedUnpackSkipRows);
-            call(mPixelStorei, GL_UNPACK_SWAP_BYTES, savedUnpackSwap);
+            if (!pnMasked(PN_SKIP_PX)) {
+                call(mPixelStorei, GL_UNPACK_SKIP_PIXELS, savedUnpackSkipPx);
+            }
+            if (!pnMasked(PN_SKIP_ROWS)) {
+                call(mPixelStorei, GL_UNPACK_SKIP_ROWS, savedUnpackSkipRows);
+            }
+            if (!pnMasked(PN_SWAP)) {
+                call(mPixelStorei, GL_UNPACK_SWAP_BYTES, savedUnpackSwap);
+            }
             if (savedScissor) {
                 call(mEnable, GL_SCISSOR_TEST);
             }
         }
     }
 
-    /** texSubImage2D 错误留行（首例带段几何与缓冲规格——上传错儿的一手现场）。 */
+    /**
+     * texSubImage2D 错误留行（v0.4.4: 重试后仍错 = 真失败——非误记；该段跳过
+     * 其余段继续）。首例带段几何与缓冲规格。
+     */
     private void noteGlError(String op, int err, ByteBuffer rgba) {
         PathtraceHook.glErrors++;
         texSubErrCount++;
@@ -599,12 +799,11 @@ final class GlComposer {
             int cap = rgba != null ? rgba.capacity() : -1;
             int rem = rgba != null ? rgba.remaining() : -1;
             report().fail(String.format(
-                    "[compose] %s GL 错误 %s(0x%04X) 第 %d 次"
-                            + "（tex=%d 规格=%dx%d 段 buf=%dB/%dB row=0 "
-                            + "skipPx=0 skipRows=0 align=4——重置后仍错 "
-                            + "⇒ 驱动侧坐实）",
+                    "[compose] %s GL 错误 %s(0x%04X) 第 %d 次（重试后仍错 = "
+                            + "真失败；tex=%d 规格=%dx%d 段 buf=%dB/%dB "
+                            + "mask=0x%X——该段跳过，其余段继续）",
                     op, errName(err), err, texSubErrCount, rtTex, rtW, rtH,
-                    rem, cap));
+                    rem, cap, maskedPnames));
         }
     }
 

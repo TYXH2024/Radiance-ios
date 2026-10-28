@@ -345,3 +345,26 @@ Stage Summary:
 - v0.4 真机判读定谳：合成从未上屏（签名雷）+ live 渲染全天空（worker 重建 TLAS 失效，机制未定谳但实证组合明确：探针线程构建+任意线程查询）——用户全程看原版画面与报告/PNG 矛盾的解释闭环
 - v0.4.1 交付：pathtrace-v0.4.1（四修复+哨兵电池仪器+30s 探针重锚 A/B）——下一轮真机回收的判读焦点：[live] camHit（真值）、[live-sentinel] 三次、[S8.4] 前后对比、[compose]/[S8.1]/[S8.2]
 - 若 [live-sentinel] 命中而 [live] camHit≈0 → live 帧派发自身缺陷（v0.5 定点）；若双 miss 且 [S8.4] 后恢复 → worker 构建毒害定谳；若全恢复 → 2.3 收口进 2.4（质量+事件驱动摄取）
+
+## 2026-10-28（十八）· pathtrace v0.4.2/v0.4.3 真机两连回收：camHit 35.7% 恢复→SIGSEGV 定谳→黑屏+TLAS 毒化 → v0.4.4
+
+Task: v0.4.1 真机回收判读（LIVE_OK_WITH_GL_ERRORS + 永久全 miss）→ v0.4.2 仪器+防御包 → 回收（camHit 恢复但闪退）→ v0.4.3 SKIP 归一修复 → 回收（黑块+几何消失）→ v0.4.4
+
+Work Log:
+- v0.4.2（仪器+防御包）：哨兵姿态回显 + atlas epoch 括号 + 1.5s 加密点；探针交叉复测 [probe-sentinel]（worker 0/6 → probe 同 ray 换线程）；场景锁 g_sceneLock（castRayNative 此前无锁读 g_tlas=UAF 窗口）；atlas 二分开关 -Dpathtrace.atlas=false；GL 错误分类学 + 首帧几何行；墙钟统计（重置风暴免疫）；开关语义修复（Boolean.getBoolean 反转）
+- v0.4.2 真机回收（17:55 run1）：**camHit 恢复 35.7%**（TLAS 职责迁移坐实；假说 B/C 双排除——atlas 前后哨兵均 3/6）+ 102 f/s / 82.89 Mray/s 真噪点出屏——但 live ~1.5s SIGSEGV：渲染线程 GlComposer.present → glTexSubImage2D → OSMesa/zink _platform_memmove 读源侧 SEGV_ACCERR；寄存器拼图 317216+201184=518400=整帧字节——源指针被正向平移出缓冲尾部；根因=v0.4.2 只重置 ROW_LENGTH/ALIGNMENT 漏 SKIP_*（GL 规范 SKIP 平移源指针；MC 图集路径遗留 skipRows=112）——v0.4 底部花屏条与 v0.4.2 崩溃同源
+- v0.4.3（四重防御）：UNPACK/PACK 五元组归零（含 SKIP_PIXELS/SKIP_ROWS/SWAP_BYTES）+ Java 容量闸门 + 分段上传 ≤64 行/段（122,880B < zink 128KB 分块粒度）+ native staging 头尾 64KB guard pad；[compose] 捕获时像素传输状态行（现行犯取证）+ 256 帧心跳
+- v0.4.3 真机回收（18:20 run2）：防崩生效（进程存活；skipRows=112 当场捕获坐实）——**两个新 P0**：
+  ①黑屏：每帧 chunked texSubImage2D 首段 GL_INVALID_ENUM → break 弃帧（texSubErr=2815/2816 帧全灭）→ RT 纹理永黑=用户"黑块"；根因=present 缺预排空——进队早于本帧的错误被段 0 后第一个 glGetError 误记到上传头上（v0.4.2 同采样 89s 仅 10 错 vs v0.4.3 每帧必错——时间线直指每帧新增五元组读写调用）
+  ②TLAS 毒化：live ~1s 后全员归零（worker 1.5s 0/6 + probe 交叉复测 0/6=AS 内容坏）；30s 探针重建后 probe 2/6 恢复而 worker 32s 仍 0/6；同 518400 全 miss 查询 ~10ms→~77ms（慢 miss=垃圾遍历签名）；loopHz 101→13
+- v0.4.4 修复+仪器（本条目主交付）：
+  黑屏四件套：present 预排空（每帧 1 次 glGetError 清队）/ pname 掩码探测（SKIP_PIXELS/SKIP_ROWS/SWAP_BYTES 读+写各探错，被拒即不可能被污染→读重置恢复三连跳过）/ 首帧调用归因梯（重置段/bind/段0/段0重试/段1 每步独立采样——INVALID_ENUM 出生地一步定谳）/ 段级重试（首错排空后重打一次=误记自愈；重试仍错才计真失败且继续后续段——部分帧>>零帧）
+  atlas 防御：captureAtlas PACK 重置后回读验证——状态不可控即中止采集回退顶点色（glReadPixels 写目标平移越界量级可远超 64KB guard=TLAS 毒化悬案头号嫌疑，宁缺毋滥）
+  TLAS 追凶仪器：g_verifiedTlas 双句柄 A/B（castRayVerifiedNative——同 ray 换句柄来源：g_tlas=0+verified>0⇒句柄陈旧；双 0⇒毒化/GPU 层；双>0⇒渲染通路）+ tlasIdentityNative（build#+指针身份）+ [live-sentinel] 六射线耗时（慢+全 miss=毒化签名）+ [live] 行 tlas=build#N（camHit 衰减与 build 年龄相关性）+ 34s 延迟复测（毒化半衰期）+ 交叉复测 5s 冷却（可重复）
+  自愈重锚 [S8.7]：camHit 连续归零 + 哨兵双死（g_tlas 与 verified 均 0/6——排除合法天空场景与句柄陈旧）→ 探针线程立即重建（不等 30s）；持续型毒化下用户看到周期性真噪点而非永久黑屏
+- 现场归档：docs/chapter2-pathtrace-field/M3-v0.4.3-report.txt（run2 完整 1230 行）；版本链 bump 0.4.4（fabric.mod.json/build.sh/报告头/workflow 11 处+release notes+新 JNI 符号校验/README）；本地 ecj 全类编译零错误（仅入口类缺 fabric 依赖属预期）
+
+Stage Summary:
+- v0.4.3 判读定谳：黑屏=GL 错误误归因+整帧弃帧（break）；TLAS 毒化=未定谳但已装齐判决仪器（双句柄 A/B/身份/耗时/半衰期/自愈）
+- v0.4.4 交付：pathtrace-v0.4.4——黑屏四件套大概率直接修复上屏（预排空消误记+重试自愈）；TLAS 毒化下轮真机的判读焦点：[compose] 首帧调用归因梯（INVALID_ENUM 出生地）、[live-sentinel] verified 栏与耗时、[S8.7] 自愈频率、[live] tlas=build# 与 camHit 相关性、atlas=false 二分轮
+- 二分协议：默认轮 + -Dpathtrace.atlas=false 轮各 60s——atlas=false 轮 TLAS 全程存活 ⇒ atlas 采集链（glReadPixels 写目标平移打坏 GPU 堆邻居）凶手坐实 ⇒ v0.4.5 定点修
