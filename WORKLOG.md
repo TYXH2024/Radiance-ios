@@ -323,3 +323,25 @@ Work Log:
 Stage Summary:
 - 2.3 首版完整：进世界 ~19s 摄取 → 离屏首帧（2.2 链路原样）→ 实时会话自动开启 → 游戏画面被路径追踪帧整帧替换 → 静止收敛/移动重置 → 60s 判定收口
 - 待办：①CI 过绿 + Release pathtrace-v0.4 ②真机复跑：预期 LIVE_OK（blit>0、GL 错误=0、15s→55s 快照收敛、重置无鬼影）③atlas 采样效果与 greenish 底色对照 ④回收后判定 2.3 是否收口或装下一轮仪器
+
+## 2026-10-28（十七）· pathtrace v0.4 真机回收判读：COMPOSE_DEAD + live 全天空——四缺陷定谳（report + PNG 像素级分析）→ v0.4.1
+
+Task: 回收 v0.4 真机产物（pathtrace_report.txt×2 次运行 + latest.log + pathtrace_frame/live/live_final.png，操作序列 20静止>20旋转>20静止>20旋转）→ 像素级判读 → v0.4.1 修复发布
+
+Work Log:
+- 报告判读：S7 离屏首帧 PATHTRACE_OK（camHit=100%、64.81 Mray/s、帧 PNG=体素地形 ✓）；S8 实时会话开启后 [compose] 合成器立即判死：NoSuchMethodException: GL11.glGetTexLevelParameteriv(int,int,int)——LWJGL 3.3.3 无此重载（出参是第 4 个 int[]）；atlas 采集随之未执行（atlas=顶点色回退）
+- PNG 像素级分析（自写 PNG 解码器分带/分列/非天空密度统计）：live 15s 快照=纯平灰蓝 (163-170,171-175,182)≈着色器地平线色 tonemap 精确值 (172,176,182)——俯视地板的射线全部穿透地板逃逸成天空；live 55s 快照=标准上下渐变=水平视角（pitch≈0）却 0.0% 地形（地形在脚下 1.6 格、80 格半径内必命中）；帧 PNG（S7 同姿态）=地形 ✓——live 帧查询的 TLAS 是坏的
+- 逐 5s [live] 行反推：上帧 ~550k 查询=518.4k 主射线+6% 阴影/弹射 ⇒ ~2-3% 射线命中（快照角落小三角碎片）——TLAS 大面积失效而非全空
+- 线程归责证据链：TLAS#8（探针线程构建，摄取）→ S6.5 LIVE 电池 3/6 命中 ✓；TLAS#9（探针线程 refreshTlasNative）→ S7 camHit=100% ✓；TLAS#10+（worker 线程 liveRefreshNative 每 5s 重建）→ 同场景同姿态全 miss ✗——唯一变量=构建线程。v0.3"重锚纪律"的原始全 miss 已被定谳为矩阵编码回归（十四号条目），纪律本身从未被隔离验证；v0.4 把重锚搬到 worker 线程才暴露
+- 附带发现①：camHit% 分母误用累计 sppTotal（W×H×772）——真命中率被抹成 0.0%（上帧 camHits 至多 518k，显示 <0.05%）；v0.4 现场显示值与 PNG 矛盾的元凶之一
+- 附带发现②：每 5s liveRefreshNative 强制重建 → g_stats[3] 前进 → native 自检判"场景变化"→ 累积重置——spp 在 300-800 打转永不收敛（用户应看到的 60s 收敛被 5s 周期切断）；且每次重建重分配全部 4 着色池+TLAS+实例缓冲（[retired] releasing 6 objects/次）
+- 附带发现③：pt_grid 把 padded 总网格 (480,272) 当 dispatchThreadgroups: 的组数传 → 7680×4352 线程 ≈ 33M 空转/帧（256× 过量派发；bounds guard 保正确性但费 20-30ms/帧）
+- 附带发现④：f/s 显示 38.5→3.8 假降级——frames 计数随重置清零但分母用总时长
+- 签名审计：下载 lwjgl-opengl-3.3.3.jar + lwjgl-3.3.3.jar（Maven Central），反射枚举 GL11/GL13/GL30 全部 22 个被查签名——GlComposer 方法表仅 glGetTexLevelParameteriv 一处错（其余 21 个精确匹配）
+- v0.4.1 修复：①签名改 (int,int,int,int[])+int[1] 出参；②TLAS 构建职责移交探针线程（LiveSession 零重建 + PathtraceMod 等待环 30s watchdog refreshTlasNative=[S8.4] A/B 后半段）+ worker 侧哨兵电池 castRayNative 六轴 2s/12s/32s=[live-sentinel] 行（通道健康度仪器——哨兵命中+camHit≈0⇒帧派发缺陷；双 miss⇒TLAS/线程层）；③camHit 分母改单帧样本数+f/s 改距上次重置；④pt_grid 改组数 ceil(w/16)×ceil(h/16)；⑤报告行首 10s 每秒（A/B 密度）；⑥liveRefreshNative 保留为诊断通道（live 循环不再调用）
+- 版本链 bump 0.4.1（fabric.mod.json/build.sh/报告头/workflow TAG+jar 名+release notes/README 取件链接与 2.3 指南/架构图增量）；本地 ecj 3.36 + fabric-loader/sponge-mixin 同款 classpath 全 14 类编译零错误后推送
+
+Stage Summary:
+- v0.4 真机判读定谳：合成从未上屏（签名雷）+ live 渲染全天空（worker 重建 TLAS 失效，机制未定谳但实证组合明确：探针线程构建+任意线程查询）——用户全程看原版画面与报告/PNG 矛盾的解释闭环
+- v0.4.1 交付：pathtrace-v0.4.1（四修复+哨兵电池仪器+30s 探针重锚 A/B）——下一轮真机回收的判读焦点：[live] camHit（真值）、[live-sentinel] 三次、[S8.4] 前后对比、[compose]/[S8.1]/[S8.2]
+- 若 [live-sentinel] 命中而 [live] camHit≈0 → live 帧派发自身缺陷（v0.5 定点）；若双 miss 且 [S8.4] 后恢复 → worker 构建毒害定谳；若全恢复 → 2.3 收口进 2.4（质量+事件驱动摄取）

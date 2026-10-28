@@ -1706,9 +1706,16 @@ static void pt_fill_uniforms(void *dst, jfloat camX, jfloat camY, jfloat camZ,
 
 // Padded dispatch grid + kernel bounds guard (dispatchThreadgroups is
 // universally supported; dispatchThreads would need a capability check).
+// v0.4.1 fix: dispatchThreadgroups:'s first argument is the GROUP COUNT,
+// not the total grid size. v0.4 passed the padded total (480×272) as the
+// group count with 16×16 threads → 7680×4352 threads for a 480×270
+// target = 256× over-dispatch (correct output thanks to the kernel bounds
+// guard, but ~33M mostly-idle thread invocations per frame). Correct:
+// groups = ceil(w/16) × ceil(h/16); the padded tail threads are killed by
+// the kernel's bounds guard.
 static MTLSize pt_grid(jint width, jint height) {
-    return MTLSizeMake(((NSUInteger)width + 15) / 16 * 16,
-                       ((NSUInteger)height + 15) / 16 * 16, 1);
+    return MTLSizeMake(((NSUInteger)width + 15) / 16,
+                       ((NSUInteger)height + 15) / 16, 1);
 }
 static const MTLSize kThreadgroup = { 16, 16, 1 };
 
@@ -2286,8 +2293,12 @@ Java_net_prisma_pathtrace_Native_uploadAtlasNative(
     }
 }
 
-// Worker-thread periodic re-anchor (v0.3 field-proven pattern: a fresh AS
-// build on the calling thread before its ray dispatches).
+// Worker-thread re-anchor. v0.4.1: NOT called by the live loop anymore —
+// v0.4 field evidence showed worker-thread-rebuilt TLASes (builds>=10) all
+// miss live camera rays while probe-thread builds (8/9) hit 100% in the
+// same scene/pose (S6.5 battery / S7 render). TLAS build duty moved to the
+// probe thread (30s watchdog, [S8.4]); this entry point stays exported as
+// a diagnostic channel (A/B on demand).
 JNIEXPORT void JNICALL
 Java_net_prisma_pathtrace_Native_liveRefreshNative(JNIEnv *env, jclass cls) {
     (void)env; (void)cls;

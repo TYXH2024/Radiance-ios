@@ -42,16 +42,16 @@ jobs:
           set -ex
           chmod +x chapter2/pathtrace/build.sh
           bash chapter2/pathtrace/build.sh
-          JAR="chapter2/pathtrace/pathtrace-0.4.0.jar"
+          JAR="chapter2/pathtrace/pathtrace-0.4.1.jar"
           test -f "$JAR"
-          cp "$JAR" ./pathtrace-0.4.0.jar
+          cp "$JAR" ./pathtrace-0.4.1.jar
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: pathtrace-jar
           path: |
-            pathtrace-0.4.0.jar
+            pathtrace-0.4.1.jar
             chapter2/pathtrace/build/native/libradiance_pathtrace.dylib
             chapter2/pathtrace/build/native/pathtrace.metallib
           if-no-files-found: error
@@ -101,7 +101,7 @@ jobs:
           file "$METALLIB"
           test -s "$METALLIB"
           # JAR 内容验证：mixin 类 + mixins.json 必须在包内
-          JAR="chapter2/pathtrace/pathtrace-0.4.0.jar"
+          JAR="chapter2/pathtrace/pathtrace-0.4.1.jar"
           unzip -l "$JAR" | grep -q "net/prisma/pathtrace/mixin/PathtraceWindowMixin.class" \
             && echo "JAR_MIXIN_CLASS_OK"
           unzip -l "$JAR" | grep -q "pathtrace.mixins.json" \
@@ -109,51 +109,49 @@ jobs:
           unzip -l "$JAR" | grep -q "fabric.mod.json" \
             && echo "JAR_FABRIC_MOD_OK"
 
-      - name: Release (pathtrace-v0.4, prerelease)
+      - name: Release (pathtrace-v0.4.1, prerelease)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -ex
-          TAG="pathtrace-v0.4"
-          TITLE="pathtrace v0.4 — 2.3 实时化三件事：渐进累积 + GL 合成上屏 + atlas albedo（mixin swap 钩子）"
+          TAG="pathtrace-v0.4.1"
+          TITLE="pathtrace v0.4.1 — v0.4 真机判读修复：GL 合成签名 + live TLAS 线程归责 + camHit 分母 + 派发浪费"
           NOTES_FILE=release-notes.md
           cat > "$NOTES_FILE" <<'EOF'
-          # pathtrace v0.4 — 2.3 实时化（眼见为实）
+          # pathtrace v0.4.1 — v0.4 真机回收四修复
 
-          **v0.3 真机判定 PATHTRACE_OK（2.2 闭环）**：摄取（600 区块/169k
-          三角/COLOR+UV0 双提取）、摆放（重锚后 3/6 命中、整数格线、脚下
-          地板）、渲染链（57% camHit、64.2 Mray/s 实测）全部验收。COLOR
-          审计行证据：distinct=16 寡色 ⇒ 2.3 换 atlas 采样。
+          **v0.4 真机判定 COMPOSE_DEAD + live 全天空**（report + PNG
+          像素级分析定谳）：
 
-          **v0.4 内容（2.3 三件事）**：
-          - **渐进累积**：Metal 侧持久 float4 累积缓冲 + 双 kernel
-            （pathtrace_kernel 累积模式 + present_kernel tonemap）；
-            相机静止收敛（每帧 4 spp，静止 5s ≈ 500+ spp）、移动/
-            场景变化自动重置；工作线程 ~30Hz 相机轮询。
-          - **GL 合成上屏**：mixin `Window.swapBuffers`(method_15998)
-            HEAD 钩子 → 反射 LWJGL GL（FBO + glBlitFramebuffer）整帧
-            替换游戏画面（480×270 → 窗口分辨率线性放大，y 翻转补偿）。
-            双保险零崩险：mixins.json `required:false` + `@Inject
-            (require=0)`；钩子 OFF 态一次 volatile 读零开销。
-          - **atlas albedo**：摄取期 UV0 提取（field_52109，(-1,-1)
-            哨兵回退）+ triUV 池；GL 侧读回块图集（glId 反射链 →
-            FBO attach → glReadPixels）→ MTLTexture → kernel
-            `atlasTex.sample(uv) × 顶点色`。采集失败自动回退纯顶点色
-            （2.2 等价路径，零回归）。
-          - 判定新增 LIVE_OK / COMPOSE_INACTIVE / COMPOSE_DEAD /
-            ACCUM_STALLED / LIVE_OK_WITH_GL_ERRORS；快照 PNG
-            pathtrace_live.png（15s）+ pathtrace_live_final.png（55s）。
+          1. **GL 合成器判死**：`glGetTexLevelParameteriv` 反射签名误写
+             成 `(int,int,int)`——LWJGL 3.3.3 无此重载（出参是第 4 个
+             `int[]`）→ 初始化即 NoSuchMethodException → COMPOSE_DEAD，
+             屏幕从未上屏。已修正（21 个其余签名逐一对 3.3.3 jar 反射
+             审计全对）。
+          2. **live 全天空**：worker 线程重建的 TLAS（builds≥10）对 live
+             相机射线 ~100% miss（15s 快照 = 纯平地平线色、55s = 水平
+             视角 0% 地形），而探针线程构建的 TLAS（8/9）同场景同姿态
+             100% 命中。TLAS 构建职责移交探针线程（30s watchdog 重锚
+             [S8.4]），live 循环零重建；worker 侧哨兵电池
+             [live-sentinel]（2s/12s/32s）直查 TLAS 留证。
+          3. **camHit 显示 bug**：分母误用累计 sppTotal → 真命中率被抹
+             成 0.0%（v0.4 现场即如此）。分母改单帧样本数；f/s 改
+             "距上次重置"（v0.4 的 38→3.8 假降级）。
+          4. **256× 线程过量派发**：`dispatchThreadgroups:` 首参是组数
+             而非总尺寸——v0.4 把 480×272 当组数传 → 每帧 ~33M 空转
+             线程。修正为 ceil(w/16)×ceil(h/16) 组。
 
           **使用**：替换 mods/ 内旧 JAR → 进世界停留 ~40s（摄取+S7）→
           **原地不动看屏幕**：S8 开启后画面整帧变为路径追踪渲染
-          （移动会重置累积重新收敛，属预期）→ 60s 后回报
-          pathtrace_report.txt + pathtrace_live*.png。
-          若画面未变但报告 LIVE_OK——即 COMPOSE 判定问题，回报报告。
+          （移动重置累积重收敛，属预期；30s 处有一次刻意重锚重置）
+          → **坐满 70s** 后回报 pathtrace_report.txt（重点看
+          [live] 行 camHit、[live-sentinel] 行、[S8.4] 行、[compose]
+          行）+ pathtrace_live*.png。
           EOF
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release upload "$TAG" ./pathtrace-0.4.0.jar --clobber --repo "$GITHUB_REPOSITORY"
+            gh release upload "$TAG" ./pathtrace-0.4.1.jar --clobber --repo "$GITHUB_REPOSITORY"
           else
-            gh release create "$TAG" ./pathtrace-0.4.0.jar \
+            gh release create "$TAG" ./pathtrace-0.4.1.jar \
                  --title "$TITLE" --notes-file "$NOTES_FILE" \
                  --prerelease --repo "$GITHUB_REPOSITORY"
           fi

@@ -5,23 +5,25 @@
 > **v0.1 真机回收（2026-10-28 01:08）：判 PLACEMENT_FAIL**（六向全 miss、哨兵 3/3、相机区块已摄取且 verts=2344 与 2.1 一致）——离线逐函数比对确认 fork 与 2.1 数学等价，v0.2 按零粉饰纪律装判别仪器（不盲改）。
 > **v0.2 真机回收（2026-10-28 02:23）：仍判 PLACEMENT_FAIL，但仪器已定谳**——LIVE TLAS/BLAS/矩阵/摆放全部正确（ISO=LIVE 一致，3/6 命中、脚下地板 1.62、hitPoint 与 v0.5 完全一致），S6 全 miss 是探针通道自身缺陷；隔离渲染出图 + 62.40 Mray/s。**v0.3：探测线程重锚 + A/B 复测自证 + albedo 回读仪器。**现场记录：`docs/chapter2-pathtrace-field/`
 > **v0.3 真机回收（2026-10-28 03:25）：判 PATHTRACE_OK——2.2 关闭。**重锚机制当场坐实：首轮六向全 miss → 探测线程 TLAS 重锚（refreshTlasNative）→ 复测 3/6 命中（+X/-Y/-Z 整数格线全中，miss 三向 512 格内确无几何），ISO/LIVE 逐向一致（TLAS 组装健康）。离屏首帧 480×270 / 24 spp / 2 bounces → 77.7 ms、4,990,055 queries、camHit=45.7%、**64.19 Mray/s 实测**。**2.3 开工：实时累积 + GL 合成 + atlas 采样（本版）。**
+> **v0.4 真机回收（2026-10-28 14:22/14:24）：判 COMPOSE_DEAD + live 全天空——四缺陷定谳（report + PNG 像素级分析）→ v0.4.1。**
+> ① GL 合成器初始化即死：`glGetTexLevelParameteriv` 反射签名误写 `(int,int,int)`（LWJGL 3.3.3 无此重载，出参是第 4 个 `int[]`）→ 屏幕从未上屏；② live 相机射线 ~100% miss：worker 线程重建的 TLAS（builds≥10）全 miss，同场景同姿态探针线程构建的（8/9）100% 命中（S6.5/S7）——TLAS 构建职责移交探针线程；③ camHit% 分母误用累计 sppTotal → 真命中率被抹成 0.0%；④ `dispatchThreadgroups:` 把总尺寸当组数传 → 256× 线程过量派发。现场记录：`docs/chapter2-pathtrace-field/`
 
 ## 取成品（两个通道，内容相同）
 
 | 通道 | 位置 | 说明 |
 |---|---|---|
-| **A · 工作流运行页成品文件** | Actions → `chapter2-pathtrace` → 任意绿勾运行 → 页面底部 **Artifacts** 区 → `pathtrace-jar` | 每次绿勾必有；zip 内含 `pathtrace-0.4.0.jar` + dylib + metallib。**运行中途被取消的运行没有 artifact**（也不会发布 Release——可能遗留草稿） |
-| **B · GitHub Release（正式交付）** | https://github.com/TYXH2024/Radiance-ios/releases/tag/pathtrace-v0.4 → `pathtrace-0.4.0.jar` | 幂等 `--clobber` 重传；若 Releases 页看不到，先检查页面底部"Drafts"区（被取消的运行可能遗留未发布草稿） |
+| **A · 工作流运行页成品文件** | Actions → `chapter2-pathtrace` → 任意绿勾运行 → 页面底部 **Artifacts** 区 → `pathtrace-jar` | 每次绿勾必有；zip 内含 `pathtrace-0.4.1.jar` + dylib + metallib。**运行中途被取消的运行没有 artifact**（也不会发布 Release——可能遗留草稿） |
+| **B · GitHub Release（正式交付）** | https://github.com/TYXH2024/Radiance-ios/releases/tag/pathtrace-v0.4.1 → `pathtrace-0.4.1.jar` | 幂等 `--clobber` 重传；若 Releases 页看不到，先检查页面底部"Drafts"区（被取消的运行可能遗留未发布草稿） |
 
 > v0.1 首发 workflow 遗漏了 artifact 上传步骤（2.0/2.1 均有）——导致"绿勾了但运行页看不到 jar"。v0.1.1 已补齐：**以后看绿勾运行页最下方的 Artifacts 即可直接下载**。
 
 ## 使用（2.3 实时版）
 
-1. 删除 `mods/` 内旧探针 JAR（scene-ingestion / metal-rt-probe / rt-probe / 旧版 pathtrace），放入 `pathtrace-0.4.0.jar`——同存档、同启动器档位（Vulkan/MoltenVK 档，OSMesa 宿主实测兼容）。
+1. 删除 `mods/` 内旧探针 JAR（scene-ingestion / metal-rt-probe / rt-probe / 旧版 pathtrace），放入 `pathtrace-0.4.1.jar`——同存档、同启动器档位（Vulkan/MoltenVK 档，OSMesa 宿主实测兼容）。
 2. 进入世界后：摄取约 19s → 离屏首帧（2.2 链路原样跑一遍，落 `pathtrace_frame.png`）→ **实时会话自动开启（S8）——游戏画面自此被路径追踪帧整帧替换**（480×270 线性放大至窗口分辨率）。
-3. 建议动作序列（60s 观察窗内）：**静止 ~20s** 看噪点随累积收敛 → **缓慢转动视角** 看累积自动重置（重新变噪）→ **再静止 ~20s** 看重新收敛。移动整个身体（位移）同样触发重置。
+3. 建议动作序列（60s 观察窗内）：**静止 ~20s** 看噪点随累积收敛 → **缓慢转动视角** 看累积自动重置（重新变噪）→ **再静止 ~20s** 看重新收敛。移动整个身体（位移）同样触发重置。v0.4.1 注：30s 处有一次刻意的探针线程重锚（[S8.4]）→ 累积重置一次，属预期仪器行为（A/B 后半段）。
 4. 停留 **≥75s**（60s 观察窗 + 判定收口），随后退出世界/游戏均可（会话资源随进程退出释放，报告在 windowDone 时已写全）。
-5. 回报 game 目录下四个文件：**`pathtrace_report.txt`**（全量报告，含 S8 实时判定块与 [live] 周期行）+ **`pathtrace_frame.png`**（离屏首帧）+ **`pathtrace_live.png`**（实时 15s 早期收敛快照）+ **`pathtrace_live_final.png`**（实时 55s 高 spp 收敛快照）。
+5. 回报 game 目录下四个文件：**`pathtrace_report.txt`**（全量报告，重点行：[live] 的 camHit（v0.4.1 分母已修）、[live-sentinel] 2s/12s/32s 三次哨兵电池、[S8.4] 重锚行、[compose]/[S8.1]/[S8.2] 合成与 atlas 行）+ **`pathtrace_frame.png`**（离屏首帧）+ **`pathtrace_live.png`**（实时 15s 快照）+ **`pathtrace_live_final.png`**（实时 55s 快照）。
 
 > 若合成疑似干扰排查：加 `-Dpathtrace.compose=false` 启动——累积/快照照常，仅不上屏（判定 `LIVE_OK_NO_COMPOSE`，语义即自证 A/B）。
 
@@ -68,15 +70,19 @@
 S8 实时会话（RT 工作线程，~30 Hz 相机轮询 + 8ms 帧节流）：
   相机姿态反射读取（S6/S7 同链路）→ 位移>0.02格/转角>0.05° → liveResetNative
   liveFrameNative — trace+present 单命令缓冲异步提交（store→accumulate 双模式）
-  每 5s liveRefreshNative（工作线程 TLAS 重锚——v0.3 实证纪律）+ [live] 进度行
+  v0.4.1：本线程零 TLAS 重建（worker 重建 TLAS 全 miss——构建职责在探针线程）
+  [live] 报告行：首 10s 每秒（A/B 密度），此后 5s；camHit 分母 = 单帧样本数
+  [live-sentinel] 哨兵电池（2s/12s/32s）：worker 直查 TLAS 六轴——求交通道健康度
   15s/55s 快照 PNG（收敛双证据）→ 60s 观察窗末写判定块
+探针线程 30s watchdog 重锚（[S8.4]）：refreshTlasNative——A/B 后半段留证
 上屏（渲染线程，mixin swapBuffers HEAD）：
   PathtraceWindowMixin → PathtraceHook（OFF/ARMED/ACTIVE/DEAD 状态机）
   → livePresentNative() 取稳定快照 → GlComposer（GL 反射，无 LWJGL GL 类依赖）
   → 纹理上传 + 整帧 blit（480×270 → 窗口分辨率线性放大）
   双保险：mixins.json required=false + @Inject require=0 + 回调全 try/catch 判死
 atlas 采样：
-  GlComposer.captureAtlas — 渲染线程 GL 回读方块 atlas → liveAtlasBufferNative
+  GlComposer.captureAtlas — 渲染线程 GL 回读方块 atlas（glGetTexLevelParameteriv
+  出参 int[]——v0.4.1 签名修复）→ liveAtlasBufferNative
   → uploadAtlasNative 入 MTLBuffer → pathtrace_kernel UV 采样替代顶点色寡色
 ```
 

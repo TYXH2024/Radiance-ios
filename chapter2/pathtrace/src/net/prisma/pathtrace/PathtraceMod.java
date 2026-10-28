@@ -50,7 +50,8 @@ public final class PathtraceMod {
     // 2.3 实时会话参数（可系统属性调优）。
     private static final int LIVE_W = intProp("pathtrace.rtW", 480);
     private static final int LIVE_H = intProp("pathtrace.rtH", 270);
-    private static final int LIVE_SPP = intProp("pathtrace.spp", 4);
+    /** 包内可见（LiveSession 的 camHit 分母——v0.4.1 分母修复）。 */
+    static final int LIVE_SPP = intProp("pathtrace.spp", 4);
 
     static int intProp(String name, int dflt) {
         try {
@@ -65,7 +66,7 @@ public final class PathtraceMod {
             return;
         }
         ProbeReport r = new ProbeReport("pathtrace_report.txt");
-        r.header("路径追踪探针 (pathtrace 0.4.0)");
+        r.header("路径追踪探针 (pathtrace 0.4.1)");
         r.info("触发方式: " + triggerSource);
 
         if (isDisabled()) {
@@ -431,8 +432,14 @@ public final class PathtraceMod {
                 LiveSession live = new LiveSession(r);
                 Thread t = new Thread(live, "Pathtrace-Live");
                 t.setDaemon(true);
+                long liveStartNs = System.nanoTime();
                 t.start();
-                // 等观察窗收口（报告完整性：用户随时拉取即含实时判定块）。
+                // 等观察窗收口（报告完整性）+ 30s 探针线程定时重锚（v0.4.1：
+                // TLAS 构建职责在探针线程——v0.4 真机判读 worker 重建的
+                // TLAS 对 live 射线全 miss；本次为 A/B 后半段：探针构建 +
+                // worker 查询，[S8.4] 行留证，[live]/[live-sentinel] 行
+                // 前后对比自证）。
+                boolean anchored = false;
                 long deadline = System.nanoTime() + 100_000_000_000L;
                 while (!live.windowDone && System.nanoTime() < deadline) {
                     try {
@@ -440,6 +447,18 @@ public final class PathtraceMod {
                     } catch (InterruptedException e) {
                         Thread.currentThread().interrupt();
                         break;
+                    }
+                    if (!anchored
+                            && System.nanoTime() - liveStartNs >= 30_000_000_000L) {
+                        anchored = true;
+                        try {
+                            Native.refreshTlasNative();
+                            r.pass("[S8.4] 探针线程 30s 定时重锚（A/B 后半段："
+                                    + "探针构建 + worker 查询——对比 [live] 行"
+                                    + " 30s 前后的 camHit）");
+                        } catch (Throwable tx) {
+                            r.fail("[S8.4] 重锚异常: " + tx);
+                        }
                     }
                 }
                 if (!live.windowDone) {

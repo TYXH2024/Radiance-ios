@@ -148,8 +148,14 @@ final class GlComposer {
         mReadPixels = method(gl11, "glReadPixels",
                 int.class, int.class, int.class, int.class, int.class, int.class,
                 ByteBuffer.class);
+        // v0.4.1 fix: LWJGL 3.3.3 has NO 3-arg glGetTexLevelParameteriv —
+        // the level parameter is WRITTEN to a 4th output argument (int[] or
+        // IntBuffer). v0.4 looked up (int,int,int) → NoSuchMethodException at
+        // init → COMPOSE_DEAD on every v0.4 field run (verified against
+        // lwjgl-opengl-3.3.3.jar via reflection audit: the only bad signature
+        // in this table — all 21 other lookups are exact matches).
         mGetTexLevelParameteriv = method(gl11, "glGetTexLevelParameteriv",
-                int.class, int.class, int.class);
+                int.class, int.class, int.class, int[].class);
         mActiveTexture = method(gl13, "glActiveTexture", int.class);
         mGenFramebuffers = method(gl30, "glGenFramebuffers");
         mBindFramebuffer = method(gl30, "glBindFramebuffer", int.class, int.class);
@@ -256,15 +262,19 @@ final class GlComposer {
                 return;
             }
 
-            // ---- 尺寸查询（glGetTexLevelParameteriv 需纹理绑定在当前单元）----
+            // ---- 尺寸查询（glGetTexLevelParameteriv 需纹理绑定在当前单元；
+            // 出参写进 int[1]——LWJGL 无返回值重载）----
             int savedActive = callI(mGetInteger, GL_ACTIVE_TEXTURE);
             int savedBinding = callI(mGetInteger, GL_TEXTURE_BINDING_2D);
+            int[] box = new int[1];
             int w;
             int h;
             try {
                 call(mBindTexture, GL_TEXTURE_2D, glId);
-                w = callI(mGetTexLevelParameteriv, GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH);
-                h = callI(mGetTexLevelParameteriv, GL_TEXTURE_2D, 0, GL_TEXTURE_HEIGHT);
+                call(mGetTexLevelParameteriv, GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH, box);
+                w = box[0];
+                call(mGetTexLevelParameteriv, GL_TEXTURE_2D, 0, GL_TEXTURE_HEIGHT, box);
+                h = box[0];
             } finally {
                 call(mBindTexture, GL_TEXTURE_2D, savedBinding);
                 call(mActiveTexture, savedActive);
