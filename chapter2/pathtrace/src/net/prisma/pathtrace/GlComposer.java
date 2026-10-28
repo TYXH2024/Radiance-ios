@@ -34,6 +34,8 @@ final class GlComposer {
     private static final int GL_TEXTURE_MIN_FILTER = 0x2801;
     private static final int GL_TEXTURE_MAG_FILTER = 0x2800;
     private static final int GL_LINEAR = 0x2601;
+    /** v0.4.2: NEAREST（0x2600，规范固定值）——LINEAR blit 出错时的自愈降级。 */
+    private static final int GL_NEAREST = 0x2600;
     private static final int GL_TEXTURE_WRAP_S = 0x2802;
     private static final int GL_TEXTURE_WRAP_T = 0x2803;
     private static final int GL_CLAMP_TO_EDGE = 0x812F;
@@ -70,6 +72,8 @@ final class GlComposer {
     private Method mPixelStorei;
     private Method mGetError;
     private Method mGetInteger;
+    /** v0.4.2: glGetIntegerv(int, int[]) —— viewport/scissor box 四元组查询（软符号：缺失则几何行降级）。 */
+    private Method mGetIntegerv;
     private Method mIsEnabled;
     private Method mEnable;
     private Method mDisable;
@@ -91,6 +95,25 @@ final class GlComposer {
     private int rtH = -1;
     private int winW = -1;
     private int winH = -1;
+
+    // ---- v0.4.2 GL 错误分类学（底部花屏/错误计数同源取证）----
+    // v0.4.1 现场：glErrors=10 实为计数器封顶值（glErrors<10 才果加）——
+    // 真实错误可能每帧都在发生（blit=3565 帧，屏幕底部 1/10 花屏条）。
+    // 本版：逐操作探错（上传后/blit 后各一次）+ 错误码命名 + 每操作首例
+    // 留行（含几何参数），计数不再封顶。
+    private int firstPresentDone = 0;
+    private boolean blitNearest = false;   // LINEAR blit 出错后的自愈降级
+    private boolean blitFallbackLogged = false;
+    private int texSubErrCount = 0;
+    private int blitErrCount = 0;
+    private int texSubErrLogged = 0;
+    private int blitErrLogged = 0;
+    /** 报告引用（init 时保存——present 的错误/几何留行用）。 */
+    private ProbeReport rpt;
+
+    private ProbeReport report() {
+        return rpt != null ? rpt : PathtraceHook.silentReport();
+    }
 
     // ------------------------------------------------------------------
     // 反射调用助手（primitive 装箱直通）
@@ -124,6 +147,7 @@ final class GlComposer {
     // ------------------------------------------------------------------
 
     void init(ProbeReport r) throws Exception {
+        rpt = r;
         Class<?> gl11 = Class.forName("org.lwjgl.opengl.GL11");
         Class<?> gl13 = Class.forName("org.lwjgl.opengl.GL13");
         Class<?> gl30 = Class.forName("org.lwjgl.opengl.GL30");
@@ -140,6 +164,12 @@ final class GlComposer {
         mPixelStorei = method(gl11, "glPixelStorei", int.class, int.class);
         mGetError = method(gl11, "glGetError");
         mGetInteger = method(gl11, "glGetInteger", int.class);
+        // v0.4.2: 四元组查询重载（软符号——LWJGL 3.3.x 为 glGetIntegerv(int, int[])）。
+        try {
+            mGetIntegerv = method(gl11, "glGetIntegerv", int.class, int[].class);
+        } catch (Throwable t) {
+            mGetIntegerv = null;
+        }
         mIsEnabled = method(gl11, "glIsEnabled", int.class);
         mEnable = method(gl11, "glEnable", int.class);
         mDisable = method(gl11, "glDisable", int.class);
@@ -169,6 +199,16 @@ final class GlComposer {
         mDeleteFramebuffers = method(gl30, "glDeleteFramebuffers", int.class);
 
         // GL 环境证据行
+        // v0.4.2: 先排空错误队列——否则游戏侧遗留错误会被后续 err!=0 检查
+        // 记到合成器头上（甚至直接判死 init）。排空条数留行，不计入 glErrors。
+        int drained = 0;
+        while (callI(mGetError) != 0 && drained < 8) {
+            drained++;
+        }
+        if (drained > 0) {
+            r.info(String.format("[S8.1] 排空 GL 错误队列: %d 条（游戏侧遗留，"
+                    + "不归因本合成器——后续 [compose] 错误行均为本类操作）", drained));
+        }
         String vendor = str(GL_VENDOR);
         String renderer = str(GL_RENDERER);
         String version = str(GL_VERSION);
@@ -353,6 +393,21 @@ final class GlComposer {
         final int dstW = winW > 0 ? winW : rtW;
         final int dstH = winH > 0 ? winH : rtH;
 
+        // v0.4.2: 首帧几何取证一行——底部花屏条（v0.4.1 现场 ~1/10 屏高
+        // 粉/黑/彩条纹）的两个头号嫌疑：dst 矩形 ≠ 实际帧缓冲尺寸（点/像素
+        // 或缩放系数错位 → blit 只盖住部分）；或 blit 本身 GL_INVALID_*
+        // 失败（残留旧画面/未初始化区）。此行把 src/dst/viewport/scissor
+        // 全部钉在报告里，读图即知覆盖区与缺口。
+        if (firstPresentDone == 0) {
+            firstPresentDone = 1;
+            report().pass(String.format(
+                    "[compose] 首帧几何: RT=%dx%d win=%d(%s) dst=%dx%d "
+                            + "blit_src=(0,0,%d,%d) blit_dst=(0,%d,%d,0)%s%s",
+                    rtW, rtH, winW, winW > 0 ? "反射链" : "缺失→RT回退",
+                    dstW, dstH, rtW, rtH, dstH, dstW,
+                    viewportSuffix(), scissorSuffix()));
+        }
+
         // ---- 状态保存 ----
         int savedActive = callI(mGetInteger, GL_ACTIVE_TEXTURE);
         int savedBinding = callI(mGetInteger, GL_TEXTURE_BINDING_2D);
@@ -373,14 +428,49 @@ final class GlComposer {
             call(mBindTexture, GL_TEXTURE_2D, rtTex);
             call(mTexSubImage2D, GL_TEXTURE_2D, 0, 0, 0, rtW, rtH,
                     GL_RGBA, GL_UNSIGNED_BYTE, rgba);
+            int errUpload = callI(mGetError);
+            if (errUpload != 0) {
+                noteGlError("texSubImage2D", errUpload, rgba);
+            }
 
             // ---- blit 整帧替换（dst y 翻转：GL 左下原点 vs 图像上下行主序）----
+            // v0.4.2 自愈：LINEAR blit 首次报错 → 换 NEAREST 重试一次并记住
+            // （缩放 blit 在个别驱动/格式组合下只允许 NEAREST——错误码行自证）。
             call(mBindFramebuffer, GL_READ_FRAMEBUFFER, rtFbo);
             call(mBindFramebuffer, GL_DRAW_FRAMEBUFFER, 0);
+            int filter = blitNearest ? GL_NEAREST : GL_LINEAR;
             call(mBlitFramebuffer,
                     0, 0, rtW, rtH,          // src: full RT
                     0, dstH, dstW, 0,        // dst: full window, y-flipped
-                    GL_COLOR_BUFFER_BIT, GL_LINEAR);
+                    GL_COLOR_BUFFER_BIT, filter);
+            int errBlit = callI(mGetError);
+            if (errBlit != 0) {
+                PathtraceHook.glErrors++;
+                blitErrCount++;
+                if (!blitNearest) {
+                    blitNearest = true;
+                    if (!blitFallbackLogged) {
+                        blitFallbackLogged = true;
+                        report().fail(String.format(
+                                "[compose] blit GL 错误 %s(0x%04X) @ LINEAR"
+                                        + " → 改用 NEAREST 重试（后续帧生效；"
+                                        + "几何见 [compose] 首帧几何行）",
+                                errName(errBlit), errBlit));
+                    }
+                    // 本次立即用 NEAREST 重打一遍（自愈当下帧）
+                    call(mBlitFramebuffer,
+                            0, 0, rtW, rtH,
+                            0, dstH, dstW, 0,
+                            GL_COLOR_BUFFER_BIT, GL_NEAREST);
+                    callI(mGetError); // 重试后的错误不再重复计数
+                } else if (blitErrLogged < 10) {
+                    blitErrLogged++;
+                    report().fail(String.format(
+                            "[compose] blit GL 错误 %s(0x%04X) 第 %d 次"
+                                    + "（NEAREST 模式下仍错——见首帧几何行）",
+                            errName(errBlit), errBlit, blitErrCount));
+                }
+            }
         } finally {
             call(mBindFramebuffer, GL_DRAW_FRAMEBUFFER, savedDrawFb);
             call(mBindFramebuffer, GL_READ_FRAMEBUFFER, savedReadFb);
@@ -392,9 +482,69 @@ final class GlComposer {
                 call(mEnable, GL_SCISSOR_TEST);
             }
         }
-        int err = callI(mGetError);
-        if (err != 0 && PathtraceHook.glErrors < 10) {
-            PathtraceHook.glErrors++;
+    }
+
+    /** texSubImage2D 错误留行（首例带参数与缓冲规格——上传错儿的一手现场）。 */
+    private void noteGlError(String op, int err, ByteBuffer rgba) {
+        PathtraceHook.glErrors++;
+        texSubErrCount++;
+        if (texSubErrLogged < 10) {
+            texSubErrLogged++;
+            int cap = rgba != null ? rgba.capacity() : -1;
+            report().fail(String.format(
+                    "[compose] %s GL 错误 %s(0x%04X) 第 %d 次"
+                            + "（tex=%d 规格=%dx%d RGBA8 buf=%dB row=0 align=4）",
+                    op, errName(err), err, texSubErrCount, rtTex, rtW, rtH, cap));
+        }
+    }
+
+    /** v0.4.2: GL 错误码命名（规范固定值——底部花屏与错误行直接对上号）。 */
+    private static String errName(int err) {
+        switch (err) {
+            case 0x0500: return "GL_INVALID_ENUM";
+            case 0x0501: return "GL_INVALID_VALUE";
+            case 0x0502: return "GL_INVALID_OPERATION";
+            case 0x0503: return "GL_STACK_OVERFLOW";
+            case 0x0504: return "GL_STACK_UNDERFLOW";
+            case 0x0505: return "GL_OUT_OF_MEMORY";
+            case 0x0506: return "GL_INVALID_FRAMEBUFFER_OPERATION";
+            case 0x0507: return "GL_CONTEXT_LOST";
+            default: return "GL_ERROR_" + Integer.toHexString(err);
+        }
+    }
+
+    /** 当前帧 viewport 四元组（软符号缺失 → 空串）。 */
+    private String viewportSuffix() {
+        int[] vp = vec4(GL_VIEWPORT);
+        return vp != null ? String.format(" viewport=[%d,%d %dx%d]", vp[0], vp[1], vp[2], vp[3]) : "";
+    }
+
+    /** 当前帧 scissor 状态与盒子（首帧花屏定位：裁剪区是否吃掉底部）。 */
+    private String scissorSuffix() {
+        try {
+            boolean on = callZ(mIsEnabled, GL_SCISSOR_TEST);
+            int[] box = vec4(GL_SCISSOR_BOX);
+            return on || box != null
+                    ? String.format(" scissor=%s[%s]", on ? "ON" : "off",
+                            box != null
+                                    ? String.format("%d,%d %dx%d", box[0], box[1], box[2], box[3])
+                                    : "?")
+                    : "";
+        } catch (Throwable t) {
+            return "";
+        }
+    }
+
+    private int[] vec4(int pname) {
+        if (mGetIntegerv == null) {
+            return null;
+        }
+        try {
+            int[] out = new int[4];
+            mGetIntegerv.invoke(null, pname, out);
+            return out;
+        } catch (Throwable t) {
+            return null;
         }
     }
 

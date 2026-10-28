@@ -61,12 +61,24 @@ public final class PathtraceMod {
         }
     }
 
+    /**
+     * v0.4.2: 布尔开关语义修正。v0.4/v0.4.1 的 composeEnabled() 用
+     * Boolean.getBoolean("pathtrace.compose")——它返回的是属性字符串的布尔
+     * 【值】（"false"→false），取反后 -Dpathtrace.compose=false 实际上把合成
+     * 【打开】了：文档承诺的归因开关从未真正关掉过（两轮真机均未触发此路径，
+     * 故未污染现场，但仪器是坏的）。统一改为字符串判定：false/0/off = 关。
+     */
+    static boolean flagProp(String name, boolean dflt) {
+        String v = System.getProperty(name, dflt ? "true" : "false").trim();
+        return !("false".equalsIgnoreCase(v) || "0".equals(v) || "off".equalsIgnoreCase(v));
+    }
+
     static void runAll(String triggerSource) {
         if (!STARTED.compareAndSet(false, true)) {
             return;
         }
         ProbeReport r = new ProbeReport("pathtrace_report.txt");
-        r.header("路径追踪探针 (pathtrace 0.4.1)");
+        r.header("路径追踪探针 (pathtrace 0.4.2)");
         r.info("触发方式: " + triggerSource);
 
         if (isDisabled()) {
@@ -441,6 +453,7 @@ public final class PathtraceMod {
                 // 前后对比自证）。
                 boolean anchored = false;
                 long deadline = System.nanoTime() + 100_000_000_000L;
+                boolean probeAcked = false; // v0.4.2: 首次 0/6 交叉复测是否已执行
                 while (!live.windowDone && System.nanoTime() < deadline) {
                     try {
                         Thread.sleep(500L);
@@ -456,9 +469,21 @@ public final class PathtraceMod {
                             r.pass("[S8.4] 探针线程 30s 定时重锚（A/B 后半段："
                                     + "探针构建 + worker 查询——对比 [live] 行"
                                     + " 30s 前后的 camHit）");
+                            // v0.4.2: 重锚后探针线程自己也打一轮电池——v0.3
+                            // 的实证模式（新鲜 AS build 后同线程查询）。若
+                            // probe 命中而 worker 仍 0/6（[live-sentinel 32s]），
+                            // 线程归责一步定谳；若 probe 也 miss，则重锚没用
+                            // 上（旧 TLAS 本身已毒化，见 [probe-sentinel] 行）。
+                            probeBattery(r, "S8.4 重锚后（探针线程）");
                         } catch (Throwable tx) {
                             r.fail("[S8.4] 重锚异常: " + tx);
                         }
+                    }
+                    // v0.4.2: worker 哨兵 0/6 → 探针线程交叉复测（只打一次，
+                    // 消费后置 probeAcked；后续哨兵行不再重复请求）。
+                    if (!probeAcked && probeBatteryReq) {
+                        probeAcked = true;
+                        probeBattery(r, "worker 0/6 触发的交叉复测");
                     }
                 }
                 if (!live.windowDone) {
@@ -486,6 +511,28 @@ public final class PathtraceMod {
     }
 
     // ---- 工具 ----
+
+    /**
+     * v0.4.2：探针线程交叉复测电池（[probe-sentinel] 行）。与 worker 侧
+     * [live-sentinel] 同一组六轴 ray、同一 TLAS，仅派发线程不同——
+     * 读法：probe 命中 + worker 0/6 ⇒ worker 派发路径坏（线程归责）；
+     * 两者皆 miss ⇒ AS 内容坏（BLAS/TLAS 毒化）。姿态一并回显
+     * （NaN/漂移在此行直接现形，一步杀掉"相机数据污染"假说）。
+     */
+    private static void probeBattery(ProbeReport r, String tag) {
+        try {
+            float[] pose = cameraPose();
+            int[] res = castAxisBattery(r, pose, "probe");
+            r.pass(String.format(
+                    "[probe-sentinel %s] 探针线程直查 TLAS：%d/6 命中"
+                            + "（格线 %d，-Y 脚下 %d）| cam=(%.2f, %.2f, %.2f)"
+                            + " yaw=%.1f pitch=%.1f —— 与 [live-sentinel] 行互证",
+                    tag, res[0], res[1], res[2], pose[0], pose[1], pose[2],
+                    pose[3], pose[4]));
+        } catch (Throwable t) {
+            r.fail("[probe-sentinel " + tag + "] 异常: " + t);
+        }
+    }
 
     /**
      * v0.3: 六轴 ray 电池（原 S6 内联逻辑提取）——返回 int[3]：
@@ -658,10 +705,33 @@ public final class PathtraceMod {
                 || "1".equals(System.getenv("PATHTRACE_DISABLED"));
     }
 
-    /** 2.3：GL 合成开关（默认开；false → 累积/快照照常，仅不上屏）。 */
+    /** 2.3：GL 合成开关（v0.4.2 语义修正——-Dpathtrace.compose=false 真正关闭）。 */
     private static boolean composeEnabled() {
-        return !Boolean.getBoolean("pathtrace.compose");
+        return flagProp("pathtrace.compose", true);
     }
+
+    /**
+     * 2.3 v0.4.2：atlas 采集二分开关。-Dpathtrace.atlas=false → 跳过
+     * captureAtlas（albedo 保持顶点色，2.2 等价路径）。v0.4.1 真机时间线：
+     * camHit 1s=100%（该帧编码于 atlas 上传之后）→ (1s,2s) 窗口内永久归零；
+     * atlas 绑定本身已被排除为【即时】毒源，但上传链路（GL readback +
+     * Metal 纹理创建 + 锁内 GPU wait）仍是关联事件——本开关把整条链
+     * 一次切开：camHit 恢复非零 ⇒ 上传链凶手坐实；仍归零 ⇒ 触发点在
+     * 别处（GL 合成/哨兵派发/驱动层），继续看 [probe-sentinel] 行。
+     */
+    static boolean atlasEnabled() {
+        return flagProp("pathtrace.atlas", true);
+    }
+
+    // ---- v0.4.2 探针线程交叉复测通道（worker→probe 的单向请求）----
+    // live 哨兵 0/6 时置位；PathtraceMod watchdog 轮询消费。同一 TLAS、
+    // 同一射线电池，从探针线程重打一遍：probe 命中 + worker 全 miss ⇒
+    // worker 派发路径坏（线程归责定谳）；两者皆 miss ⇒ AS 内容坏
+    // （BLAS/TLAS 毒化——重锚后的复测再分新旧）。v0.4.1 全程缺失的
+    // 关键 A/B：S6.5 之后探针线程再没打过任何一条 ray。
+    static volatile boolean probeBatteryReq = false;
+    /** atlas 采集完成计数（成功/降级/跳过均 +1——LiveSession 据此括号探测）。 */
+    static volatile int atlasEpoch = 0;
 
     private static void envSnapshot(ProbeReport r) {
         r.info("java.version  = " + System.getProperty("java.version"));

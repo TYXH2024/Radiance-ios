@@ -42,16 +42,16 @@ jobs:
           set -ex
           chmod +x chapter2/pathtrace/build.sh
           bash chapter2/pathtrace/build.sh
-          JAR="chapter2/pathtrace/pathtrace-0.4.1.jar"
+          JAR="chapter2/pathtrace/pathtrace-0.4.2.jar"
           test -f "$JAR"
-          cp "$JAR" ./pathtrace-0.4.1.jar
+          cp "$JAR" ./pathtrace-0.4.2.jar
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: pathtrace-jar
           path: |
-            pathtrace-0.4.1.jar
+            pathtrace-0.4.2.jar
             chapter2/pathtrace/build/native/libradiance_pathtrace.dylib
             chapter2/pathtrace/build/native/pathtrace.metallib
           if-no-files-found: error
@@ -101,7 +101,7 @@ jobs:
           file "$METALLIB"
           test -s "$METALLIB"
           # JAR 内容验证：mixin 类 + mixins.json 必须在包内
-          JAR="chapter2/pathtrace/pathtrace-0.4.1.jar"
+          JAR="chapter2/pathtrace/pathtrace-0.4.2.jar"
           unzip -l "$JAR" | grep -q "net/prisma/pathtrace/mixin/PathtraceWindowMixin.class" \
             && echo "JAR_MIXIN_CLASS_OK"
           unzip -l "$JAR" | grep -q "pathtrace.mixins.json" \
@@ -109,49 +109,65 @@ jobs:
           unzip -l "$JAR" | grep -q "fabric.mod.json" \
             && echo "JAR_FABRIC_MOD_OK"
 
-      - name: Release (pathtrace-v0.4.1, prerelease)
+      - name: Release (pathtrace-v0.4.2, prerelease)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -ex
-          TAG="pathtrace-v0.4.1"
-          TITLE="pathtrace v0.4.1 — v0.4 真机判读修复：GL 合成签名 + live TLAS 线程归责 + camHit 分母 + 派发浪费"
+          TAG="pathtrace-v0.4.2"
+          TITLE="pathtrace v0.4.2 — v0.4.1 真机判读仪器+防御修复：探针交叉复测 + atlas 二分开关 + GL 错误分类学 + 场景锁 + 墙钟统计"
           NOTES_FILE=release-notes.md
           cat > "$NOTES_FILE" <<'EOF'
-          # pathtrace v0.4.1 — v0.4 真机回收四修复
+          # pathtrace v0.4.2 — v0.4.1 判读 LIVE_OK_WITH_GL_ERRORS + 全 miss 定谳的仪器与防御包
 
-          **v0.4 真机判定 COMPOSE_DEAD + live 全天空**（report + PNG
-          像素级分析定谳）：
+          **v0.4.1 真机判定**：`LIVE_OK_WITH_GL_ERRORS`（blit=3565——上屏管道
+          活）但 camHit 在 (1s,2s) 窗口内从 100% 永久归零，worker 哨兵
+          2s/12s/32s 全 0/6，探针 30s 重锚无效；55s PNG=天空+太阳
+          （俯视视角却见天=射线全穿透）。GL 侧 glErrors=10 实为计数器
+          封顶值 + 屏幕底部 ~1/10 花屏条。
 
-          1. **GL 合成器判死**：`glGetTexLevelParameteriv` 反射签名误写
-             成 `(int,int,int)`——LWJGL 3.3.3 无此重载（出参是第 4 个
-             `int[]`）→ 初始化即 NoSuchMethodException → COMPOSE_DEAD，
-             屏幕从未上屏。已修正（21 个其余签名逐一对 3.3.3 jar 反射
-             审计全对）。
-          2. **live 全天空**：worker 线程重建的 TLAS（builds≥10）对 live
-             相机射线 ~100% miss（15s 快照 = 纯平地平线色、55s = 水平
-             视角 0% 地形），而探针线程构建的 TLAS（8/9）同场景同姿态
-             100% 命中。TLAS 构建职责移交探针线程（30s watchdog 重锚
-             [S8.4]），live 循环零重建；worker 侧哨兵电池
-             [live-sentinel]（2s/12s/32s）直查 TLAS 留证。
-          3. **camHit 显示 bug**：分母误用累计 sppTotal → 真命中率被抹
-             成 0.0%（v0.4 现场即如此）。分母改单帧样本数；f/s 改
-             "距上次重置"（v0.4 的 38→3.8 假降级）。
-          4. **256× 线程过量派发**：`dispatchThreadgroups:` 首参是组数
-             而非总尺寸——v0.4 把 480×272 当组数传 → 每帧 ~33M 空转
-             线程。修正为 ceil(w/16)×ceil(h/16) 组。
+          **本版六件套**：
+
+          1. **探针线程交叉复测 [probe-sentinel]**：worker 哨兵 0/6 时，
+             探针线程对同一 TLAS 打同一组六轴 ray——probe 命中 + worker
+             全 miss = worker 派发路径坏（线程归责定谳）；双 miss =
+             AS 内容坏（BLAS/TLAS 毒化）。S8.4 重锚后同样复测。v0.4.1
+             全程探针线程在 S6.5 后再没打过任何 ray——正是缺失的关键 A/B。
+          2. **atlas 二分开关** `-Dpathtrace.atlas=false`：跳过 GL readback
+             + Metal 纹理上传整条链（albedo 回退顶点色）。camHit 恢复
+             非零 = 上传链凶手坐实。atlas epoch 前后即时哨兵括号
+             （t≈0 前基线 / epoch 后 ≤8ms / 1.5s 加密点）+ 哨兵行姿态
+             回显（NaN/漂移现形）。
+          3. **GL 错误分类学**：逐操作错误码+命名（texSubImage2D / blit
+             分开探）+ 首帧几何行（RT/win/dst/src/viewport/scissor——
+             底部花屏条直指 dst 矩形 vs 帧缓冲尺寸错位或 blit 失败）+
+             LINEAR blit 出错自动 NEAREST 重试（自愈）+ init 前排空
+             游戏侧遗留错误 + glErrors 计数去掉封顶。
+          4. **场景锁 g_sceneLock**：castRayNative 此前读 g_tlas 完全
+             无锁（探针线程 rebuild 换装/退役 TLAS 与 worker 读并发
+             = use-after-free 窗口）；rebuild 换装段、worker 帧编码
+             （快照 TLAS+pools）、castRay 快照全部上锁（锁序 L→S，
+             死锁审计过）。uploadAtlasNative 的 GPU wait 移出会话锁。
+          5. **开关语义修复**：`Boolean.getBoolean` 反转——
+             `-Dpathtrace.compose=false` 实际上从未关掉过合成（v0.4/v0.4.1
+             的归因开关是坏的；两轮真机未触发此路径故未污染现场）。
+             统一字符串判定，atlas 开关同款。
+          6. **墙钟统计**：[live] 行新增 wall f/s（Java 侧计帧差分——
+             免疫重置风暴）+ loopHz（GPU 锁死/线程饥饿现形）；since-reset
+             span 下限 200ms（杀掉 89000 f/s 假值）。
 
           **使用**：替换 mods/ 内旧 JAR → 进世界停留 ~40s（摄取+S7）→
-          **原地不动看屏幕**：S8 开启后画面整帧变为路径追踪渲染
-          （移动重置累积重收敛，属预期；30s 处有一次刻意重锚重置）
-          → **坐满 70s** 后回报 pathtrace_report.txt（重点看
-          [live] 行 camHit、[live-sentinel] 行、[S8.4] 行、[compose]
-          行）+ pathtrace_live*.png。
+          静止/转向随意（观察窗 60s）→ 坐满 70s 回报
+          pathtrace_report.txt（重点：[probe-sentinel]、[live-sentinel]
+          各行、[live] camHit 曲线、[compose] 首帧几何与错误码行、
+          [S8.2] atlas 行）+ pathtrace_live*.png + 屏幕目检描述。
+          若首跑 camHit 仍归零：加 `-Dpathtrace.atlas=false` 再跑一轮
+          （A/B 二分——无需改 JAR）。
           EOF
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release upload "$TAG" ./pathtrace-0.4.1.jar --clobber --repo "$GITHUB_REPOSITORY"
+            gh release upload "$TAG" ./pathtrace-0.4.2.jar --clobber --repo "$GITHUB_REPOSITORY"
           else
-            gh release create "$TAG" ./pathtrace-0.4.1.jar \
+            gh release create "$TAG" ./pathtrace-0.4.2.jar \
                  --title "$TITLE" --notes-file "$NOTES_FILE" \
                  --prerelease --repo "$GITHUB_REPOSITORY"
           fi

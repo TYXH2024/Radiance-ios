@@ -1,6 +1,6 @@
 //
 //  metal_pathtrace.m
-//  Radiance iOS Port — Chapter 2 — Stage 2.3 — Live Path Tracing (v0.4)
+//  Radiance iOS Port — Chapter 2 — Stage 2.3 — Live Path Tracing (v0.4.2)
 //
 //  Scene manager behind net.prisma.pathtrace.Native (JNI). Fork of the 2.1
 //  scene-ingestion manager (field-verified through v0.5 — SCENE_INGEST_OK)
@@ -216,6 +216,21 @@ static uint32_t g_instOriginCount = 0;
 //        [8]=retiredPending
 static uint64_t g_stats[9];
 
+// v0.4.2: scene-state mutex — guards the {g_tlas, g_instanceBuffer,
+// g_triColorPool, g_triNormalPool, g_instTriBase, g_triUVPool,
+// g_instOrigins/g_instOriginCount} swap section in rebuild_tlas against
+// unlocked readers (castRayNative read g_tlas with NO lock in <= v0.4.1 —
+// a probe-thread rebuild could swap-and-retire the TLAS between the
+// worker's pointer read and the encoder bind: a use-after-free window on
+// the exact AS object whose queries went silently all-miss on device).
+// Lock ORDER (deadlock audit): liveFrameNative takes g_liveLock THEN
+// g_sceneLock (L→S). Nobody takes S→L: rebuild_tlas / castRayNative take
+// g_sceneLock only; refreshTlasNative checks g_liveLock, RELEASES it, then
+// rebuilds. uploadAtlas/livePresent take g_liveLock only.
+// @synchronized(nil) is a documented no-op — pre-init callers (single-
+// threaded by construction) degrade to the old unlocked behavior.
+static NSObject *g_sceneLock = nil;
+
 static void flush_retired(void) {
     if (g_retired != nil && g_retired.count > 0) {
         rp("[retired] releasing %llu deferred objects",
@@ -299,7 +314,12 @@ static inline simd_float3 vsub(simd_float3 a, simd_float3 b) {
 
 // Rebuild TLAS over all ready slots + the shading pools (same order). Flushes
 // the retired list afterwards.
-static void rebuild_tlas(void) {
+// v0.4.2: split into rebuild_tlas (public entry — scene-state swap under
+// g_sceneLock) and rebuild_tlas_locked (original body unchanged). Readers
+// on other threads (worker liveFrameNative / castRayNative) snapshot the
+// TLAS + shading pools under the same mutex, closing the swap-retire-read
+// use-after-free window (see g_sceneLock comment above).
+static void rebuild_tlas_locked(void) {
     if (!g_tlasDirty) { return; }
 
     // Collect ready slots (instance order = slot scan order; the kernel's
@@ -519,6 +539,16 @@ static void rebuild_tlas(void) {
        (unsigned long long)g_stats[3]);
 }
 
+// v0.4.2 public entry: build + swap under the scene mutex. Early-out on the
+// dirty flag stays unlocked (benign hint read — worst case one extra/missed
+// no-op build across threads; the locked body re-checks).
+static void rebuild_tlas(void) {
+    if (!g_tlasDirty) { return; }
+    @synchronized (g_sceneLock) {
+        rebuild_tlas_locked();
+    }
+}
+
 // ------------------------- JNI -------------------------
 
 static const char *kMetallibPath = NULL;
@@ -547,6 +577,9 @@ Java_net_prisma_pathtrace_Native_initNative(
         }
         g_queue = [g_device newCommandQueue];
         g_liveLock = [[NSObject alloc] init];   // 2.3: live session mutex
+        if (g_sceneLock == nil) {
+            g_sceneLock = [[NSObject alloc] init]; // v0.4.2: scene-state mutex
+        }
         rp("[scene] device=%s raytracing=%s",
            g_device.name.UTF8String, g_device.supportsRaytracing ? "YES" : "NO");
         if (!g_device.supportsRaytracing) {
@@ -1008,9 +1041,20 @@ Java_net_prisma_pathtrace_Native_castRayNative(
     }
 
     uint32_t hitFlag = 0; float dist = -1.0f; uint32_t instIdx = 0xFFFFFFFFu;
-    if (trace_ray(g_tlas, simd_make_float3(ox, oy, oz),
-                  simd_make_float3(dx, dy, dz), maxDist,
-                  &hitFlag, &dist, &instIdx)) {
+    // v0.4.2: snapshot the TLAS under the scene mutex. <= v0.4.1 read g_tlas
+    // with NO lock: a probe-thread rebuild_tlas could retire (and release)
+    // the old TLAS between this read and the encoder bind — a use-after-free
+    // on the exact AS object whose queries went silently all-miss on device.
+    // The strong local ref covers the whole trace lifetime (the command
+    // buffer additionally retains it once bound).
+    id<MTLAccelerationStructure> tlas;
+    @synchronized (g_sceneLock) {
+        tlas = g_tlas;
+    }
+    if (tlas != nil
+            && trace_ray(tlas, simd_make_float3(ox, oy, oz),
+                         simd_make_float3(dx, dy, dz), maxDist,
+                         &hitFlag, &dist, &instIdx)) {
         out[0] = hitFlag ? 1.0f : 0.0f;
         out[1] = dist;
         out[2] = (jfloat)instIdx;
@@ -2096,24 +2140,50 @@ Java_net_prisma_pathtrace_Native_liveFrameNative(
         // 3. Per-frame stats reset (safe: no kernel in flight).
         memset(g_liveStats.contents, 0, 2 * sizeof(uint32_t));
         // 4. Uniforms (shared buffer contents write — CPU-side).
+        // v0.4.2: snapshot scene state under g_sceneLock (nested inside
+        // g_liveLock — lock order L→S, deadlock-audited in the g_sceneLock
+        // comment). The probe thread's rebuild_tlas (S8.4 watchdog) can
+        // otherwise swap + retire the TLAS/pools between our reads and the
+        // encoder binds; a torn bind set (new TLAS + old pools, or a
+        // released object) is exactly the class of silent all-miss we are
+        // hunting. Skip the frame if the pools are torn down.
+        id<MTLAccelerationStructure> tlas;
+        id<MTLBuffer> colorPool;
+        id<MTLBuffer> normalPool;
+        id<MTLBuffer> triBase;
+        id<MTLBuffer> uvPool;
+        uint32_t instCount;
+        @synchronized (g_sceneLock) {
+            tlas = g_tlas;
+            colorPool = g_triColorPool;
+            normalPool = g_triNormalPool;
+            triBase = g_instTriBase;
+            uvPool = g_triUVPool;
+            instCount = g_instOriginCount;
+        }
+        if (tlas == nil || colorPool == nil || normalPool == nil
+                || triBase == nil || uvPool == nil) {
+            rp("[live] frame skipped: scene state unavailable (TLAS/pools)");
+            return result;
+        }
         const uint32_t resetFlag = (g_liveFrames == 0) ? 1u : 0u;
         const uint32_t sppTotalNext = g_liveSppTotal + g_liveSpp;
         pt_fill_uniforms(g_liveUniform.contents, camX, camY, camZ,
                          yawDeg, pitchDeg, (jint)g_liveW, (jint)g_liveH,
                          (jint)g_liveSpp, (jint)g_liveBounces,
-                         g_instOriginCount, resetFlag, sppTotalNext);
+                         instCount, resetFlag, sppTotalNext);
         // 5. Encode trace + present in one command buffer, commit async.
         id<MTLCommandBuffer> cmd = [g_queue commandBuffer];
         id<MTLComputeCommandEncoder> enc = [cmd computeCommandEncoder];
         [enc setComputePipelineState:g_ptPipeline];
         [enc setBuffer:g_liveUniform offset:0 atIndex:0];
         [enc setBuffer:g_liveAccum offset:0 atIndex:1];
-        [enc setAccelerationStructure:g_tlas atBufferIndex:2];
-        [enc setBuffer:g_triColorPool offset:0 atIndex:3];
-        [enc setBuffer:g_triNormalPool offset:0 atIndex:4];
-        [enc setBuffer:g_instTriBase offset:0 atIndex:5];
+        [enc setAccelerationStructure:tlas atBufferIndex:2];
+        [enc setBuffer:colorPool offset:0 atIndex:3];
+        [enc setBuffer:normalPool offset:0 atIndex:4];
+        [enc setBuffer:triBase offset:0 atIndex:5];
         [enc setBuffer:g_liveStats offset:0 atIndex:6];
-        [enc setBuffer:g_triUVPool offset:0 atIndex:7];
+        [enc setBuffer:uvPool offset:0 atIndex:7];
         [enc setTexture:(g_atlasTexture != nil ? g_atlasTexture : g_whiteTexture)
                  atIndex:0];
         [enc setSamplerState:g_sampler atIndex:0];
@@ -2265,10 +2335,16 @@ Java_net_prisma_pathtrace_Native_liveAtlasBufferNative(
 
 // Turn the staged atlas bytes into an MTLTexture and switch the live albedo
 // path to ATLAS_RGB. The next dispatched frame samples it.
+// v0.4.2: the texture creation (newTexture + buffer blit + waitUntilCompleted)
+// now runs OUTSIDE g_liveLock — v0.4.1 held the session mutex across a GPU
+// wait on the render thread, stalling every worker liveFrameNative for the
+// blit duration (and vice versa). Validation snapshots the staging state
+// under the lock; only the pointer swap is locked.
 JNIEXPORT jboolean JNICALL
 Java_net_prisma_pathtrace_Native_uploadAtlasNative(
         JNIEnv *env, jclass cls, jint width, jint height) {
     (void)env; (void)cls;
+    // ---- validation under the session lock ----
     @synchronized (g_liveLock) {
         if (g_atlasStaging == nil) {
             rp("[live] atlas upload reject: no staging buffer");
@@ -2280,17 +2356,24 @@ Java_net_prisma_pathtrace_Native_uploadAtlasNative(
                width, height, (unsigned long long)g_atlasStagingBytes);
             return JNI_FALSE;
         }
-        id<MTLTexture> tex =
-            make_texture_from_bytes(g_atlasStaging.contents,
-                                    (uint32_t)width, (uint32_t)height);
-        if (tex == nil) { return JNI_FALSE; }
+    }
+    // ---- GPU work outside the lock (render thread; once per session) ----
+    const void *staged;
+    @synchronized (g_liveLock) {
+        staged = g_atlasStaging.contents;
+    }
+    id<MTLTexture> tex =
+        make_texture_from_bytes(staged, (uint32_t)width, (uint32_t)height);
+    if (tex == nil) { return JNI_FALSE; }
+    // ---- swap under the lock (worker frames bind g_atlasTexture) ----
+    @synchronized (g_liveLock) {
         if (g_atlasTexture != nil) { [g_retired addObject:g_atlasTexture]; }
         g_atlasTexture = tex;
         g_liveAtlasMode = 1;
         rp("[live] atlas uploaded: %dx%d RGBA8 -> MTLTexture "
            "(albedo path: ATLAS_RGB x vertex tint)", width, height);
-        return JNI_TRUE;
     }
+    return JNI_TRUE;
 }
 
 // Worker-thread re-anchor. v0.4.1: NOT called by the live loop anymore —

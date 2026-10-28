@@ -15,7 +15,13 @@ import java.nio.ByteBuffer;
  *   DEAD(3)   任何异常一次性降级（游戏零影响），报告留 [compose] 行
  *
  * 判死开关：-Dpathtrace.compose=false → PathtraceMod 不 arm（mixin 已注入
- * 但永远 OFF，吞吐零影响）。
+ * 但永远 OFF，吞吐零影响）。（v0.4.2：开关语义修复——此前 Boolean.getBoolean
+ * 反转导致 =false 实际关不掉。）
+ *
+ * v0.4.2 atlas 开关：-Dpathtrace.atlas=false → 跳过 captureAtlas，albedo
+ * 保持顶点色（2.2 等价路径）。无论采集成功/降级/跳过，atlasEpoch 均递增
+ * ——LiveSession 据此在 epoch 变化后的下一轮循环（≤8ms）立即打一轮哨兵
+ * 电池，把“atlas 前后”括在同一时间线里。
  *
  * 线程：本类全部方法只在游戏渲染线程被调（swapBuffers 调用栈内）——GL
  * 上下文在该线程，所有 GL 反射调用天然合法。
@@ -42,6 +48,11 @@ public final class PathtraceHook {
 
     private PathtraceHook() {}
 
+    /** v0.4.2: 静默报告（GlComposer 防御性留行用——不落盘仅 stdout）。 */
+    static ProbeReport silentReport() {
+        return ProbeReport.SILENT;
+    }
+
     /** 探针线程：S8 武装（liveBegin 成功后调用）。 */
     static void arm(ProbeReport r) {
         report = r;
@@ -66,7 +77,14 @@ public final class PathtraceHook {
             if (s == ARMED) {
                 composer = new GlComposer();
                 composer.init(report);
-                composer.captureAtlas(report);
+                if (PathtraceMod.atlasEnabled()) {
+                    composer.captureAtlas(report);
+                } else {
+                    report.info("[S8.2] atlas 采集跳过（pathtrace.atlas=false ——"
+                            + " albedo 保持顶点色；二分开关：若本轮 camHit 恢复"
+                            + "非零 ⇒ atlas 上传链凶手坐实）");
+                }
+                PathtraceMod.atlasEpoch++;
                 state = ACTIVE;
             }
             if (state == ACTIVE) {

@@ -16,13 +16,17 @@ final class ProbeReport {
     private final Path file;
     private final Object lock = new Object();
 
+    /** v0.4.2: 静默单例（不落盘，仅 stdout）——防御性回退：GlComposer 在
+     * init 前被调用的理论路径下留行不丢异常。 */
+    static final ProbeReport SILENT = new ProbeReport(null);
+
     ProbeReport(String fileName) {
         String dir = System.getProperty("user.dir", ".");
-        this.file = Paths.get(dir, fileName);
+        this.file = fileName != null ? Paths.get(dir, fileName) : null;
     }
 
     String getFile() {
-        return file.toString();
+        return file != null ? file.toString() : "(silent)";
     }
 
     void header(String title) {
@@ -86,10 +90,12 @@ final class ProbeReport {
 
     private void line(String line) {
         synchronized (lock) {
-            try (OutputStream out = Files.newOutputStream(file,
-                    StandardOpenOption.CREATE, StandardOpenOption.APPEND)) {
-                write(out, line);
-            } catch (IOException ignored) {
+            if (file != null) {
+                try (OutputStream out = Files.newOutputStream(file,
+                        StandardOpenOption.CREATE, StandardOpenOption.APPEND)) {
+                    write(out, line);
+                } catch (IOException ignored) {
+                }
             }
         }
         System.out.println("[Pathtrace] " + line);

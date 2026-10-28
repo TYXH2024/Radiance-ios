@@ -22,6 +22,20 @@ import java.nio.file.Paths;
  *     与 [live] 行 camHit 互为印证——若哨兵命中而 camHit≈0，缺陷在 live
  *     帧派发；若两者皆 miss，缺陷在 TLAS/线程层。
  *
+ * v0.4.2 增量（v0.4.1 真机判读驱动——camHit 1s=100% → (1s,2s) 窗口内永久归零）：
+ *   - 哨兵电池升级：每行回显相机姿态（NaN/漂移直接现形）；新增 atlas
+ *     epoch 括号——PathtraceHook 采集完成（成功/降级/跳过均计）后，本线程
+ *     下一轮循环（≤8ms）立即打一轮电池，atlas 前后钉在同一时间线；
+ *     1.5s 早期点加密括号密度（毒化窗口 (1s,2s) 内必有至少两轮电池）。
+ *   - 哨兵 0/6 → 置 PathtraceMod.probeBatteryReq：探针线程交叉复测
+ *     （[probe-sentinel] 行）——同一 TLAS 同一组 ray 仅换派发线程，一步
+ *     分清“worker 派发路径坏”vs“AS 内容坏”。v0.4.1 全程探针线程在
+ *     S6.5 之后再没打过任何 ray，这正是缺失的关键 A/B。
+ *   - stats 墙钟化：v0.4.1 的 since-reset 分母在重置风暴下产出 2000/
+ *     89000 f/s 假值（分母 <1ms）；新增 wall f/s（Java 侧计帧、墙钟差分，
+ *     免疫重置）+ loopHz（循环频率——GPU 锁死/线程饥饿直接现形），
+ *     since-reset span 下限 200ms。
+ *
  * 循环（~30 Hz 相机轮询 + Metal 异步帧）：
  *   - 相机姿态反射读取（与 S6/S7 同链路）；位移/转角超阈值 → liveResetNative
  *     （下一帧 store 模式覆写累积，静止后重新收敛）
@@ -53,7 +67,8 @@ final class LiveSession implements Runnable {
     /** 周期行间隔（ms）：首 10s 每秒（A/B 密度），此后 5s。 */
     private static final long REPORT_EARLY_MS = 1_000L;
     private static final long REPORT_EVERY_MS = 5_000L;
-    /** 哨兵电池时刻（ms）：重锚前基线 ×2 + 探针 30s 重锚后 ×1。 */
+    /** 哨兵电池时刻（ms）：atlas 前基线（首循环）+ 1.5s 早期 + 重锚前基线 ×2 + 探针 30s 重锚后 ×1。 */
+    private static final long SENTINEL_EARLY_MS = 1_500L;
     private static final long SENTINEL_1_MS = 2_000L;
     private static final long SENTINEL_2_MS = 12_000L;
     private static final long SENTINEL_3_MS = 32_000L;
@@ -75,6 +90,18 @@ final class LiveSession implements Runnable {
     /** Java 侧镜像 native 帧计数（检测重置时刻——f/s 分母修复）。 */
     private long lastNativeFrames = -1;
     private long lastResetMs = 0;
+
+    // ---- v0.4.2 墙钟 stats（免疫重置风暴）----
+    /** Java 侧 liveFrameNative 调用计数（从不重置——wall f/s 分子）。 */
+    private long wallFrames = 0;
+    /** 上一报告行的墙钟时刻（ms）。 */
+    private long lastReportWallMs = 0;
+    /** 循环迭代计数（loopHz 分子）。 */
+    private long loopIters = 0;
+    /** 已见过的 atlas epoch（变化 → 括号电池）。 */
+    private int lastAtlasEpoch = 0;
+    /** 首轮 atlas 前基线电池是否已打。 */
+    private boolean preAtlasSentinelDone = false;
 
     LiveSession(ProbeReport r) {
         this.r = r;
@@ -98,6 +125,7 @@ final class LiveSession implements Runnable {
 
         boolean snap1Done = false;
         boolean snap2Done = false;
+        boolean sentEarlyDone = false;
         boolean sent1Done = false;
         boolean sent2Done = false;
         boolean sent3Done = false;
@@ -106,6 +134,7 @@ final class LiveSession implements Runnable {
         while (true) {
             Thread.sleep(FRAME_SLEEP_MS);
             long elapsedMs = elapsed();
+            loopIters++;
 
             // ---- 相机跟踪（世界退出容错：暂停而非终止）----
             float[] pose;
@@ -136,6 +165,17 @@ final class LiveSession implements Runnable {
 
             // ---- 累积一帧 ----
             Native.liveFrameNative(pose[0], pose[1], pose[2], pose[3], pose[4]);
+            wallFrames++;
+
+            // ---- v0.4.2: atlas epoch 括号（首循环前基线 + epoch 变化即时）----
+            if (!preAtlasSentinelDone) {
+                preAtlasSentinelDone = true;
+                sentinelBattery("atlas 前基线（t≈0，epoch=0）");
+            }
+            if (PathtraceMod.atlasEpoch != lastAtlasEpoch) {
+                lastAtlasEpoch = PathtraceMod.atlasEpoch;
+                sentinelBattery("atlas 后即时（epoch=" + lastAtlasEpoch + "）");
+            }
 
             // ---- 报告行（首 10s 每秒，此后 5s）----
             long cadence = elapsedMs < 10_000L ? REPORT_EARLY_MS : REPORT_EVERY_MS;
@@ -145,6 +185,10 @@ final class LiveSession implements Runnable {
             }
 
             // ---- worker 侧哨兵电池（A/B 仪器：本线程求交通道健康度）----
+            if (!sentEarlyDone && elapsedMs >= SENTINEL_EARLY_MS) {
+                sentEarlyDone = true;
+                sentinelBattery("1.5s 早期（毒化窗口加密点）");
+            }
             if (!sent1Done && elapsedMs >= SENTINEL_1_MS) {
                 sent1Done = true;
                 sentinelBattery("2s 重锚前基线");
@@ -197,29 +241,48 @@ final class LiveSession implements Runnable {
                 lastResetMs = elapsedMs;
             }
             lastNativeFrames = st[0];
-            double spanMs = Math.max(1, elapsedMs - lastResetMs);
+            // v0.4.2: span 下限 200ms——重置风暴下分母 <1ms 产出 2000/89000
+            // f/s 假值（v0.4.1 现场即如此）。真速率看后面的 wall f/s。
+            double spanMs = Math.max(200, elapsedMs - lastResetMs);
             double framesPerSec = st[0] * 1000.0 / spanMs;
+            // v0.4.2: 墙钟速率——Java 侧计帧差分（分子分母均从不重置，免疫
+            // 重置风暴）；loopHz = 循环频率（GPU 锁死/锁饥饿/线程饥饿直接现形）。
+            long wallSpanMs = Math.max(1, elapsedMs - lastReportWallMs);
+            double wallFps = (wallFrames - lastWallFramesAtReport) * 1000.0 / wallSpanMs;
+            double loopHz = loopIters * 1000.0 / Math.max(1, elapsedMs);
+            lastReportWallMs = elapsedMs;
+            lastWallFramesAtReport = wallFrames;
+            loopIters = 0;
             // v0.4.1: camHit% 分母 = 单帧样本数（W×H×spp/帧）。v0.4 误用累计
             // sppTotal——静止收敛后真命中率被抹成 0.0%（v0.4 现场即如此）。
             double frameSamples = (double) rtW() * rtH() * PathtraceMod.LIVE_SPP;
             double camHit = frameSamples > 0
                     ? st[6] * 100.0 / Math.max(1, (long) frameSamples) : 0;
-            double mrays = st[5] * framesPerSec / 1e6;
+            // v0.4.2: Mray/s 用墙钟速率（since-reset 帧率在风暴下无意义）。
+            double mrays = st[5] * wallFps / 1e6;
             r.info(String.format(
-                    "[live] %.0fs: frames=%d (%.1f f/s) spp=%d resets=%d | "
-                            + "上帧 %d 查询 camHit=%.1f%% (%.2f Mray/s) | %s",
-                    elapsedMs / 1000.0, st[0], framesPerSec, st[1], st[2],
-                    st[5], camHit, mrays,
+                    "[live] %.0fs: frames=%d (%.1f f/s) wall=%.1f f/s loop=%.0fHz"
+                            + " spp=%d resets=%d | 上帧 %d 查询 camHit=%.1f%%"
+                            + " (%.2f Mray/s) | %s",
+                    elapsedMs / 1000.0, st[0], framesPerSec, wallFps, loopHz,
+                    st[1], st[2], st[5], camHit, mrays,
                     st[7] == 1 ? "atlas=ATLAS_RGB" : "atlas=顶点色回退"));
         } catch (Throwable t) {
             r.fail("[live] 统计读取异常: " + t);
         }
     }
 
+    /** 上次报告行时的 wallFrames 快照（墙钟 f/s 分子差分用）。 */
+    private long lastWallFramesAtReport = 0;
+
     /**
      * worker 侧哨兵电池（v0.4.1 A/B 仪器）：六轴 castRayNative 直查当前
      * TLAS。与 [live] 行 camHit 互证：哨兵命中 + camHit≈0 ⇒ 缺陷在 live
      * 帧派发；两者皆 miss ⇒ TLAS/线程层。
+     *
+     * v0.4.2：①姿态回显（NaN/漂移在此行现形——"相机数据污染"假说一步杀）；
+     * ②0/6 时置 PathtraceMod.probeBatteryReq——探针线程交叉复测（只触发
+     * 一次，[probe-sentinel] 行）——worker 派发坏 vs AS 内容坏的终极 A/B。
      */
     private void sentinelBattery(String tag) {
         try {
@@ -245,13 +308,24 @@ final class LiveSession implements Runnable {
                     ? String.format("，-Y 脚下 %.2f 格（instance=%d）", downDist, downInst)
                     : "";
             r.pass(String.format(
-                    "[live-sentinel %s] worker 直查 TLAS：%d/6 命中%s —— "
+                    "[live-sentinel %s] worker 直查 TLAS：%d/6 命中%s | "
+                            + "cam=(%.2f, %.2f, %.2f) yaw=%.1f pitch=%.1f —— "
                             + "本线程求交通道健康度（与 [live] camHit 互证）",
-                    tag, hits, down));
+                    tag, hits, down, pose[0], pose[1], pose[2], pose[3], pose[4]));
+            if (hits == 0 && !probeReqSent) {
+                probeReqSent = true;
+                PathtraceMod.probeBatteryReq = true;
+                r.info("[live-sentinel] 零命中 → 已请求探针线程交叉复测"
+                        + "（[probe-sentinel] 行约 0.5s 内出现——同 TLAS 同射线"
+                        + "仅换线程：probe 命中=worker 派发坏；双 miss=AS 内容坏）");
+            }
         } catch (Throwable t) {
             r.fail("[live-sentinel " + tag + "] 异常: " + t);
         }
     }
+
+    /** 交叉复测请求已发（只发一次）。 */
+    private boolean probeReqSent = false;
 
     private int rtW() {
         try {
@@ -304,10 +378,13 @@ final class LiveSession implements Runnable {
             double frameSamples = (double) rtW() * rtH() * PathtraceMod.LIVE_SPP;
             double lastCamHit = frameSamples > 0
                     ? st[6] * 100.0 / Math.max(1, (long) frameSamples) : 0;
+            double wallFps = wallFrames * 1000.0 / Math.max(1, elapsed());
             r.info(String.format(
                     "会话统计: frames=%d spp=%d resets=%d refreshes=%d | "
-                            + "上帧 camHit=%.1f%% | hook: swap=%d blit=%d glErrors=%d",
-                    st[0], st[1], st[2], st[3], lastCamHit, swaps, blits, glErrs));
+                            + "上帧 camHit=%.1f%% | wall=%.1f f/s | hook: swap=%d "
+                            + "blit=%d glErrors=%d",
+                    st[0], st[1], st[2], st[3], lastCamHit, wallFps, swaps,
+                    blits, glErrs));
 
             String verdict;
             String message;
@@ -332,8 +409,10 @@ final class LiveSession implements Runnable {
             } else if (glErrs > 0) {
                 verdict = "LIVE_OK_WITH_GL_ERRORS";
                 message = "实时路径追踪已上屏（blit=" + blits + "），但 GL 层出现 "
-                        + glErrs + " 次错误计数——画面可能异常，回报本报告与目检"
-                        + "描述。";
+                        + glErrs + " 次错误计数——画面可能异常（错误码与几何"
+                        + "见 [compose] 行，首帧几何行直指底部花屏归因）。"
+                        + "camHit 与线程归责见 [live]/[live-sentinel]/"
+                        + "[probe-sentinel] 行。回报本报告与目检描述。";
             } else if (st[0] < 30) {
                 verdict = "ACCUM_STALLED";
                 message = "60s 内仅 " + st[0] + " 帧（预期 >100）——GPU 派发阻塞"
@@ -346,10 +425,11 @@ final class LiveSession implements Runnable {
                         + (st[7] == 1 ? "atlas albedo（ATLAS_RGB × 顶点色）"
                                       : "albedo 顶点色回退（atlas 未采集，"
                                         + "看 [S8.2] 行）")
-                        + "。v0.4.1 证据链：camHit 见 [live] 行（分母已修——"
+                        + "。v0.4.2 证据链：camHit 见 [live] 行（分母已修——"
                         + "v0.4 显示 bug 曾把真命中率抹成 0.0%）、TLAS 线程归责"
-                        + "见 [live-sentinel]/[S8.4] 行（探针构建 + worker 查询"
-                        + "A/B）。会话继续运行直到游戏退出——眼见为实。"
+                        + "见 [live-sentinel]/[probe-sentinel]/[S8.4] 行（探针"
+                        + "构建 + 双线程查询 A/B）、GL 错误分类学见 [compose] 行。"
+                        + "会话继续运行直到游戏退出——眼见为实。"
                         + "下一步（2.4）：反射/GI 质量与阴影 ray 复用、事件驱动"
                         + "摄取（mixin 化 SceneProxy）。";
             }
