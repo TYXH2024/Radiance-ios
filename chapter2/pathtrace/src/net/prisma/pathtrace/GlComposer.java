@@ -29,6 +29,15 @@ import java.nio.ByteBuffer;
  */
 final class GlComposer {
 
+    // v0.4.5: 合成帧计数（静态 volatile——[tlas-health] 死亡时刻关联事件：
+    // "死亡时已合成 N 帧"——TLAS 死亡与合成器帧序的相关性一步可见）。
+    private static volatile long composeFrameCounter = 0;
+
+    /** v0.4.5: 已合成帧数（健康监视器死亡行引用；无需锁——volatile 读）。 */
+    static long composeFrames() {
+        return composeFrameCounter;
+    }
+
     // ---- GL 常量（规范固定值）----
     private static final int GL_TEXTURE_2D = 0x0DE1;
     private static final int GL_RGBA = 0x1908;
@@ -495,6 +504,7 @@ final class GlComposer {
         final int dstW = winW > 0 ? winW : rtW;
         final int dstH = winH > 0 ? winH : rtH;
         presentCount++;
+        composeFrameCounter++;
 
         // ---- v0.4.4: 预排空（进队早于本帧的错误一律不归因本类）----
         // 上见字段区注释——v0.4.3 的每帧 INVALID_ENUM → break 弃帧 = 黑屏。

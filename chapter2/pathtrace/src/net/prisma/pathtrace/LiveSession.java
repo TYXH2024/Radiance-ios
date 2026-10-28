@@ -36,6 +36,20 @@ import java.nio.file.Paths;
  *     免疫重置）+ loopHz（循环频率——GPU 锁死/线程饥饿直接现形），
  *     since-reset span 下限 200ms。
  *
+ * v0.4.5 增量（v0.4.4 真机判读驱动——A20 Pro 上毒化为【时间级】定谳：
+ * 同一 TLAS#30 探针线程 30.05s 命中 2/6、32s 双线程双亡；0.6% 残存
+ * camHit 与快照 0.40% 非平坦像素 = 相机本地一小片幸存实例）：
+ *   - 健康监视器（[tlas-health] 行）：相机正下方 -Y 金丝瑞射线，首 10s
+ *     每 250ms——死亡时刻钉到 ±0.25s 并与 atlas 上传/首帧 ATLAS_RGB/
+ *     合成帧序一行关联；变迁即刻共享内存审计。
+ *   - 实例普查（[census] 行）：每实例一条 -Y 射线展开 157 实例幸存/
+ *     阵亡地图——连续索引区段=TLAS 实例记录线性扫写 / 空间聚集=距离
+ *     选择性失效 / 散布=BLAS 层；五点编排（基线/稳态/S8.4 新鲜/再衰减/晚窗）。
+ *   - 共享内存审计（[audit] 行 + native hexdump）：实例缓冲 vs 构建时
+ *     影子 memcmp + 64KB 确定性图案金丝瑞——共享侧越界写手当场落网。
+ *   - S8.7 阈值修复：camHit<0.5 → <2.0（v0.4.4 现场 0.6% 残存命中把
+ *     自愈触发器卡死——用户全程只见灰蒙）；+5s 自愈冷却防重建风暴。
+ *
  * 循环（~30 Hz 相机轮询 + Metal 异步帧）：
  *   - 相机姿态反射读取（与 S6/S7 同链路）；位移/转角超阈值 → liveResetNative
  *     （下一帧 store 模式覆写累积，静止后重新收敛）
@@ -79,6 +93,18 @@ final class LiveSession implements Runnable {
     private static final int MISS_STREAK_TRIGGER = 2;
     /** v0.4.4: 交叉复测请求冷却（ms）——每轮死电池都能拿到新鲜 probe 对照。 */
     private static final long PROBE_REQ_COOLDOWN_MS = 5_000L;
+    // ---- v0.4.5 毒化定谳仪器（v0.4.4 现场定谳：时间级毒化——同一 TLAS
+    // 探针线程重建后 0.05s 命中 2/6、32s 双线程双亡；S8.7 未触发系阈值
+    // bug：camHit<0.5 而现场卡在 0.6%——残存命中=相机本地一小片实例）----
+    /** 金丝瑞 -Y 射线检查密度（ms）：首 10s 每次 250ms，此后 1s。 */
+    private static final long HEALTH_EARLY_MS = 250L;
+    private static final long HEALTH_LATE_MS = 1_000L;
+    /** v0.4.5: 自愈重锚最小间隔（ms）——防止阈值放宽后的重建风暴，
+     * 每次自愈给用户 ~1-2s 真画面 + 一次毒化半衰期测量。 */
+    private static final long HEAL_COOLDOWN_MS = 5_000L;
+    /** v0.4.5: camHit 归零阈值（%）——v0.4.4 的 0.5 被现场 0.6% 残存命中
+     * 卡住（S8.7 全程未触发）；2.0 覆盖残存命中量级，仍远低于健康值。 */
+    private static final double CAMHIT_DEAD_PCT = 2.0;
 
     private final ProbeReport r;
     private final long startNs = System.nanoTime();
@@ -109,6 +135,26 @@ final class LiveSession implements Runnable {
     private int lastAtlasEpoch = 0;
     /** 首轮 atlas 前基线电池是否已打。 */
     private boolean preAtlasSentinelDone = false;
+
+    // ---- v0.4.5 健康监视器/普查/审计状态 ----
+    private long lastHealthMs = -1;
+    private boolean healthAlive = true;
+    private boolean healthEchoed = false;
+    /** atlas epoch 变化时刻（死亡行关联事件）。 */
+    private long atlasEpochMs = -1;
+    /** 首帧 ATLAS_RGB 时刻（st[7]==1 首次为真——死亡行关联事件）。 */
+    private long firstAtlasFrameMs = -1;
+    private boolean atlasFrameSeen = false;
+    /** 基线普查（atlas 前）结果。 */
+    private int[] censusBaseline = null;
+    private long censusBaselineMs = -1;
+    private boolean censusBaselineDone = false;
+    private boolean censusSteadyDone = false;
+    private boolean censusFreshDone = false;
+    private boolean censusDecayDone = false;
+    private boolean censusLateDone = false;
+    /** 最近一次自愈重锚请求时刻（冷却用）。 */
+    private long lastHealReqMs = -1;
 
     LiveSession(ProbeReport r) {
         this.r = r;
@@ -182,7 +228,39 @@ final class LiveSession implements Runnable {
             }
             if (PathtraceMod.atlasEpoch != lastAtlasEpoch) {
                 lastAtlasEpoch = PathtraceMod.atlasEpoch;
+                atlasEpochMs = elapsedMs;
                 sentinelBattery("atlas 后即时（epoch=" + lastAtlasEpoch + "）");
+            }
+
+            // ---- v0.4.5: TLAS 健康监视器（金丝瑞 -Y 射线，250ms 密度）----
+            // 仅变迁打行（附死亡时刻事件关联）；变迁即刻同步做共享内存审计。
+            long healthCadence = elapsedMs < 10_000L ? HEALTH_EARLY_MS : HEALTH_LATE_MS;
+            if (lastHealthMs < 0 || elapsedMs - lastHealthMs >= healthCadence) {
+                lastHealthMs = elapsedMs;
+                healthCheck(elapsedMs);
+            }
+
+            // ---- v0.4.5: 实例普查编排（基线→稳态→新鲜→再衰减→晚窗）----
+            if (!censusBaselineDone && elapsedMs >= 150L) {
+                censusBaselineDone = true;
+                censusBaselineMs = elapsedMs;
+                census("基线（atlas 前）", elapsedMs);
+            }
+            if (!censusSteadyDone && elapsedMs >= 3_000L) {
+                censusSteadyDone = true;
+                census("稳态毒化后", elapsedMs);
+            }
+            if (!censusFreshDone && elapsedMs >= 30_600L) {
+                censusFreshDone = true;
+                census("S8.4 重锚后新鲜", elapsedMs);
+            }
+            if (!censusDecayDone && elapsedMs >= 33_000L) {
+                censusDecayDone = true;
+                census("再衰减后", elapsedMs);
+            }
+            if (!censusLateDone && elapsedMs >= 58_000L) {
+                censusLateDone = true;
+                census("晚窗", elapsedMs);
             }
 
             // ---- 报告行（首 10s 每秒，此后 5s）----
@@ -291,15 +369,17 @@ final class LiveSession implements Runnable {
             // 与 verified 均 0/6——排除合法天空场景与句柄陈旧）才请求探针
             // 线程重建（worker 不建——v0.4.1 实证）。重建触发 [live] reset：
             // 若持续型毒化凶手仍在，用户也能看到周期性真噪点而非永久黑屏。----
-            if (st[5] > 0 && camHit < 0.5) {
+            if (st[5] > 0 && camHit < CAMHIT_DEAD_PCT) {
                 missStreak++;
-            } else if (camHit >= 0.5) {
+            } else if (camHit >= CAMHIT_DEAD_PCT) {
                 missStreak = 0;
             }
             if (missStreak >= MISS_STREAK_TRIGGER) {
                 missStreak = 0;
                 sentinelBattery("自愈前置（camHit 连续归零）");
-                if (sentinelBothDead) {
+                if (sentinelBothDead
+                        && (lastHealReqMs < 0 || elapsedMs - lastHealReqMs >= HEAL_COOLDOWN_MS)) {
+                    lastHealReqMs = elapsedMs;
                     healCount++;
                     PathtraceMod.reanchorReq = true;
                     r.info(String.format(
@@ -422,6 +502,187 @@ final class LiveSession implements Runnable {
     private int healCount = 0;
     /** v0.4.4: 最近一轮电池双死（g_tlas 与 verified 均 0/6）——自愈前置条件。 */
     private boolean sentinelBothDead = false;
+
+    // ------------------------------------------------------------------
+    // v0.4.5: TLAS 健康监视器（金丝瑞 -Y 射线）+ 实例普查 + 共享内存审计
+    // ------------------------------------------------------------------
+
+    /**
+     * 健康检查：相机正下方一条 -Y 射线（脚下 1.62 格内必有地板——v0.4.4
+     * 现场 cam=(4.50,70.62,22.50) 基线 2/6 含 -Y 命中）。250ms 密度把死亡
+     * 时刻钉到 ±0.25s，与 atlas 上传/首帧 ATLAS_RGB/合成帧序一行关联；
+     * 变迁即刻做共享内存审计（写手若在共享侧当场落网）。
+     */
+    private void healthCheck(long elapsedMs) {
+        try {
+            // 首帧 ATLAS_RGB 时刻（st[7]==1 首次为真）——死亡行关联事件。
+            if (!atlasFrameSeen) {
+                long[] st = Native.liveStatsNative();
+                if (st != null && st.length >= 8 && st[7] == 1) {
+                    atlasFrameSeen = true;
+                    firstAtlasFrameMs = elapsedMs;
+                }
+            }
+            float[] pose = PathtraceMod.cameraPose();
+            float[] res = Native.castRayNative(pose[0], pose[1], pose[2],
+                    0f, -1f, 0f, 512f);
+            boolean alive = res != null && res[0] > 0.5f;
+            if (alive != healthAlive || !healthEchoed) {
+                healthAlive = alive;
+                healthEchoed = true;
+                String ev = deathContext(elapsedMs);
+                if (alive) {
+                    r.pass(String.format(
+                            "[tlas-health] t=%.2fs 复活（-Y 脚下 %.2f 格命中）| %s",
+                            elapsedMs / 1000.0, res != null ? res[1] : -1f, ev));
+                } else {
+                    r.fail(String.format(
+                            "[tlas-health] t=%.2fs 死亡（-Y 金丝瑞 miss——相机"
+                                    + "正下方本有地板）| %s",
+                            elapsedMs / 1000.0, ev));
+                }
+                sharedAudit(elapsedMs);
+            }
+        } catch (Throwable t) {
+            r.fail("[tlas-health] 异常: " + t);
+        }
+    }
+
+    /** 死亡/复活行的事件关联串（相对时刻 + 合成帧序）。 */
+    private String deathContext(long elapsedMs) {
+        StringBuilder sb = new StringBuilder("事件关联:");
+        if (atlasEpochMs >= 0) {
+            sb.append(String.format(" atlas上传=%+.2fs",
+                    (atlasEpochMs - elapsedMs) / 1000.0));
+        } else {
+            sb.append(" atlas未上传");
+        }
+        if (firstAtlasFrameMs >= 0) {
+            sb.append(String.format(" 首帧ATLAS_RGB=%+.2fs",
+                    (firstAtlasFrameMs - elapsedMs) / 1000.0));
+        } else {
+            sb.append(" 仍顶点色帧");
+        }
+        sb.append(" compose=").append(GlComposer.composeFrames()).append("帧");
+        if (censusBaselineMs >= 0) {
+            sb.append(String.format(" 基线普查=%+.2fs",
+                    (censusBaselineMs - elapsedMs) / 1000.0));
+        }
+        return sb.toString();
+    }
+
+    /**
+     * 实例普查（v0.4.5 核心仪器）：把 v0.4.4 快照里 0.40% 的幸存几何带
+     * 展开成 157 实例的幸存/阵亡地图。判读法：
+     *   幸存集=连续索引区段 ⇒ TLAS 实例记录被线性扫写（配 [audit] 首异偏移）
+     *   幸存集=空间聚集（相机本地） ⇒ 遍历层距离选择性失效
+     *   幸存集=散布且重建后变化 ⇒ BLAS 层逐个被打坏
+     *   重建后幸存集与旧 TLAS 完全一致 ⇒ 毒化确定性命中同一批记录
+     */
+    private void census(String tag, long elapsedMs) {
+        try {
+            int[] cur = Native.instanceCensusNative();
+            if (cur == null || cur.length == 0) {
+                r.info("[census " + tag + "] 场景未就绪（无实例）");
+                return;
+            }
+            final int n = cur.length;
+            if (censusBaseline == null || censusBaseline.length != n) {
+                if (censusBaseline != null) {
+                    r.info("[census " + tag + "] 实例数变化（"
+                            + censusBaseline.length + "→" + n + "）——基线重置");
+                }
+                censusBaseline = cur.clone();
+            }
+            final int[] base = censusBaseline;
+            int alive = 0;
+            int selfHits = 0;
+            int survivors = 0;
+            int newlyDead = 0;
+            StringBuilder ranges = new StringBuilder();
+            int runStart = -1;
+            for (int i = 0; i <= n; i++) {
+                boolean hit = i < n && cur[i] > 0;
+                if (hit) {
+                    alive++;
+                    if (cur[i] == i + 1) {
+                        selfHits++;
+                    }
+                }
+                boolean survivor = i < n && base[i] > 0 && cur[i] > 0;
+                if (i < n && base[i] > 0 && cur[i] == 0) {
+                    newlyDead++;
+                }
+                if (survivor) {
+                    survivors++;
+                    if (runStart < 0) {
+                        runStart = i;
+                    }
+                } else {
+                    if (runStart >= 0) {
+                        if (ranges.length() > 0) {
+                            ranges.append(',');
+                        }
+                        ranges.append(runStart == i - 1
+                                ? String.valueOf(runStart)
+                                : runStart + "-" + (i - 1));
+                        runStart = -1;
+                    }
+                }
+            }
+            // 幸存集空间包围盒（相机本地聚集 vs 全域散布一步可辨）。
+            String spatial = "";
+            if (survivors > 0 && survivors <= n) {
+                float minx = Float.MAX_VALUE, maxx = -Float.MAX_VALUE;
+                float minz = Float.MAX_VALUE, maxz = -Float.MAX_VALUE;
+                for (int i = 0; i < n; i++) {
+                    if (base[i] > 0 && cur[i] > 0) {
+                        int[] o = Native.instanceOriginNative(i);
+                        if (o != null && o.length >= 3) {
+                            minx = Math.min(minx, o[0]);
+                            maxx = Math.max(maxx, o[0]);
+                            minz = Math.min(minz, o[2]);
+                            maxz = Math.max(maxz, o[2]);
+                        }
+                    }
+                }
+                if (minx <= maxx) {
+                    spatial = String.format(" 幸存XY盒=%dx%d格",
+                            (int) (maxx - minx), (int) (maxz - minz));
+                }
+            }
+            String rangeStr = ranges.length() > 96
+                    ? ranges.substring(0, 96) + "…" : ranges.toString();
+            r.pass(String.format(
+                    "[census %s] t=%.2fs: 命中列=%d/%d 自身=%d | 幸存=%d "
+                            + "新亡=%d%s | 幸存索引=%s",
+                    tag, elapsedMs / 1000.0, alive, n, selfHits,
+                    survivors, newlyDead, spatial, rangeStr));
+            sharedAudit(elapsedMs);
+        } catch (Throwable t) {
+            r.fail("[census " + tag + "] 异常: " + t);
+        }
+    }
+
+    /** 共享内存审计（实例缓冲影子 memcmp + 64KB 金丝瑞图案）行。 */
+    private void sharedAudit(long elapsedMs) {
+        try {
+            long[] a = Native.sharedAuditNative();
+            if (a == null || a.length < 8) {
+                return;
+            }
+            String inst = a[0] < 0 ? "无影子" : a[0] == 1 ? "干净"
+                    : String.format("被改写(首异@+%d)", a[1]);
+            String canary = a[4] < 0 ? "无金丝瑞" : a[4] == 1 ? "干净"
+                    : String.format("被改写(首异@+%d, %dB)", a[5], a[6]);
+            r.info(String.format(
+                    "[audit] t=%.2fs build#%d: 实例缓冲=%s 金丝瑞=%s —— "
+                            + "双净而 TLAS 死 ⇒ GPU 私有内存写手（二分轮收口）",
+                    elapsedMs / 1000.0, a[7], inst, canary));
+        } catch (Throwable t) {
+            r.fail("[audit] 异常: " + t);
+        }
+    }
 
     private int rtW() {
         try {

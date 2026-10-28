@@ -233,6 +233,22 @@ static const NSUInteger kGuardPad = 64 * 1024;
 static int32_t (*g_instOrigins)[3] = NULL;
 static uint32_t g_instOriginCount = 0;
 
+// v0.4.5: TLAS 毒化定谳仪器。v0.4.4 现场已定谳：毒化是【时间级】而非
+// 线程级——同一 TLAS#30 探针线程 30.05s 命中 2/6、32s 双线程双亡；残存
+// camHit 0.6% 与快照里 0.40% 非平坦像素（相机本地一条几何带）对应。
+// ①实例缓冲影子副本：构建时 CPU 侧字节快照——实例缓冲是 SHARED 存储，
+// 驱动/邻居的越界写入可用 memcmp 直接现形（首异字节偏移 + hexdump =
+// 写手签名）；②64KB 共享金丝雀：liveBegin 分配、确定性图案——任何
+// 越过我们分配边界的共享内存写手都会在图案上留下可读签名；③instance-
+// CensusNative：每实例一条 -Y 金丝瑞射线——幸存实例集合的【分布模式】
+// （连续区段=线性扫写 TLAS 实例记录 / 空间聚集=相机本地 / 散布=BLAS 层）
+// 一步指向毒化层。
+static uint8_t *g_instanceShadow = NULL;
+static uint64_t g_instanceShadowBytes = 0;
+static id<MTLBuffer> g_sharedCanary = nil;
+static const NSUInteger kCanaryBytes = 64 * 1024;
+static uint32_t g_liveAtlasDispatched = 0;
+
 // stats: [0]=readyBLAS [1]=totalTris [2]=totalVerts [3]=tlasBuilds
 //        [4]=blasBuilds [5]=vertexBytes [6]=indexBytes [7]=tlasBytes
 //        [8]=retiredPending
@@ -387,6 +403,15 @@ static void rebuild_tlas_locked(void) {
     id<MTLBuffer> instanceBuffer =
         [g_device newBufferWithBytes:instances length:instBytes
                               options:MTLResourceStorageModeShared];
+    // v0.4.5: 影子副本（先于 free——sharedAuditNative 的 memcmp 基准）。
+    {
+        uint8_t *shadow = (uint8_t *)realloc(g_instanceShadow, instBytes);
+        if (shadow != NULL) {
+            memcpy(shadow, instances, instBytes);
+            g_instanceShadow = shadow;
+            g_instanceShadowBytes = instBytes;
+        }
+    }
     free(instances);
     if (instanceBuffer == nil) { free(newOrigins); return; }
 
@@ -444,6 +469,16 @@ static void rebuild_tlas_locked(void) {
     // 双句柄 A/B 基准点。
     g_verifiedTlas = tlas;
     g_verifiedTlasBuild = g_stats[3];
+    // v0.4.5: 地址图（毒化若为邻居越界写，受害/幸存分配的相对布局即证据；
+    // as/instBuf 列与 v0.4.4 的 ptr=0x7F7D… 系列可比对）。
+    rp("[addr] TLAS build#%llu: as=%lluB obj=0x%llX instBuf(mem)=0x%llX "
+       "instBytes=%llu shadow(mem)=0x%llX",
+       (unsigned long long)g_stats[3],
+       (unsigned long long)sizes.accelerationStructureSize,
+       (unsigned long long)(uintptr_t)tlas,
+       (unsigned long long)(uintptr_t)instanceBuffer.contents,
+       (unsigned long long)instBytes,
+       (unsigned long long)(uintptr_t)g_instanceShadow);
 
     // ---- 2.2 shading pools (same slot order as the instances above) ----
     // triColors: 3 x uchar4 per triangle (via the quad-expanded index buffer,
@@ -1125,6 +1160,170 @@ Java_net_prisma_pathtrace_Native_tlasIdentityNative(JNIEnv *env, jclass cls) {
     }
     jlongArray result = (*env)->NewLongArray(env, 4);
     if (result != NULL) { (*env)->SetLongArrayRegion(env, result, 0, 4, out); }
+    return result;
+}
+
+// -------------------------------------------------------------------
+// v0.4.5: TLAS 毒化定谳仪器（实例普查 + 共享内存审计）
+// -------------------------------------------------------------------
+
+// 实例普查：每个 TLAS 实例（section 槽位）一条 -Y 金丝瑞射线——起点在
+// 该 section 自己的 16^3 盒内顶部中心（origin+8, oy+15.5, +8），向下贯穿
+// 整盒（maxDist=16）。命中的实例号回显（正常 = 自身；异常 = 他人/miss）。
+// v0.4.4 现场：毒化后幸存命中只剩相机本地一小片（快照 0.40% 非平坦带）。
+// 本仪器把"一小片"展开成 157 个实例的幸存/阵亡地图：
+//   幸存集 = 连续索引区段   ⇒ TLAS 实例记录被线性扫写（首异偏移对齐
+//                              sharedAuditNative 的 instanceBuffer memcmp）
+//   幸存集 = 空间聚集（相机本地）⇒ 遍历层按距离/AABB 选择性失效
+//   幸存集 = 散布且重建后变化 ⇒ BLAS 层逐个被打坏
+//   重建后幸存集与旧 TLAS 完全一致 ⇒ 毒化确定性命中同一批记录/BLAS
+// 返回 jint[n]：0 = miss；>0 = 命中实例号+1（i 位 = 自身命中自检）。
+// 代价 ~0.5ms/实例 × n（g_sceneLock 全程持有——一致性快照）。
+JNIEXPORT jintArray JNICALL
+Java_net_prisma_pathtrace_Native_instanceCensusNative(JNIEnv *env, jclass cls) {
+    (void)cls;
+    @synchronized (g_sceneLock) {
+        const uint32_t n = g_instOriginCount;
+        // n==0 → 空数组（Java 侧 length==0 分支：场景未就绪，不设基线）。
+        jintArray result = (*env)->NewIntArray(env, (jsize)n);
+        if (result == NULL) { return NULL; }
+        if (n == 0 || g_tlas == nil || g_pipeline == nil) {
+            return result;
+        }
+        jint *out = (jint *)calloc((size_t)n, sizeof(jint));
+        if (out == NULL) {
+            return result;
+        }
+        id<MTLAccelerationStructure> tlas = g_tlas;
+        double t0 = clockms();
+        for (uint32_t i = 0; i < n; i++) {
+            const float ox = (float)g_instOrigins[i][0] + 8.0f;
+            const float oy = (float)g_instOrigins[i][1] + 15.5f;
+            const float oz = (float)g_instOrigins[i][2] + 8.0f;
+            uint32_t hitFlag = 0; float dist = -1.0f; uint32_t instIdx = 0xFFFFFFFFu;
+            if (trace_ray(tlas, simd_make_float3(ox, oy, oz),
+                          simd_make_float3(0.0f, -1.0f, 0.0f), 16.0f,
+                          &hitFlag, &dist, &instIdx)) {
+                out[i] = hitFlag ? (jint)(instIdx + 1) : 0;
+            }
+        }
+        rp("[census] %u 实例金丝瑞电池完成（%.0f ms，tlas=build#%llu）",
+           (unsigned)n, clockms() - t0, (unsigned long long)g_stats[3]);
+        (*env)->SetIntArrayRegion(env, result, 0, (jsize)n, out);
+        free(out);
+        return result;
+    }
+}
+
+// FNV-1a 64（审计用——只求稳定性不求密码学）。
+static uint64_t fnv1a64(const uint8_t *p, uint64_t len) {
+    uint64_t h = 1469598103934665603ULL;
+    for (uint64_t i = 0; i < len; i++) {
+        h ^= (uint64_t)p[i];
+        h *= 1099511628211ULL;
+    }
+    return h;
+}
+
+// 共享内存审计：实例缓冲（MTLBuffer SHARED 存储）vs 构建时影子副本 +
+// 64KB 金丝瑞图案。毒化若发生在共享内存侧（CPU 或驱动 memcpy 越界），
+// 这里直接现形——首异偏移 + 32B hexdump 就是写手签名（SKIP 平移=行步长
+// 纹理图案 / 归零=memset 类 / 0xAA 类填充=驱动 poison 值）。若两项均
+// 干净而 TLAS 仍死亡 ⇒ 毒化在 GPU 私有内存（AS 自身/BLAS）——战场升级
+// 到 zink/MoltenVK GPU 侧写手（用户侧 atlas=false / compose=false 二分
+// 轮收口）。
+// 返回 jlong[8]：
+//   [0] inst match(1)/mismatch(0)/no-shadow(-1)  [1] inst 首异字节偏移(-1=无)
+//   [2] inst 影子 FNV                            [3] inst 现场值 FNV
+//   [4] canary match(1)/mismatch(0)/none(-1)     [5] canary 首异偏移(-1=无)
+//   [6] canary 被改字节数                        [7] 审计时 build#
+JNIEXPORT jlongArray JNICALL
+Java_net_prisma_pathtrace_Native_sharedAuditNative(JNIEnv *env, jclass cls) {
+    (void)cls;
+    jlong out[8] = { -1, -1, 0, 0, -1, -1, 0, 0 };
+    @synchronized (g_sceneLock) {
+        out[7] = (jlong)g_stats[3];
+        // ---- 实例缓冲 vs 影子 ----
+        if (g_instanceBuffer != nil && g_instanceShadow != NULL
+                && g_instanceShadowBytes > 0) {
+            const uint8_t *live = (const uint8_t *)g_instanceBuffer.contents;
+            const uint8_t *shadow = g_instanceShadow;
+            const uint64_t bytes = g_instanceShadowBytes;
+            out[2] = (jlong)fnv1a64(shadow, bytes);
+            out[3] = (jlong)fnv1a64(live, bytes);
+            if (out[2] == out[3] && memcmp(live, shadow, (size_t)bytes) == 0) {
+                out[0] = 1; out[1] = -1;
+            } else {
+                out[0] = 0;
+                uint64_t diff = 0;
+                uint64_t first = bytes;
+                for (uint64_t i = 0; i < bytes; i++) {
+                    if (live[i] != shadow[i]) {
+                        if (i < first) { first = i; }
+                        diff++;
+                    }
+                }
+                out[1] = (jlong)first;
+                rp("[audit] 实例缓冲被改写！首异 @+%llu/%llu B（共 %llu B "
+                   "不同，build#%llu）——写手签名 hexdump：",
+                   (unsigned long long)first, (unsigned long long)bytes,
+                   (unsigned long long)diff, (unsigned long long)g_stats[3]);
+                const uint64_t start = first > 16 ? first - 16 : 0;
+                const uint64_t end = (first + 16 < bytes) ? first + 16 : bytes;
+                for (uint64_t base = start; base < end; base += 16) {
+                    char a[64], b[64];
+                    int oa = 0, ob = 0;
+                    for (uint64_t k = 0; k < 16 && base + k < end; k++) {
+                        oa += snprintf(a + oa, sizeof(a) - oa, "%02X ",
+                                       live[base + k]);
+                        ob += snprintf(b + ob, sizeof(b) - ob, "%02X ",
+                                       shadow[base + k]);
+                    }
+                    rp("[audit]   +%llu: live  %s", (unsigned long long)base, a);
+                    rp("[audit]   +%llu: want  %s", (unsigned long long)base, b);
+                }
+            }
+        }
+        // ---- 金丝瑞图案 ----
+        if (g_sharedCanary != nil) {
+            const uint8_t *p = (const uint8_t *)g_sharedCanary.contents;
+            uint64_t diff = 0;
+            uint64_t first = kCanaryBytes;
+            for (NSUInteger i = 0; i < kCanaryBytes; i++) {
+                const uint8_t want = (uint8_t)(i * 31u + 7u);
+                if (p[i] != want) {
+                    if (i < first) { first = i; }
+                    diff++;
+                }
+            }
+            if (diff == 0) {
+                out[4] = 1; out[5] = -1; out[6] = 0;
+            } else {
+                out[4] = 0; out[5] = (jlong)first; out[6] = (jlong)diff;
+                rp("[audit] 金丝瑞被改写！首异 @+%llu/%llu B（共 %llu B "
+                   "不同）——越界写手落网签名：",
+                   (unsigned long long)first,
+                   (unsigned long long)kCanaryBytes,
+                   (unsigned long long)diff);
+                const uint64_t start = first > 16 ? first - 16 : 0;
+                const uint64_t end = ((uint64_t)first + 16 < (uint64_t)kCanaryBytes)
+                    ? (uint64_t)first + 16 : (uint64_t)kCanaryBytes;
+                for (uint64_t base = start; base < end; base += 16) {
+                    char a[64];
+                    int oa = 0;
+                    for (uint64_t k = 0; k < 16 && base + k < end; k++) {
+                        oa += snprintf(a + oa, sizeof(a) - oa, "%02X ",
+                                       p[base + k]);
+                    }
+                    rp("[audit]   +%llu: live  %s (want %02X)",
+                       (unsigned long long)base, a,
+                       (unsigned)((base) * 31u + 7u) & 0xFFu);
+                }
+            }
+        }
+    }
+    jlongArray result = (*env)->NewLongArray(env, 8);
+    if (result != NULL) { (*env)->SetLongArrayRegion(env, result, 0, 8, out); }
     return result;
 }
 
@@ -2148,6 +2347,19 @@ Java_net_prisma_pathtrace_Native_liveBeginNative(
             return JNI_FALSE;
         }
         memset(g_liveStats.contents, 0, 2 * sizeof(uint32_t));
+        // v0.4.5: 共享金丝瑞（64KB 确定性图案，sharedAuditNative 周期比对；
+        // 分配在 accum/image 之后——若越界写手按分配顺序扫射，金丝瑞与
+        // 实例缓冲至少一个会被打中，签名直接可读）。
+        g_sharedCanary =
+            [g_device newBufferWithLength:kCanaryBytes
+                                 options:MTLResourceStorageModeShared];
+        if (g_sharedCanary != nil) {
+            uint8_t *p = (uint8_t *)g_sharedCanary.contents;
+            for (NSUInteger i = 0; i < kCanaryBytes; i++) {
+                p[i] = (uint8_t)(i * 31u + 7u);
+            }
+        }
+        g_liveAtlasDispatched = 0;
         g_liveW = (uint32_t)width; g_liveH = (uint32_t)height;
         g_liveSpp = (uint32_t)sppPerFrame; g_liveBounces = (uint32_t)bounces;
         g_liveFrames = 0; g_liveSppTotal = 0; g_liveResets = 0;
@@ -2158,6 +2370,17 @@ Java_net_prisma_pathtrace_Native_liveBeginNative(
         rp("[live] session begun: %dx%d spp/frame=%d bounces=%d "
            "(atlas=%s)", width, height, sppPerFrame, bounces,
            g_atlasTexture != nil ? "ATLAS_RGB" : "white-vertex-color");
+        // v0.4.5: 会话缓冲地址图（与 [addr] TLAS 行同格式——统一布局视图）。
+        rp("[addr] live bufs: accum(mem)=0x%llX image(mem)=0x%llX "
+           "staging(mem)=0x%llX canary(mem)=0x%llX uniform(mem)=0x%llX "
+           "stats(mem)=0x%llX",
+           (unsigned long long)(uintptr_t)g_liveAccum.contents,
+           (unsigned long long)(uintptr_t)g_liveImage.contents,
+           (unsigned long long)(uintptr_t)g_liveStaging.contents,
+           (unsigned long long)(uintptr_t)(g_sharedCanary != nil
+               ? g_sharedCanary.contents : NULL),
+           (unsigned long long)(uintptr_t)g_liveUniform.contents,
+           (unsigned long long)(uintptr_t)g_liveStats.contents);
         return JNI_TRUE;
     }
 }
@@ -2236,6 +2459,13 @@ Java_net_prisma_pathtrace_Native_liveFrameNative(
                 || triBase == nil || uvPool == nil) {
             rp("[live] frame skipped: scene state unavailable (TLAS/pools)");
             return result;
+        }
+        // v0.4.5: 首帧 ATLAS_RGB 派发标记——死亡时刻关联事件（毒化窗口内
+        // 的关键事件时间戳，[tlas-health] 行引用）。
+        if (g_atlasTexture != nil && g_liveAtlasDispatched == 0) {
+            g_liveAtlasDispatched = 1;
+            rp("[live] first ATLAS_RGB frame dispatched (tlas=build#%llu)",
+               (unsigned long long)g_stats[3]);
         }
         const uint32_t resetFlag = (g_liveFrames == 0) ? 1u : 0u;
         const uint32_t sppTotalNext = g_liveSppTotal + g_liveSpp;
@@ -2533,6 +2763,14 @@ Java_net_prisma_pathtrace_Native_shutdownNative(JNIEnv *env, jclass cls) {
     g_atlasStaging = nil;
     g_atlasStagingData = NULL;
     g_atlasStagingBytes = 0;
+    // v0.4.5: 毒化仪器状态（影子/金丝瑞/首帧标记）。
+    g_sharedCanary = nil;
+    g_liveAtlasDispatched = 0;
+    if (g_instanceShadow != NULL) {
+        free(g_instanceShadow);
+        g_instanceShadow = NULL;
+        g_instanceShadowBytes = 0;
+    }
     g_liveAtlasMode = 0;
     g_poolTris = 0;
     g_tlasDirty = NO;

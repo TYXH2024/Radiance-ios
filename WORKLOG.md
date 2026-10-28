@@ -368,3 +368,26 @@ Stage Summary:
 - v0.4.3 判读定谳：黑屏=GL 错误误归因+整帧弃帧（break）；TLAS 毒化=未定谳但已装齐判决仪器（双句柄 A/B/身份/耗时/半衰期/自愈）
 - v0.4.4 交付：pathtrace-v0.4.4——黑屏四件套大概率直接修复上屏（预排空消误记+重试自愈）；TLAS 毒化下轮真机的判读焦点：[compose] 首帧调用归因梯（INVALID_ENUM 出生地）、[live-sentinel] verified 栏与耗时、[S8.7] 自愈频率、[live] tlas=build# 与 camHit 相关性、atlas=false 二分轮
 - 二分协议：默认轮 + -Dpathtrace.atlas=false 轮各 60s——atlas=false 轮 TLAS 全程存活 ⇒ atlas 采集链（glReadPixels 写目标平移打坏 GPU 堆邻居）凶手坐实 ⇒ v0.4.5 定点修
+
+## 2026-10-28（十九）· pathtrace v0.4.4 真机回收判读：LIVE_OK（黑屏修复坐实）+ TLAS 毒化定谳【时间级】→ v0.4.5 三仪定谳包
+
+Task: 回收 v0.4.4 真机产物（A20 Pro 19:45 run：report + live/live_final PNG，用户症状"灰蒙渐变+中途一次重置再渐变"）→ 像素级+时间线判读 → v0.4.5
+
+Work Log:
+- **设备更正**：v0.4.3/0.4.4 两轮现场实为 **A20 Pro**（S8.1 行 renderer=zink(Apple A20 Pro GPU) 为准；归档文件名"M3-"误标——用户已提醒切机，此前未察觉）。本轮起回报文件名按设备命名，归档改名 A20Pro-v0.4.4-*
+- **P0-1 黑屏：修复坐实 ✓**——首帧归因梯全 0x0000（重置/bind/段0/段0重试/段1 每步净）；pname 掩码 0x0；心跳全程 texSubErr=0 blitErr=0 chunkFail=0；retryOk=4862 全部为排空前遗留误记（无一真失败）；blit=4753 帧上屏、进程全程存活、atlas 采集 PASS（skip=0——v0.4.3 的 SKIP 污染路径未再现，回读验证生效或环境变化）
+- **P0-2 TLAS 毒化：定谳为时间级而非线程级**——决定性证据链：①同一 TLAS#30（探针线程 30s 重建）：探针 30.05s 查询 2/6 命中（格线2+-Y 脚下）→ **32s 探针（交叉复测#3）+worker 双 0/6**；②TLAS#29 同轨迹：epoch=0/1 即时 worker 2/6（atlas 上传后仍活）→ 1.5s 双亡 → 2s/12s 持续双亡；③六射线耗时 7ms（活）→3ms（死）= 快 miss 空遍历签名（v0.4.3 为 77ms 垃圾遍历——两轮毒化形态不同或渐进）。**结论：新建 AS 在 ~2s 内被原地打坏，与查询线程无关——v0.4.1"线程归责"框架正式出局，v0.4.3"探针 2/6 vs worker 0/6"实为新鲜度差异非线程差异**
+- **残存命中解剖**：camHit 卡 0.6%（~3.1k/521.6k 查询）↔ 快照 0.40% 非平坦像素（自写 PNG 解码器分带/分列统计）：相机正下方一小片带状几何（y∈[135,216]、x∈[69,472]，15s/55s 同形）——毒化后为**稳定部分态**（个别实例/子树幸存，非全灭）
+- **用户症状闭环**："渐变到灰色朦胧" = camHit 1s 内 1.9%→0.6% 归零，pitch=90 俯视地面全屏变地平线色 (167,174,181)（tonemap 精确值）；"中间一次重置再渐变" = S8.4 30s 探针重锚（唯一 resets=1）+ TLAS#30 建成即衰亡；**非 S8.7 自愈——阈值 bug：触发条件 camHit<0.5 被现场 0.6% 残存卡死，自愈全程未触发**
+- **离线代码审计**（找 OOB 写手，均排除）：MSL 内核入口 bounds guard、accum/image 写全部有界、atlas 只读采样；trace_ray/liveFrame 全走共享 g_device/g_queue（无线程私有状态）；atlas 上传 = 私有纹理+精确 blit+同步等待（时序上也被 epoch=1 即时命中排除即时毒源）；make_texture_from_bytes 归一。嫌疑收敛到：atlas 链延迟效应 / 合成器 GL 链 / zink-MoltenVK GPU 侧写手——**留给三轮二分现场定谳**
+- v0.4.5 三仪（把"一小片"展开定谳）：①**instanceCensusNative** 每实例 -Y 金丝瑞射线（盒内顶部中心向下 16 格）→ 157 实例幸存/阵亡地图——连续索引区段=TLAS 实例记录线性扫写 / 空间聚集=距离选择性失效 / 散布=BLAS 层；Java 五点编排（基线 t≈0.15s / 稳态 3s / S8.4 新鲜 30.6s / 再衰减 33s / 晚窗 58s）+ 幸存 XY 盒 + 基线相对分析（合法 miss 列不误报）
+- ②**sharedAuditNative**：实例缓冲（SHARED 存储）vs 构建时影子副本 memcmp（首异偏移+32B hexdump=写手签名：SKIP 平移=行步长图案 / 归零=memset / 0xAA=驱动 poison）+ 64KB 确定性图案金丝瑞（liveBegin 分配）——共享侧越界写手当场落网；双净而 TLAS 死 ⇒ GPU 私有内存写手
+- ③**[tlas-health] 健康监视器**：相机正下方 -Y 金丝瑞射线 250ms 密度（首 10s），仅变迁打行 + 死亡时刻事件关联（atlas 上传 Δ/首帧 ATLAS_RGB Δ——native [live] first ATLAS_RGB frame dispatched 标记+Java st[7] 检测 / compose 帧序——GlComposer 静态计数器）；变迁即刻 [audit]
+- v0.4.5 修复：S8.7 阈值 camHit<0.5→**<2.0**（0.6% 残存卡死 bug）+ 5s 自愈冷却（防重建风暴）——毒化仍在时用户看到周期性 ~1-2s 真画面（每次自愈=一次半衰期测量）；[addr] 地址图（TLAS obj/实例缓冲 mem/影子/金丝瑞/会话缓冲——邻居越界写布局证据）
+- 冒烟 smoke_pathtrace_v045.sh：ecj 14 类零错误（-proc:none——sponge-mixin 注解处理器缺 ASM 依赖且无需激活）/ 括号平衡 414:414 / JNI 30:30 对位（含两新入口）/ YAML 6 步 / 9 仪器符号在场；**自查抓获一处编辑事故**：liveBeginNative 的 g_liveW/H 赋值行被吞（会致零渲染线程）——已补回+复测
+- 版本链 bump 0.4.5（fabric.mod.json/build.sh/报告头/workflow TAG+2 新 JNI nm 校验+release notes/README 三轮二分协议+设备命名纪律）；现场归档 A20Pro-v0.4.4-{report,live15s,live55s} + 判读存档
+
+Stage Summary:
+- v0.4.4 判读定谳：黑屏修复闭环（四件套全胜）；毒化=时间级（新建 AS ~2s 内被原地打坏，线程无关）+ 稳定部分态（相机本地一小片幸存）；S8.7 未触发=阈值 bug 而非条件错
+- v0.4.5 交付：pathtrace-v0.4.5——普查/审计/健康监视器三仪 + 自愈阈值修复；下一轮真机判读焦点：[tlas-health] 死亡时刻与事件关联、[census] 幸存地图模式、[audit] 共享侧 vs GPU 私有侧、[S8.7] 自愈周期、三轮二分（默认/atlas=false/compose=false）存活分流
+- 待办：①CI 过绿 + Release pathtrace-v0.4.5 ②用户三轮 60s 真机（同存档同姿态）③据 [census]/[audit]/二分结果定 v0.4.6 定点修复（若 atlas 链坐实→修采集；若 GPU 私有侧→考虑分配隔离/驱动层绕行）④M3 复测一轮对照（设备特异性排查）

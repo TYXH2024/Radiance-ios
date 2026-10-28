@@ -42,16 +42,16 @@ jobs:
           set -ex
           chmod +x chapter2/pathtrace/build.sh
           bash chapter2/pathtrace/build.sh
-          JAR="chapter2/pathtrace/pathtrace-0.4.4.jar"
+          JAR="chapter2/pathtrace/pathtrace-0.4.5.jar"
           test -f "$JAR"
-          cp "$JAR" ./pathtrace-0.4.4.jar
+          cp "$JAR" ./pathtrace-0.4.5.jar
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: pathtrace-jar
           path: |
-            pathtrace-0.4.4.jar
+            pathtrace-0.4.5.jar
             chapter2/pathtrace/build/native/libradiance_pathtrace.dylib
             chapter2/pathtrace/build/native/pathtrace.metallib
           if-no-files-found: error
@@ -72,6 +72,11 @@ jobs:
             && echo "JNI_EXPORT_OK(castRayVerifiedNative)"
           nm -gU "$DYLIB" | grep -q "Java_net_prisma_pathtrace_Native_tlasIdentityNative" \
             && echo "JNI_EXPORT_OK(tlasIdentityNative)"
+          # v0.4.5: 实例普查 + 共享内存审计（TLAS 毒化定谳仪器）
+          nm -gU "$DYLIB" | grep -q "Java_net_prisma_pathtrace_Native_instanceCensusNative" \
+            && echo "JNI_EXPORT_OK(instanceCensusNative)"
+          nm -gU "$DYLIB" | grep -q "Java_net_prisma_pathtrace_Native_sharedAuditNative" \
+            && echo "JNI_EXPORT_OK(sharedAuditNative)"
           nm -gU "$DYLIB" | grep -q "Java_net_prisma_pathtrace_Native_sentinelProbeNative" \
             && echo "JNI_EXPORT_OK(sentinelProbeNative)"
           nm -gU "$DYLIB" | grep -q "Java_net_prisma_pathtrace_Native_sceneStatsNative" \
@@ -106,7 +111,7 @@ jobs:
           file "$METALLIB"
           test -s "$METALLIB"
           # JAR 内容验证：mixin 类 + mixins.json 必须在包内
-          JAR="chapter2/pathtrace/pathtrace-0.4.4.jar"
+          JAR="chapter2/pathtrace/pathtrace-0.4.5.jar"
           unzip -l "$JAR" | grep -q "net/prisma/pathtrace/mixin/PathtraceWindowMixin.class" \
             && echo "JAR_MIXIN_CLASS_OK"
           unzip -l "$JAR" | grep -q "pathtrace.mixins.json" \
@@ -114,72 +119,64 @@ jobs:
           unzip -l "$JAR" | grep -q "fabric.mod.json" \
             && echo "JAR_FABRIC_MOD_OK"
 
-      - name: Release (pathtrace-v0.4.4, prerelease)
+      - name: Release (pathtrace-v0.4.5, prerelease)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -ex
-          TAG="pathtrace-v0.4.4"
-          TITLE="pathtrace v0.4.4 — v0.4.3 真机黑屏定谳（GL 错误误归因+整帧弃帧）+ TLAS 毒化追凶仪器 + 自愈重锚"
+          TAG="pathtrace-v0.4.5"
+          TITLE="pathtrace v0.4.5 — v0.4.4 真机定谳（毒化=时间级非线程级；黑屏已修）+ 普查/审计/健康监视器三仪 + 自愈阈值修复"
           NOTES_FILE=release-notes.md
           cat > "$NOTES_FILE" <<'EOF'
-          # pathtrace v0.4.4 — v0.4.3 真机回收：黑屏定谳 + TLAS 毒化追凶 + 自愈
+          # pathtrace v0.4.5 — v0.4.4 真机回收判读 + 毒化定谳仪器三件套
 
-          **v0.4.3 真机判定**（2026-10-28 双 run 现场）：
-          - run1（v0.4.2，17:55）：camHit 35.7%（真噪点出屏）→ ~1.5s
-            SIGSEGV——v0.4.3 已定谳的 SKIP_ROWS=112 平移读源越界。
-          - run2（v0.4.3，18:20）：防崩四件套生效（进程存活、skipRows=112
-            现场捕获坐实）——但两个新 P0：
+          **v0.4.4 真机判定（A20 Pro，19:45 run）**：
+          - **P0-1 黑屏：已修复 ✓**——归因梯全 0、心跳零真错、blit=4753 帧
+            上屏、进程全程存活；[compose] 段级重试自愈 4862 次（全部为排空
+            前遗留误记，无一真失败）。
+          - **P0-2 TLAS 毒化：定谳为【时间级】而非线程级**——同一 TLAS#30
+            （探针线程 30s 重建）：探针 30.05s 查询 2/6 命中，32s 探针+
+            worker 双 0/6（交叉复测 #3）；TLAS#29 同样在 atlas 后 ~1s 内
+            由活转死（epoch=1 即时探针 2/6 → 1.5s 双亡）。**新建 AS 在
+            ~2s 内被原地打坏，与查询线程无关**。
+          - 残存 camHit=0.6% 与快照 0.40% 非平坦像素精确对应：相机正下方
+            一小片几何幸存（15s/55s 快照同形——毒化后为稳定部分态）。
+            用户看到的"灰蒙渐变+中途一次重置再渐变" = camHit 归零后全屏
+            地平线色 + S8.4 30s 重锚（非 S8.7 自愈——阈值 bug 使其未触发）。
 
-          **P0-1 黑屏**：每帧 chunked texSubImage2D 首段 GL_INVALID_ENUM
-          → break 弃帧（texSubErr=2815/2816 帧全灭）→ RT 纹理永黑 =
-          用户"黑块"。根因：present() 缺预排空——进队早于本帧的错误
-          （游戏侧渲染/上一帧恢复序列/本类五元组读写）被段 0 后第一个
-          glGetError 误记到上传头上；v0.4.2 同采样 89s 仅 10 错 vs
-          v0.4.3 每帧必错，时间线直指每帧新增调用。
+          **本版三仪（把"一小片"展开定谳）**：
+          1. **实例普查 [census]**：每实例一条 -Y 金丝瑞射线，157 实例
+             幸存/阵亡地图——连续索引区段=TLAS 实例记录线性扫写 /
+             空间聚集=距离选择性失效 / 散布=BLAS 层；五点编排
+             （基线/稳态/S8.4 新鲜/再衰减/晚窗）。
+          2. **共享内存审计 [audit]**：实例缓冲 vs 构建时影子 memcmp +
+             64KB 确定性图案金丝瑞——共享侧越界写手当场落网（首异偏移
+             +hexdump=写手签名）；双净而 TLAS 死 ⇒ GPU 私有内存写手。
+          3. **健康监视器 [tlas-health]**：相机正下方 -Y 射线 250ms 密度
+             ——死亡时刻钉到 ±0.25s 并与 atlas 上传/首帧 ATLAS_RGB/
+             合成帧序一行关联。
 
-          **P0-2 TLAS 毒化**：live ~1s 后全员归零（worker+probe 双 0/6
-          = AS 内容坏）；30s 探针重建后 probe 2/6 恢复而 worker 仍 0/6；
-          同 518400 全 miss 查询从 ~10ms 涨到 ~77ms（慢 miss = 垃圾
-          遍历签名）。凶手待定（atlas=false 二分开关本轮未跑）。
+          **本版修复**：S8.7 自愈阈值 camHit<0.5 → <2.0（v0.4.4 现场
+          0.6% 残存命中把触发器卡死——用户全程只见灰蒙）+ 5s 冷却防
+          重建风暴——毒化仍在时用户看到周期性真画面（每次重建约 1-2s
+          真画面 + 一次半衰期测量）。
 
-          **本版修复（黑屏）——present 四件套**：
-          1. **预排空**：进队早于本帧的错误一律不归因上传
-          2. **pname 掩码探测**：SKIP_PIXELS/SKIP_ROWS/SWAP_BYTES 读+写
-             各探错，被拒 pname 跳过读/重置/恢复三连（被拒即不可能
-             被污染）
-          3. **首帧调用归因梯**：重置段/bind/段0/段0重试/段1 每步独立
-             采样——INVALID_ENUM 出生地一步定谳
-          4. **段级重试**：首错排空后重打一次（误记自愈）；重试仍错才
-             计真失败且继续后续段——部分帧 >> 零帧
-
-          **本版防御（atlas 采集）**：PACK 重置后回读验证——状态不可控
-          即中止采集回退顶点色（glReadPixels 写目标平移的越界量级可
-          远超 64KB guard，是 TLAS 毒化悬案头号嫌疑——宁缺毋滥）。
-
-          **本版仪器（TLAS 毒化追凶）**：
-          - **g_verifiedTlas 双句柄 A/B**（castRayVerifiedNative）：同 ray
-            换句柄来源——g_tlas=0+verified>0 ⇒ 句柄陈旧；双 0 ⇒ 毒化/
-            GPU 层；双 >0 ⇒ 渲染通路
-          - [live-sentinel] 行升级：TLAS 身份（build#+指针）+ 六射线耗时
-            （慢+全 miss = 毒化签名）+ verified 电池
-          - [live] 行加 tlas=build#N——camHit 衰减与 build 年龄相关性
-            一行可见
-          - 34s 延迟复测（毒化半衰期）+ 交叉复测 5s 冷却（可重复触发）
-          - **自愈重锚 [S8.7]**：camHit 连续归零 + 哨兵双死 → 探针线程
-            立即重建（不等 30s）——持续型毒化下用户看到周期性真噪点
-            而非永久黑屏
-
-          **使用**：替换 mods/ 内旧 JAR → 默认配置跑一轮 60s；再跑一轮
-          `-Dpathtrace.atlas=false`（二分：TLAS 存活 ⇒ atlas 采集链凶手
-          坐实）。回报 pathtrace_report.txt + pathtrace_live*.png（重点：
-          [compose] 首帧调用归因梯 / pname 探测 / [live-sentinel]
-          verified 与耗时栏 / [S8.7] 自愈行 / [live] tlas=build#）。
+          **使用（三轮二分——关键）**：替换 mods/ 内旧 JAR，同一存档
+          同一姿态：
+          1. 默认跑 60s
+          2. `-Dpathtrace.atlas=false` 跑 60s（TLAS 全程存活 ⇒ atlas 链
+             凶手坐实）
+          3. `-Dpathtrace.compose=false` 跑 60s（存活 ⇒ 合成器 GL 链
+             凶手坐实；两轮均死 ⇒ 渲染环/驱动层）
+          回报每轮 pathtrace_report.txt（重点：[tlas-health] 死亡行/
+          [census] 五点/[audit]/[S8.7] 自愈周期）。文件名按设备命名
+          （如 A20Pro-default.txt）——v0.4.3/0.4.4 的"M3-"前缀实为
+          A20 Pro 运行，教训立此存照。
           EOF
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release upload "$TAG" ./pathtrace-0.4.4.jar --clobber --repo "$GITHUB_REPOSITORY"
+            gh release upload "$TAG" ./pathtrace-0.4.5.jar --clobber --repo "$GITHUB_REPOSITORY"
           else
-            gh release create "$TAG" ./pathtrace-0.4.4.jar \
+            gh release create "$TAG" ./pathtrace-0.4.5.jar \
                  --title "$TITLE" --notes-file "$NOTES_FILE" \
                  --prerelease --repo "$GITHUB_REPOSITORY"
           fi

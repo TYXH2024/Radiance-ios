@@ -1,0 +1,1286 @@
+==============================================================
+路径追踪探针 (pathtrace 0.4.4) —— Radiance 移植第二章 2.2
+时间: Wed Oct 28 19:45:45 CST 2026
+报告文件: /var/mobile/Containers/Data/Application/8BCCCFC1-5C33-44BA-811F-FC58EE9FCC6E/Documents/instances/default/versions/fabric-loader-0.20.1-1.21.4/game/pathtrace_report.txt
+==============================================================
+
+[INFO ] 触发方式: CLIENT_STARTED
+
+---- S0 环境快照 ----
+[INFO ] java.version  = 21.0.8-internal
+[INFO ] java.vm.name  = OpenJDK 64-Bit Server VM
+[INFO ] os.name       = Mac OS X / aarch64
+[INFO ] user.dir      = /var/mobile/Containers/Data/Application/8BCCCFC1-5C33-44BA-811F-FC58EE9FCC6E/Documents/instances/default/versions/fabric-loader-0.20.1-1.21.4/game
+[INFO ] AMETHYST_RENDERER = libOSMesa.8.dylib
+[INFO ] GALLIUM_DRIVER     = null
+[INFO ] pojav.lwjgl.version = 333
+[INFO ] org.lwjgl.opengl.libname = libOSMesa.8.dylib
+[INFO ] org.lwjgl.vulkan.libname = MoltenVK
+
+---- S1 解包原生资产（JAR -> game 目录） ----
+[PASS ] 解包完成: /var/mobile/Containers/Data/Application/8BCCCFC1-5C33-44BA-811F-FC58EE9FCC6E/Documents/instances/default/versions/fabric-loader-0.20.1-1.21.4/game/pathtrace/libradiance_pathtrace.dylib (134832 B)
+[INFO ] metallib: /var/mobile/Containers/Data/Application/8BCCCFC1-5C33-44BA-811F-FC58EE9FCC6E/Documents/instances/default/versions/fabric-loader-0.20.1-1.21.4/game/pathtrace/pathtrace.metallib (21682 B)
+
+---- S2 System.load 装载 dylib（投送通道验证） ----
+[PASS ] dylib 装载成功（与 2.0/2.1 相同的受信装载链）
+
+---- S3 反射符号审计（intermediary 符号表逐项解析） ----
+[PASS ] class net.minecraft.class_310
+[PASS ] class net.minecraft.class_761
+[PASS ] class net.minecraft.class_769
+[PASS ] class net.minecraft.class_846
+[PASS ] class net.minecraft.class_846$class_851
+[PASS ] class net.minecraft.class_2382
+[PASS ] class net.minecraft.class_2338
+[PASS ] class net.minecraft.class_4076
+[PASS ] class net.minecraft.class_6850
+[PASS ] class net.minecraft.class_853
+[PASS ] class net.minecraft.class_9810
+[PASS ] class net.minecraft.class_9810$class_9811
+[PASS ] class net.minecraft.class_9801
+[PASS ] class net.minecraft.class_9801$class_4574
+[PASS ] class net.minecraft.class_293
+[PASS ] class net.minecraft.class_296
+[PASS ] class net.minecraft.class_8251
+[PASS ] class net.minecraft.class_750
+[PASS ] class net.minecraft.class_4184
+[PASS ] class net.minecraft.class_243
+[PASS ] class net.minecraft.class_757
+[PASS ] class net.minecraft.class_638
+[PASS ] class net.minecraft.class_1937
+[PASS ] field net.minecraft.class_310#field_1687
+[PASS ] field net.minecraft.class_310#field_1773
+[PASS ] field net.minecraft.class_638#field_17780
+[PASS ] field net.minecraft.class_761#field_4112
+[PASS ] field net.minecraft.class_761#field_45614
+[PASS ] field net.minecraft.class_769#field_4150
+[PASS ] field net.minecraft.class_769#field_4148
+[PASS ] field net.minecraft.class_769#field_4149
+[PASS ] field net.minecraft.class_769#field_4147
+[PASS ] field net.minecraft.class_846#field_52171
+[PASS ] field net.minecraft.class_846$class_851#field_29641
+[PASS ] field net.minecraft.class_846$class_851#field_4467
+[PASS ] field net.minecraft.class_846$class_851#field_4459
+[PASS ] field net.minecraft.class_9810$class_9811#field_52168
+[PASS ] field net.minecraft.class_8251#field_43360
+[PASS ] field net.minecraft.class_757#field_18765
+[PASS ] field net.minecraft.class_243#field_1352
+[PASS ] field net.minecraft.class_243#field_1351
+[PASS ] field net.minecraft.class_243#field_1350
+[PASS ] method net.minecraft.class_310#method_1551
+[PASS ] method net.minecraft.class_846$class_851#method_3670
+[PASS ] method net.minecraft.class_846$class_851#method_62975
+[PASS ] method net.minecraft.class_2382#method_10263
+[PASS ] method net.minecraft.class_2382#method_10264
+[PASS ] method net.minecraft.class_2382#method_10260
+[PASS ] method net.minecraft.class_4076#method_18682
+[PASS ] method net.minecraft.class_6850#method_39969
+[PASS ] method net.minecraft.class_9810#method_60904
+[PASS ] method net.minecraft.class_9810$class_9811#method_60905
+[PASS ] method net.minecraft.class_9801#method_60818
+[PASS ] method net.minecraft.class_9801#method_60822
+[PASS ] method net.minecraft.class_9801$class_4574#comp_749
+[PASS ] method net.minecraft.class_9801$class_4574#comp_750
+[PASS ] method net.minecraft.class_9801$class_4574#comp_752
+[PASS ] method net.minecraft.class_293#method_1362
+[PASS ] method net.minecraft.class_293#method_60835
+[PASS ] method net.minecraft.class_293#method_60836
+[PASS ] field net.minecraft.class_296#field_52108
+[PASS ] method net.minecraft.class_4184#method_19326
+[PASS ] method net.minecraft.class_4184#method_19330
+[PASS ] method net.minecraft.class_4184#method_19329
+[PASS ] ctor net.minecraft.class_750()
+[PASS ] ctor net.minecraft.class_6850()
+[INFO ] [S8soft] class net.minecraft.class_1041 解析成功
+[INFO ] [S8soft] class net.minecraft.class_2960 解析成功
+[INFO ] [S8soft] class net.minecraft.class_1060 解析成功
+[INFO ] [S8soft] class net.minecraft.class_1044 解析成功
+[INFO ] [S8soft] method net.minecraft.class_1041#method_4489 解析成功
+[INFO ] [S8soft] method net.minecraft.class_1041#method_4506 解析成功
+[INFO ] [S8soft] method net.minecraft.class_2960#method_60655 解析成功
+[INFO ] [S8soft] method net.minecraft.class_1060#method_4619 解析成功
+[INFO ] [S8soft] field net.minecraft.class_1044#field_5204 解析成功
+[INFO ] [S8soft] method net.minecraft.class_310#method_1531 解析成功
+[INFO ] [S8soft] method net.minecraft.class_310#method_22683 解析成功
+[INFO ] [S8soft] field net.minecraft.class_296#field_52109 解析成功
+[PASS ] 符号表全量解析通过（78 项）
+
+---- S4/S5 网格发现与摄取（轮询 500ms，等待进入世界；顶点+COLOR 双提取） ----
+[INFO ] 等待进入世界（mc.world == null）…
+[PASS ] 已进入世界，开始网格发现
+[scene] device=Apple A20 Pro GPU raytracing=YES
+[scene] slot grid initialized: 6936 chunks
+[scene] ray_query pipeline ready (threadsPerThreadgroup=1024)
+[scene] pathtrace pipeline ready (threadsPerThreadgroup=1024)
+[PASS ] 网格初始化: 6936 槽位 (sizeX=17 sizeY=24 sizeZ=17)
+[INFO ] 顶点格式取证: layer0(stride=32 colorOff=12 uvOff=16)（COLOR/UV0 元素偏移由 VertexFormat.getOffset 动态解析——2.2 albedo 通路 + 2.3 atlas 采样通路）
+[rebuild] index=0 origin=(0,-64,0) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 6.95 ms, total builds=1)
+[INFO ] rebuild #1: index=0 origin=(0,-64,0) layers=1 verts=1024 (21.9 ms)
+[rebuild] index=1 origin=(16,-64,0) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 0.82 ms, total builds=2)
+[INFO ] rebuild #2: index=1 origin=(16,-64,0) layers=1 verts=1024 (14.1 ms)
+[rebuild] index=2 origin=(32,-64,0) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 0.72 ms, total builds=3)
+[INFO ] rebuild #3: index=2 origin=(32,-64,0) layers=1 verts=1024 (11.3 ms)
+[rebuild] index=3 origin=(48,-64,0) layers=1 verts=1304 tris=652 color=yes uv=yes (blas 0.74 ms, total builds=4)
+[INFO ] rebuild #4: index=3 origin=(48,-64,0) layers=1 verts=1304 (18.1 ms)
+[rebuild] index=4 origin=(64,-64,0) layers=1 verts=1060 tris=530 color=yes uv=yes (blas 0.61 ms, total builds=5)
+[INFO ] rebuild #5: index=4 origin=(64,-64,0) layers=1 verts=1060 (9.5 ms)
+[rebuild] index=5 origin=(80,-64,0) layers=1 verts=2048 tris=1024 color=yes uv=yes (blas 0.67 ms, total builds=6)
+[INFO ] rebuild #6: index=5 origin=(80,-64,0) layers=1 verts=2048 (6.2 ms)
+[rebuild] index=12 origin=(-80,-64,0) layers=2 verts=2392 tris=1196 color=yes uv=yes (blas 8.15 ms, total builds=7)
+[INFO ] rebuild #7: index=12 origin=(-80,-64,0) layers=2 verts=2392 (30.3 ms)
+[rebuild] index=13 origin=(-64,-64,0) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 6.19 ms, total builds=8)
+[INFO ] rebuild #8: index=13 origin=(-64,-64,0) layers=1 verts=1024 (24.1 ms)
+[rebuild] index=14 origin=(-48,-64,0) layers=1 verts=1112 tris=556 color=yes uv=yes (blas 3.02 ms, total builds=9)
+[INFO ] rebuild #9: index=14 origin=(-48,-64,0) layers=1 verts=1112 (24.7 ms)
+[rebuild] index=15 origin=(-32,-64,0) layers=1 verts=1264 tris=632 color=yes uv=yes (blas 0.82 ms, total builds=10)
+[INFO ] rebuild #10: index=15 origin=(-32,-64,0) layers=1 verts=1264 (18.7 ms)
+[rebuild] index=16 origin=(-16,-64,0) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 1.31 ms, total builds=11)
+[INFO ] rebuild #11: index=16 origin=(-16,-64,0) layers=1 verts=1024 (35.1 ms)
+[rebuild] index=17 origin=(0,-48,0) layers=1 verts=356 tris=178 color=yes uv=yes (blas 0.68 ms, total builds=12)
+[INFO ] rebuild #12: index=17 origin=(0,-48,0) layers=1 verts=356 (4.5 ms)
+[rebuild] index=18 origin=(16,-48,0) layers=1 verts=960 tris=480 color=yes uv=yes (blas 0.87 ms, total builds=13)
+[INFO ] rebuild #13: index=18 origin=(16,-48,0) layers=1 verts=960 (6.1 ms)
+[rebuild] index=20 origin=(48,-48,0) layers=2 verts=2328 tris=1164 color=yes uv=yes (blas 4.70 ms, total builds=14)
+[INFO ] rebuild #14: index=20 origin=(48,-48,0) layers=2 verts=2328 (30.9 ms)
+[rebuild] index=21 origin=(64,-48,0) layers=1 verts=688 tris=344 color=yes uv=yes (blas 4.06 ms, total builds=15)
+[INFO ] rebuild #15: index=21 origin=(64,-48,0) layers=1 verts=688 (7.2 ms)
+[rebuild] index=22 origin=(80,-48,0) layers=1 verts=60 tris=30 color=yes uv=yes (blas 0.57 ms, total builds=16)
+[INFO ] rebuild #16: index=22 origin=(80,-48,0) layers=1 verts=60 (3.9 ms)
+[tlas] rebuilt in 7.85 ms (instances=16, as=3840 B, tris=9346, colorSlots=16, pools=112152+112152 B, total=1 builds)
+[rebuild] index=23 origin=(96,-48,0) layers=1 verts=376 tris=188 color=yes uv=yes (blas 1.43 ms, total builds=17)
+[INFO ] rebuild #17: index=23 origin=(96,-48,0) layers=1 verts=376 (10.0 ms)
+[rebuild] index=25 origin=(128,-48,0) layers=1 verts=1256 tris=628 color=yes uv=yes (blas 1.08 ms, total builds=18)
+[INFO ] rebuild #18: index=25 origin=(128,-48,0) layers=1 verts=1256 (10.3 ms)
+[rebuild] index=26 origin=(-128,-48,0) layers=1 verts=1096 tris=548 color=yes uv=yes (blas 0.91 ms, total builds=19)
+[INFO ] rebuild #19: index=26 origin=(-128,-48,0) layers=1 verts=1096 (9.6 ms)
+[rebuild] index=27 origin=(-112,-48,0) layers=2 verts=2224 tris=1112 color=yes uv=yes (blas 0.80 ms, total builds=20)
+[INFO ] rebuild #20: index=27 origin=(-112,-48,0) layers=2 verts=2224 (12.4 ms)
+[rebuild] index=28 origin=(-96,-48,0) layers=1 verts=1012 tris=506 color=yes uv=yes (blas 0.92 ms, total builds=21)
+[rebuild] index=29 origin=(-80,-48,0) layers=1 verts=1552 tris=776 color=yes uv=yes (blas 0.87 ms, total builds=22)
+[rebuild] index=31 origin=(-48,-48,0) layers=1 verts=84 tris=42 color=yes uv=yes (blas 1.26 ms, total builds=23)
+[rebuild] index=32 origin=(-32,-48,0) layers=1 verts=164 tris=82 color=yes uv=yes (blas 0.93 ms, total builds=24)
+[rebuild] index=35 origin=(16,-32,0) layers=1 verts=220 tris=110 color=yes uv=yes (blas 2.49 ms, total builds=25)
+[rebuild] index=36 origin=(32,-32,0) layers=1 verts=64 tris=32 color=yes uv=yes (blas 1.47 ms, total builds=26)
+[rebuild] index=37 origin=(48,-32,0) layers=1 verts=548 tris=274 color=yes uv=yes (blas 0.64 ms, total builds=27)
+[rebuild] index=38 origin=(64,-32,0) layers=1 verts=308 tris=154 color=yes uv=yes (blas 0.86 ms, total builds=28)
+[rebuild] index=39 origin=(80,-32,0) layers=1 verts=864 tris=432 color=yes uv=yes (blas 0.73 ms, total builds=29)
+[rebuild] index=40 origin=(96,-32,0) layers=1 verts=840 tris=420 color=yes uv=yes (blas 7.96 ms, total builds=30)
+[rebuild] index=42 origin=(128,-32,0) layers=2 verts=2984 tris=1492 color=yes uv=yes (blas 2.84 ms, total builds=31)
+[rebuild] index=43 origin=(-128,-32,0) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 13.40 ms, total builds=32)
+[rebuild] index=44 origin=(-112,-32,0) layers=1 verts=120 tris=60 color=yes uv=yes (blas 1.46 ms, total builds=33)
+[rebuild] index=47 origin=(-64,-32,0) layers=2 verts=1456 tris=728 color=yes uv=yes (blas 0.74 ms, total builds=34)
+[rebuild] index=48 origin=(-48,-32,0) layers=1 verts=60 tris=30 color=yes uv=yes (blas 1.43 ms, total builds=35)
+[rebuild] index=52 origin=(16,-16,0) layers=1 verts=152 tris=76 color=yes uv=yes (blas 0.69 ms, total builds=36)
+[rebuild] index=53 origin=(32,-16,0) layers=1 verts=1856 tris=928 color=yes uv=yes (blas 0.85 ms, total builds=37)
+[rebuild] index=54 origin=(48,-16,0) layers=1 verts=500 tris=250 color=yes uv=yes (blas 0.65 ms, total builds=38)
+[rebuild] index=59 origin=(128,-16,0) layers=1 verts=1332 tris=666 color=yes uv=yes (blas 0.56 ms, total builds=39)
+[rebuild] index=60 origin=(-128,-16,0) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 0.67 ms, total builds=40)
+[rebuild] index=63 origin=(-80,-16,0) layers=1 verts=128 tris=64 color=yes uv=yes (blas 0.43 ms, total builds=41)
+[rebuild] index=64 origin=(-64,-16,0) layers=1 verts=412 tris=206 color=yes uv=yes (blas 1.12 ms, total builds=42)
+[rebuild] index=65 origin=(-48,-16,0) layers=1 verts=276 tris=138 color=yes uv=yes (blas 0.58 ms, total builds=43)
+[rebuild] index=66 origin=(-32,-16,0) layers=2 verts=996 tris=498 color=yes uv=yes (blas 0.60 ms, total builds=44)
+[rebuild] index=75 origin=(112,0,0) layers=1 verts=1484 tris=742 color=yes uv=yes (blas 0.74 ms, total builds=45)
+[rebuild] index=76 origin=(128,0,0) layers=1 verts=2816 tris=1408 color=yes uv=yes (blas 0.73 ms, total builds=46)
+[rebuild] index=77 origin=(-128,0,0) layers=1 verts=1116 tris=558 color=yes uv=yes (blas 0.47 ms, total builds=47)
+[rebuild] index=78 origin=(-112,0,0) layers=2 verts=516 tris=258 color=yes uv=yes (blas 0.65 ms, total builds=48)
+[retired] releasing 6 deferred objects
+[tlas] rebuilt in 0.88 ms (instances=48, as=10816 B, tris=23776, colorSlots=48, pools=285312+285312 B, total=2 builds)
+[rebuild] index=79 origin=(-96,0,0) layers=3 verts=720 tris=360 color=yes uv=yes (blas 1.06 ms, total builds=49)
+[rebuild] index=80 origin=(-80,0,0) layers=1 verts=184 tris=92 color=yes uv=yes (blas 1.52 ms, total builds=50)
+[INFO ] rebuild #50: index=80 origin=(-80,0,0) layers=1 verts=184 (2.7 ms)
+[rebuild] index=81 origin=(-64,0,0) layers=1 verts=348 tris=174 color=yes uv=yes (blas 0.73 ms, total builds=51)
+[rebuild] index=82 origin=(-48,0,0) layers=1 verts=8 tris=4 color=yes uv=yes (blas 0.20 ms, total builds=52)
+[rebuild] index=83 origin=(-32,0,0) layers=2 verts=1336 tris=668 color=yes uv=yes (blas 0.66 ms, total builds=53)
+[rebuild] index=84 origin=(-16,0,0) layers=1 verts=1044 tris=522 color=yes uv=yes (blas 1.13 ms, total builds=54)
+[rebuild] index=93 origin=(128,16,0) layers=1 verts=1060 tris=530 color=yes uv=yes (blas 0.56 ms, total builds=55)
+[rebuild] index=94 origin=(-128,16,0) layers=1 verts=1292 tris=646 color=yes uv=yes (blas 0.94 ms, total builds=56)
+[rebuild] index=95 origin=(-112,16,0) layers=2 verts=632 tris=316 color=yes uv=yes (blas 1.06 ms, total builds=57)
+[rebuild] index=96 origin=(-96,16,0) layers=1 verts=612 tris=306 color=yes uv=yes (blas 0.58 ms, total builds=58)
+[rebuild] index=98 origin=(-64,16,0) layers=1 verts=60 tris=30 color=yes uv=yes (blas 1.50 ms, total builds=59)
+[rebuild] index=99 origin=(-48,16,0) layers=1 verts=36 tris=18 color=yes uv=yes (blas 0.36 ms, total builds=60)
+[rebuild] index=100 origin=(-32,16,0) layers=1 verts=152 tris=76 color=yes uv=yes (blas 1.41 ms, total builds=61)
+[rebuild] index=101 origin=(-16,16,0) layers=2 verts=188 tris=94 color=yes uv=yes (blas 0.41 ms, total builds=62)
+[rebuild] index=106 origin=(64,32,0) layers=3 verts=2688 tris=1344 color=yes uv=yes (blas 0.84 ms, total builds=63)
+[rebuild] index=107 origin=(80,32,0) layers=3 verts=5028 tris=2514 color=yes uv=yes (blas 1.68 ms, total builds=64)
+[rebuild] index=6 origin=(96,-64,0) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 1.54 ms, total builds=65)
+[rebuild] index=7 origin=(112,-64,0) layers=1 verts=2052 tris=1026 color=yes uv=yes (blas 0.75 ms, total builds=66)
+[rebuild] index=8 origin=(128,-64,0) layers=1 verts=3532 tris=1766 color=yes uv=yes (blas 1.15 ms, total builds=67)
+[rebuild] index=9 origin=(-128,-64,0) layers=1 verts=2048 tris=1024 color=yes uv=yes (blas 0.65 ms, total builds=68)
+[rebuild] index=10 origin=(-112,-64,0) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 0.86 ms, total builds=69)
+[rebuild] index=11 origin=(-96,-64,0) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 0.82 ms, total builds=70)
+[rebuild] index=108 origin=(96,32,0) layers=3 verts=936 tris=468 color=yes uv=yes (blas 0.87 ms, total builds=71)
+[rebuild] index=110 origin=(128,32,0) layers=2 verts=1128 tris=564 color=yes uv=yes (blas 1.34 ms, total builds=72)
+[rebuild] index=111 origin=(-128,32,0) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 0.81 ms, total builds=73)
+[rebuild] index=112 origin=(-112,32,0) layers=3 verts=160 tris=80 color=yes uv=yes (blas 0.62 ms, total builds=74)
+[rebuild] index=113 origin=(-96,32,0) layers=2 verts=1560 tris=780 color=yes uv=yes (blas 0.79 ms, total builds=75)
+[rebuild] index=114 origin=(-80,32,0) layers=1 verts=148 tris=74 color=yes uv=yes (blas 1.13 ms, total builds=76)
+[rebuild] index=116 origin=(-48,32,0) layers=2 verts=660 tris=330 color=yes uv=yes (blas 7.06 ms, total builds=77)
+[rebuild] index=117 origin=(-32,32,0) layers=2 verts=576 tris=288 color=yes uv=yes (blas 8.35 ms, total builds=78)
+[rebuild] index=118 origin=(-16,32,0) layers=2 verts=448 tris=224 color=yes uv=yes (blas 0.54 ms, total builds=79)
+[rebuild] index=119 origin=(0,48,0) layers=4 verts=3376 tris=1688 color=yes uv=yes (blas 0.78 ms, total builds=80)
+[retired] releasing 6 deferred objects
+[tlas] rebuilt in 0.73 ms (instances=80, as=17728 B, tris=41830, colorSlots=80, pools=501960+501960 B, total=3 builds)
+[rebuild] index=120 origin=(16,48,0) layers=2 verts=3220 tris=1610 color=yes uv=yes (blas 5.47 ms, total builds=81)
+[rebuild] index=121 origin=(32,48,0) layers=2 verts=3280 tris=1640 color=yes uv=yes (blas 2.54 ms, total builds=82)
+[rebuild] index=122 origin=(48,48,0) layers=3 verts=4360 tris=2180 color=yes uv=yes (blas 2.04 ms, total builds=83)
+[rebuild] index=123 origin=(64,48,0) layers=4 verts=5992 tris=2996 color=yes uv=yes (blas 1.41 ms, total builds=84)
+[rebuild] index=124 origin=(80,48,0) layers=3 verts=2780 tris=1390 color=yes uv=yes (blas 1.61 ms, total builds=85)
+[rebuild] index=125 origin=(96,48,0) layers=4 verts=3832 tris=1916 color=yes uv=yes (blas 0.97 ms, total builds=86)
+[rebuild] index=127 origin=(128,48,0) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 0.69 ms, total builds=87)
+[rebuild] index=128 origin=(-128,48,0) layers=2 verts=2112 tris=1056 color=yes uv=yes (blas 0.73 ms, total builds=88)
+[rebuild] index=129 origin=(-112,48,0) layers=4 verts=1756 tris=878 color=yes uv=yes (blas 0.71 ms, total builds=89)
+[rebuild] index=130 origin=(-96,48,0) layers=4 verts=3668 tris=1834 color=yes uv=yes (blas 0.83 ms, total builds=90)
+[rebuild] index=131 origin=(-80,48,0) layers=2 verts=4152 tris=2076 color=yes uv=yes (blas 1.18 ms, total builds=91)
+[rebuild] index=132 origin=(-64,48,0) layers=3 verts=5764 tris=2882 color=yes uv=yes (blas 1.07 ms, total builds=92)
+[rebuild] index=133 origin=(-48,48,0) layers=3 verts=4812 tris=2406 color=yes uv=yes (blas 1.13 ms, total builds=93)
+[rebuild] index=134 origin=(-32,48,0) layers=3 verts=4824 tris=2412 color=yes uv=yes (blas 1.10 ms, total builds=94)
+[rebuild] index=135 origin=(-16,48,0) layers=2 verts=3808 tris=1904 color=yes uv=yes (blas 1.39 ms, total builds=95)
+[rebuild] index=136 origin=(0,64,0) layers=1 verts=516 tris=258 color=yes uv=yes (blas 0.42 ms, total builds=96)
+[rebuild] index=139 origin=(48,64,0) layers=3 verts=3292 tris=1646 color=yes uv=yes (blas 1.11 ms, total builds=97)
+[rebuild] index=140 origin=(64,64,0) layers=2 verts=820 tris=410 color=yes uv=yes (blas 0.64 ms, total builds=98)
+[rebuild] index=142 origin=(96,64,0) layers=2 verts=1160 tris=580 color=yes uv=yes (blas 0.67 ms, total builds=99)
+[rebuild] index=143 origin=(112,64,0) layers=3 verts=2264 tris=1132 color=yes uv=yes (blas 1.10 ms, total builds=100)
+[INFO ] rebuild #100: index=143 origin=(112,64,0) layers=3 verts=2264 (2.9 ms)
+[rebuild] index=144 origin=(128,64,0) layers=3 verts=3676 tris=1838 color=yes uv=yes (blas 1.02 ms, total builds=101)
+[rebuild] index=145 origin=(-128,64,0) layers=1 verts=1136 tris=568 color=yes uv=yes (blas 0.61 ms, total builds=102)
+[rebuild] index=146 origin=(-112,64,0) layers=1 verts=512 tris=256 color=yes uv=yes (blas 0.55 ms, total builds=103)
+[rebuild] index=147 origin=(-96,64,0) layers=1 verts=32 tris=16 color=yes uv=yes (blas 0.28 ms, total builds=104)
+[rebuild] index=408 origin=(0,-64,16) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 0.57 ms, total builds=105)
+[rebuild] index=409 origin=(16,-64,16) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 0.54 ms, total builds=106)
+[rebuild] index=410 origin=(32,-64,16) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 2.05 ms, total builds=107)
+[rebuild] index=411 origin=(48,-64,16) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 0.54 ms, total builds=108)
+[rebuild] index=412 origin=(64,-64,16) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 0.44 ms, total builds=109)
+[rebuild] index=413 origin=(80,-64,16) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 0.41 ms, total builds=110)
+[rebuild] index=414 origin=(96,-64,16) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 0.47 ms, total builds=111)
+[rebuild] index=415 origin=(112,-64,16) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 1.01 ms, total builds=112)
+[retired] releasing 6 deferred objects
+[tlas] rebuilt in 1.30 ms (instances=112, as=24640 B, tris=80322, colorSlots=112, pools=963864+963864 B, total=4 builds)
+[rebuild] index=416 origin=(128,-64,16) layers=1 verts=3332 tris=1666 color=yes uv=yes (blas 1.08 ms, total builds=113)
+[rebuild] index=417 origin=(-128,-64,16) layers=1 verts=2208 tris=1104 color=yes uv=yes (blas 1.24 ms, total builds=114)
+[rebuild] index=418 origin=(-112,-64,16) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 0.60 ms, total builds=115)
+[rebuild] index=419 origin=(-96,-64,16) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 0.50 ms, total builds=116)
+[rebuild] index=420 origin=(-80,-64,16) layers=2 verts=1576 tris=788 color=yes uv=yes (blas 0.74 ms, total builds=117)
+[rebuild] index=421 origin=(-64,-64,16) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 0.54 ms, total builds=118)
+[rebuild] index=422 origin=(-48,-64,16) layers=2 verts=1548 tris=774 color=yes uv=yes (blas 0.58 ms, total builds=119)
+[rebuild] index=423 origin=(-32,-64,16) layers=1 verts=1548 tris=774 color=yes uv=yes (blas 0.57 ms, total builds=120)
+[rebuild] index=424 origin=(-16,-64,16) layers=1 verts=1120 tris=560 color=yes uv=yes (blas 1.22 ms, total builds=121)
+[rebuild] index=425 origin=(0,-48,16) layers=2 verts=2324 tris=1162 color=yes uv=yes (blas 1.15 ms, total builds=122)
+[rebuild] index=426 origin=(16,-48,16) layers=1 verts=536 tris=268 color=yes uv=yes (blas 1.48 ms, total builds=123)
+[rebuild] index=428 origin=(48,-48,16) layers=1 verts=652 tris=326 color=yes uv=yes (blas 0.50 ms, total builds=124)
+[rebuild] index=429 origin=(64,-48,16) layers=1 verts=112 tris=56 color=yes uv=yes (blas 0.38 ms, total builds=125)
+[rebuild] index=430 origin=(80,-48,16) layers=1 verts=516 tris=258 color=yes uv=yes (blas 0.44 ms, total builds=126)
+[rebuild] index=431 origin=(96,-48,16) layers=1 verts=1072 tris=536 color=yes uv=yes (blas 0.59 ms, total builds=127)
+[rebuild] index=432 origin=(112,-48,16) layers=1 verts=20 tris=10 color=yes uv=yes (blas 0.26 ms, total builds=128)
+[rebuild] index=433 origin=(128,-48,16) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 0.77 ms, total builds=129)
+[rebuild] index=434 origin=(-128,-48,16) layers=1 verts=456 tris=228 color=yes uv=yes (blas 0.67 ms, total builds=130)
+[rebuild] index=435 origin=(-112,-48,16) layers=1 verts=368 tris=184 color=yes uv=yes (blas 1.29 ms, total builds=131)
+[rebuild] index=436 origin=(-96,-48,16) layers=1 verts=64 tris=32 color=yes uv=yes (blas 0.34 ms, total builds=132)
+[rebuild] index=437 origin=(-80,-48,16) layers=2 verts=644 tris=322 color=yes uv=yes (blas 0.50 ms, total builds=133)
+[rebuild] index=439 origin=(-48,-48,16) layers=2 verts=512 tris=256 color=yes uv=yes (blas 0.86 ms, total builds=134)
+[rebuild] index=440 origin=(-32,-48,16) layers=1 verts=1792 tris=896 color=yes uv=yes (blas 1.01 ms, total builds=135)
+[rebuild] index=441 origin=(-16,-48,16) layers=2 verts=1976 tris=988 color=yes uv=yes (blas 0.95 ms, total builds=136)
+[rebuild] index=442 origin=(0,-32,16) layers=1 verts=336 tris=168 color=yes uv=yes (blas 0.40 ms, total builds=137)
+[rebuild] index=443 origin=(16,-32,16) layers=1 verts=432 tris=216 color=yes uv=yes (blas 0.72 ms, total builds=138)
+[rebuild] index=445 origin=(48,-32,16) layers=1 verts=48 tris=24 color=yes uv=yes (blas 0.61 ms, total builds=139)
+[rebuild] index=446 origin=(64,-32,16) layers=2 verts=392 tris=196 color=yes uv=yes (blas 0.84 ms, total builds=140)
+[rebuild] index=447 origin=(80,-32,16) layers=2 verts=2032 tris=1016 color=yes uv=yes (blas 0.83 ms, total builds=141)
+[rebuild] index=448 origin=(96,-32,16) layers=1 verts=1204 tris=602 color=yes uv=yes (blas 0.91 ms, total builds=142)
+[rebuild] index=449 origin=(112,-32,16) layers=1 verts=44 tris=22 color=yes uv=yes (blas 0.31 ms, total builds=143)
+[rebuild] index=450 origin=(128,-32,16) layers=1 verts=1036 tris=518 color=yes uv=yes (blas 0.59 ms, total builds=144)
+[retired] releasing 6 deferred objects
+[tlas] rebuilt in 1.85 ms (instances=144, as=31552 B, tris=96320, colorSlots=144, pools=1155840+1155840 B, total=5 builds)
+[rebuild] index=451 origin=(-128,-32,16) layers=1 verts=12 tris=6 color=yes uv=yes (blas 0.69 ms, total builds=145)
+[rebuild] index=452 origin=(-112,-32,16) layers=1 verts=924 tris=462 color=yes uv=yes (blas 7.08 ms, total builds=146)
+[rebuild] index=454 origin=(-80,-32,16) layers=1 verts=88 tris=44 color=yes uv=yes (blas 3.96 ms, total builds=147)
+[rebuild] index=455 origin=(-64,-32,16) layers=2 verts=280 tris=140 color=yes uv=yes (blas 3.90 ms, total builds=148)
+[rebuild] index=461 origin=(32,-16,16) layers=1 verts=48 tris=24 color=yes uv=yes (blas 0.57 ms, total builds=149)
+[rebuild] index=462 origin=(48,-16,16) layers=2 verts=2172 tris=1086 color=yes uv=yes (blas 0.95 ms, total builds=150)
+[INFO ] rebuild #150: index=462 origin=(48,-16,16) layers=2 verts=2172 (2.5 ms)
+[rebuild] index=463 origin=(64,-16,16) layers=1 verts=232 tris=116 color=yes uv=yes (blas 0.71 ms, total builds=151)
+[rebuild] index=467 origin=(128,-16,16) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 0.65 ms, total builds=152)
+[rebuild] index=471 origin=(-80,-16,16) layers=1 verts=384 tris=192 color=yes uv=yes (blas 0.83 ms, total builds=153)
+[rebuild] index=472 origin=(-64,-16,16) layers=1 verts=304 tris=152 color=yes uv=yes (blas 0.60 ms, total builds=154)
+[rebuild] index=474 origin=(-32,-16,16) layers=2 verts=1808 tris=904 color=yes uv=yes (blas 0.85 ms, total builds=155)
+[rebuild] index=483 origin=(112,0,16) layers=2 verts=432 tris=216 color=yes uv=yes (blas 0.62 ms, total builds=156)
+[rebuild] index=484 origin=(128,0,16) layers=1 verts=3152 tris=1576 color=yes uv=yes (blas 0.79 ms, total builds=157)
+[rebuild] index=485 origin=(-128,0,16) layers=1 verts=904 tris=452 color=yes uv=yes (blas 0.62 ms, total builds=158)
+[rebuild] index=486 origin=(-112,0,16) layers=1 verts=312 tris=156 color=yes uv=yes (blas 4.83 ms, total builds=159)
+[rebuild] index=488 origin=(-80,0,16) layers=2 verts=1568 tris=784 color=yes uv=yes (blas 4.75 ms, total builds=160)
+[rebuild] index=489 origin=(-64,0,16) layers=1 verts=896 tris=448 color=yes uv=yes (blas 1.11 ms, total builds=161)
+[rebuild] index=496 origin=(48,16,16) layers=1 verts=28 tris=14 color=yes uv=yes (blas 0.28 ms, total builds=162)
+[rebuild] index=497 origin=(64,16,16) layers=1 verts=144 tris=72 color=yes uv=yes (blas 0.30 ms, total builds=163)
+[rebuild] index=498 origin=(80,16,16) layers=1 verts=76 tris=38 color=yes uv=yes (blas 0.58 ms, total builds=164)
+[rebuild] index=499 origin=(96,16,16) layers=1 verts=40 tris=20 color=yes uv=yes (blas 1.29 ms, total builds=165)
+[rebuild] index=501 origin=(128,16,16) layers=1 verts=756 tris=378 color=yes uv=yes (blas 0.57 ms, total builds=166)
+[rebuild] index=502 origin=(-128,16,16) layers=1 verts=2248 tris=1124 color=yes uv=yes (blas 0.84 ms, total builds=167)
+[rebuild] index=503 origin=(-112,16,16) layers=1 verts=832 tris=416 color=yes uv=yes (blas 0.62 ms, total builds=168)
+[rebuild] index=506 origin=(-64,16,16) layers=2 verts=1872 tris=936 color=yes uv=yes (blas 0.74 ms, total builds=169)
+[rebuild] index=507 origin=(-48,16,16) layers=2 verts=1724 tris=862 color=yes uv=yes (blas 0.68 ms, total builds=170)
+[rebuild] index=508 origin=(-32,16,16) layers=2 verts=1300 tris=650 color=yes uv=yes (blas 1.15 ms, total builds=171)
+[rebuild] index=513 origin=(48,32,16) layers=2 verts=944 tris=472 color=yes uv=yes (blas 4.23 ms, total builds=172)
+[rebuild] index=514 origin=(64,32,16) layers=4 verts=4876 tris=2438 color=yes uv=yes (blas 1.04 ms, total builds=173)
+[rebuild] index=515 origin=(80,32,16) layers=3 verts=3052 tris=1526 color=yes uv=yes (blas 1.47 ms, total builds=174)
+[rebuild] index=516 origin=(96,32,16) layers=1 verts=216 tris=108 color=yes uv=yes (blas 1.29 ms, total builds=175)
+[rebuild] index=519 origin=(-128,32,16) layers=1 verts=136 tris=68 color=yes uv=yes (blas 0.49 ms, total builds=176)
+[retired] releasing 6 deferred objects
+[tlas] rebuilt in 1.26 ms (instances=176, as=38464 B, tris=112712, colorSlots=176, pools=1352544+1352544 B, total=6 builds)
+[rebuild] index=523 origin=(-64,32,16) layers=2 verts=1288 tris=644 color=yes uv=yes (blas 1.72 ms, total builds=177)
+[rebuild] index=524 origin=(-48,32,16) layers=2 verts=732 tris=366 color=yes uv=yes (blas 0.99 ms, total builds=178)
+[rebuild] index=525 origin=(-32,32,16) layers=2 verts=1072 tris=536 color=yes uv=yes (blas 0.62 ms, total builds=179)
+[rebuild] index=526 origin=(-16,32,16) layers=2 verts=52 tris=26 color=yes uv=yes (blas 0.31 ms, total builds=180)
+[rebuild] index=527 origin=(0,48,16) layers=4 verts=2172 tris=1086 color=yes uv=yes (blas 1.27 ms, total builds=181)
+[rebuild] index=528 origin=(16,48,16) layers=2 verts=3728 tris=1864 color=yes uv=yes (blas 0.82 ms, total builds=182)
+[rebuild] index=529 origin=(32,48,16) layers=2 verts=3776 tris=1888 color=yes uv=yes (blas 1.28 ms, total builds=183)
+[rebuild] index=530 origin=(48,48,16) layers=3 verts=4236 tris=2118 color=yes uv=yes (blas 0.80 ms, total builds=184)
+[rebuild] index=531 origin=(64,48,16) layers=4 verts=5852 tris=2926 color=yes uv=yes (blas 1.55 ms, total builds=185)
+[rebuild] index=532 origin=(80,48,16) layers=3 verts=6248 tris=3124 color=yes uv=yes (blas 1.18 ms, total builds=186)
+[rebuild] index=533 origin=(96,48,16) layers=4 verts=3172 tris=1586 color=yes uv=yes (blas 0.85 ms, total builds=187)
+[rebuild] index=534 origin=(112,48,16) layers=1 verts=100 tris=50 color=yes uv=yes (blas 0.37 ms, total builds=188)
+[rebuild] index=536 origin=(-128,48,16) layers=1 verts=1056 tris=528 color=yes uv=yes (blas 0.66 ms, total builds=189)
+[rebuild] index=537 origin=(-112,48,16) layers=4 verts=2972 tris=1486 color=yes uv=yes (blas 0.73 ms, total builds=190)
+[rebuild] index=538 origin=(-96,48,16) layers=2 verts=3316 tris=1658 color=yes uv=yes (blas 1.12 ms, total builds=191)
+[rebuild] index=539 origin=(-80,48,16) layers=2 verts=3484 tris=1742 color=yes uv=yes (blas 1.05 ms, total builds=192)
+[rebuild] index=540 origin=(-64,48,16) layers=3 verts=4960 tris=2480 color=yes uv=yes (blas 0.96 ms, total builds=193)
+[rebuild] index=541 origin=(-48,48,16) layers=3 verts=6008 tris=3004 color=yes uv=yes (blas 1.04 ms, total builds=194)
+[rebuild] index=542 origin=(-32,48,16) layers=3 verts=3776 tris=1888 color=yes uv=yes (blas 2.02 ms, total builds=195)
+[rebuild] index=543 origin=(-16,48,16) layers=4 verts=2596 tris=1298 color=yes uv=yes (blas 0.66 ms, total builds=196)
+[rebuild] index=544 origin=(0,64,16) layers=1 verts=6656 tris=3328 color=yes uv=yes (blas 2.01 ms, total builds=197)
+[rebuild] index=550 origin=(96,64,16) layers=3 verts=460 tris=230 color=yes uv=yes (blas 0.46 ms, total builds=198)
+[rebuild] index=551 origin=(112,64,16) layers=3 verts=2680 tris=1340 color=yes uv=yes (blas 0.80 ms, total builds=199)
+[rebuild] index=552 origin=(128,64,16) layers=3 verts=1720 tris=860 color=yes uv=yes (blas 0.79 ms, total builds=200)
+[INFO ] rebuild #200: index=552 origin=(128,64,16) layers=3 verts=1720 (3.1 ms)
+[rebuild] index=553 origin=(-128,64,16) layers=1 verts=1648 tris=824 color=yes uv=yes (blas 1.31 ms, total builds=201)
+[rebuild] index=554 origin=(-112,64,16) layers=1 verts=480 tris=240 color=yes uv=yes (blas 0.48 ms, total builds=202)
+[rebuild] index=560 origin=(-16,64,16) layers=1 verts=3076 tris=1538 color=yes uv=yes (blas 1.07 ms, total builds=203)
+[rebuild] index=816 origin=(0,-64,32) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 0.46 ms, total builds=204)
+[rebuild] index=817 origin=(16,-64,32) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 0.46 ms, total builds=205)
+[rebuild] index=818 origin=(32,-64,32) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 1.13 ms, total builds=206)
+[rebuild] index=819 origin=(48,-64,32) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 0.81 ms, total builds=207)
+[rebuild] index=820 origin=(64,-64,32) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 0.47 ms, total builds=208)
+[retired] releasing 6 deferred objects
+[tlas] rebuilt in 1.79 ms (instances=208, as=45440 B, tris=153930, colorSlots=208, pools=1847160+1847160 B, total=7 builds)
+[rebuild] index=821 origin=(80,-64,32) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 0.54 ms, total builds=209)
+[rebuild] index=822 origin=(96,-64,32) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 0.35 ms, total builds=210)
+[rebuild] index=823 origin=(112,-64,32) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 0.48 ms, total builds=211)
+[rebuild] index=824 origin=(128,-64,32) layers=1 verts=1580 tris=790 color=yes uv=yes (blas 0.51 ms, total builds=212)
+[rebuild] index=825 origin=(-128,-64,32) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 0.40 ms, total builds=213)
+[rebuild] index=826 origin=(-112,-64,32) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 0.48 ms, total builds=214)
+[rebuild] index=827 origin=(-96,-64,32) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 1.36 ms, total builds=215)
+[rebuild] index=828 origin=(-80,-64,32) layers=2 verts=1404 tris=702 color=yes uv=yes (blas 0.54 ms, total builds=216)
+[rebuild] index=829 origin=(-64,-64,32) layers=2 verts=1396 tris=698 color=yes uv=yes (blas 0.49 ms, total builds=217)
+[rebuild] index=830 origin=(-48,-64,32) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 0.41 ms, total builds=218)
+[rebuild] index=831 origin=(-32,-64,32) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 0.45 ms, total builds=219)
+[rebuild] index=832 origin=(-16,-64,32) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 0.38 ms, total builds=220)
+[rebuild] index=833 origin=(0,-48,32) layers=2 verts=2720 tris=1360 color=yes uv=yes (blas 0.82 ms, total builds=221)
+[rebuild] index=834 origin=(16,-48,32) layers=2 verts=2960 tris=1480 color=yes uv=yes (blas 0.98 ms, total builds=222)
+[rebuild] index=835 origin=(32,-48,32) layers=2 verts=884 tris=442 color=yes uv=yes (blas 0.63 ms, total builds=223)
+[rebuild] index=836 origin=(48,-48,32) layers=1 verts=1108 tris=554 color=yes uv=yes (blas 0.48 ms, total builds=224)
+[rebuild] index=837 origin=(64,-48,32) layers=1 verts=364 tris=182 color=yes uv=yes (blas 1.12 ms, total builds=225)
+[rebuild] index=839 origin=(96,-48,32) layers=1 verts=80 tris=40 color=yes uv=yes (blas 0.38 ms, total builds=226)
+[rebuild] index=842 origin=(-128,-48,32) layers=1 verts=764 tris=382 color=yes uv=yes (blas 0.58 ms, total builds=227)
+[rebuild] index=843 origin=(-112,-48,32) layers=1 verts=132 tris=66 color=yes uv=yes (blas 0.37 ms, total builds=228)
+[rebuild] index=845 origin=(-80,-48,32) layers=2 verts=676 tris=338 color=yes uv=yes (blas 0.49 ms, total builds=229)
+[rebuild] index=846 origin=(-64,-48,32) layers=1 verts=760 tris=380 color=yes uv=yes (blas 0.57 ms, total builds=230)
+[rebuild] index=849 origin=(-16,-48,32) layers=1 verts=1008 tris=504 color=yes uv=yes (blas 0.77 ms, total builds=231)
+[rebuild] index=850 origin=(0,-32,32) layers=2 verts=1048 tris=524 color=yes uv=yes (blas 0.57 ms, total builds=232)
+[rebuild] index=851 origin=(16,-32,32) layers=1 verts=1408 tris=704 color=yes uv=yes (blas 0.74 ms, total builds=233)
+[rebuild] index=853 origin=(48,-32,32) layers=1 verts=40 tris=20 color=yes uv=yes (blas 0.36 ms, total builds=234)
+[rebuild] index=854 origin=(64,-32,32) layers=1 verts=996 tris=498 color=yes uv=yes (blas 1.14 ms, total builds=235)
+[rebuild] index=855 origin=(80,-32,32) layers=1 verts=848 tris=424 color=yes uv=yes (blas 0.56 ms, total builds=236)
+[rebuild] index=859 origin=(-128,-32,32) layers=2 verts=908 tris=454 color=yes uv=yes (blas 0.51 ms, total builds=237)
+[rebuild] index=860 origin=(-112,-32,32) layers=1 verts=1656 tris=828 color=yes uv=yes (blas 1.31 ms, total builds=238)
+[rebuild] index=862 origin=(-80,-32,32) layers=1 verts=1108 tris=554 color=yes uv=yes (blas 0.70 ms, total builds=239)
+[rebuild] index=863 origin=(-64,-32,32) layers=2 verts=848 tris=424 color=yes uv=yes (blas 0.50 ms, total builds=240)
+[retired] releasing 6 deferred objects
+[tlas] rebuilt in 1.96 ms (instances=240, as=52416 B, tris=170886, colorSlots=240, pools=2050632+2050632 B, total=8 builds)
+[rebuild] index=866 origin=(-16,-32,32) layers=1 verts=840 tris=420 color=yes uv=yes (blas 0.57 ms, total builds=241)
+[rebuild] index=874 origin=(112,-16,32) layers=2 verts=108 tris=54 color=yes uv=yes (blas 0.46 ms, total builds=242)
+[rebuild] index=875 origin=(128,-16,32) layers=1 verts=200 tris=100 color=yes uv=yes (blas 0.56 ms, total builds=243)
+[rebuild] index=876 origin=(-128,-16,32) layers=1 verts=52 tris=26 color=yes uv=yes (blas 0.30 ms, total builds=244)
+[rebuild] index=877 origin=(-112,-16,32) layers=1 verts=2584 tris=1292 color=yes uv=yes (blas 0.88 ms, total builds=245)
+[rebuild] index=878 origin=(-96,-16,32) layers=1 verts=1144 tris=572 color=yes uv=yes (blas 0.61 ms, total builds=246)
+[rebuild] index=879 origin=(-80,-16,32) layers=1 verts=880 tris=440 color=yes uv=yes (blas 1.03 ms, total builds=247)
+[rebuild] index=882 origin=(-32,-16,32) layers=2 verts=1880 tris=940 color=yes uv=yes (blas 0.76 ms, total builds=248)
+[rebuild] index=883 origin=(-16,-16,32) layers=1 verts=324 tris=162 color=yes uv=yes (blas 0.48 ms, total builds=249)
+[rebuild] index=884 origin=(0,0,32) layers=2 verts=560 tris=280 color=yes uv=yes (blas 0.89 ms, total builds=250)
+[INFO ] rebuild #250: index=884 origin=(0,0,32) layers=2 verts=560 (2.3 ms)
+[rebuild] index=890 origin=(96,0,32) layers=1 verts=84 tris=42 color=yes uv=yes (blas 0.46 ms, total builds=251)
+[rebuild] index=891 origin=(112,0,32) layers=3 verts=4104 tris=2052 color=yes uv=yes (blas 1.26 ms, total builds=252)
+[rebuild] index=892 origin=(128,0,32) layers=2 verts=4128 tris=2064 color=yes uv=yes (blas 0.85 ms, total builds=253)
+[rebuild] index=893 origin=(-128,0,32) layers=1 verts=1200 tris=600 color=yes uv=yes (blas 0.61 ms, total builds=254)
+[rebuild] index=894 origin=(-112,0,32) layers=1 verts=376 tris=188 color=yes uv=yes (blas 0.46 ms, total builds=255)
+[rebuild] index=895 origin=(-96,0,32) layers=2 verts=784 tris=392 color=yes uv=yes (blas 0.95 ms, total builds=256)
+[rebuild] index=896 origin=(-80,0,32) layers=3 verts=2928 tris=1464 color=yes uv=yes (blas 0.81 ms, total builds=257)
+[rebuild] index=897 origin=(-64,0,32) layers=2 verts=1804 tris=902 color=yes uv=yes (blas 0.79 ms, total builds=258)
+[rebuild] index=898 origin=(-48,0,32) layers=1 verts=44 tris=22 color=yes uv=yes (blas 0.42 ms, total builds=259)
+[rebuild] index=900 origin=(-16,0,32) layers=2 verts=1532 tris=766 color=yes uv=yes (blas 0.65 ms, total builds=260)
+[rebuild] index=905 origin=(64,16,32) layers=2 verts=852 tris=426 color=yes uv=yes (blas 1.08 ms, total builds=261)
+[rebuild] index=906 origin=(80,16,32) layers=2 verts=1160 tris=580 color=yes uv=yes (blas 1.12 ms, total builds=262)
+[rebuild] index=907 origin=(96,16,32) layers=1 verts=4 tris=2 color=yes uv=yes (blas 0.18 ms, total builds=263)
+[rebuild] index=908 origin=(112,16,32) layers=1 verts=212 tris=106 color=yes uv=yes (blas 0.42 ms, total builds=264)
+[rebuild] index=909 origin=(128,16,32) layers=1 verts=520 tris=260 color=yes uv=yes (blas 0.43 ms, total builds=265)
+[rebuild] index=910 origin=(-128,16,32) layers=1 verts=128 tris=64 color=yes uv=yes (blas 1.03 ms, total builds=266)
+[rebuild] index=911 origin=(-112,16,32) layers=1 verts=872 tris=436 color=yes uv=yes (blas 0.57 ms, total builds=267)
+[rebuild] index=912 origin=(-96,16,32) layers=1 verts=488 tris=244 color=yes uv=yes (blas 0.58 ms, total builds=268)
+[rebuild] index=913 origin=(-80,16,32) layers=2 verts=4624 tris=2312 color=yes uv=yes (blas 1.06 ms, total builds=269)
+[rebuild] index=914 origin=(-64,16,32) layers=3 verts=3460 tris=1730 color=yes uv=yes (blas 1.42 ms, total builds=270)
+[rebuild] index=915 origin=(-48,16,32) layers=3 verts=2028 tris=1014 color=yes uv=yes (blas 0.74 ms, total builds=271)
+[rebuild] index=916 origin=(-32,16,32) layers=1 verts=40 tris=20 color=yes uv=yes (blas 0.30 ms, total builds=272)
+[retired] releasing 6 deferred objects
+[tlas] rebuilt in 1.46 ms (instances=272, as=59328 B, tris=190858, colorSlots=272, pools=2290296+2290296 B, total=9 builds)
+[rebuild] index=918 origin=(0,32,32) layers=3 verts=3224 tris=1612 color=yes uv=yes (blas 2.04 ms, total builds=273)
+[rebuild] index=919 origin=(16,32,32) layers=2 verts=1680 tris=840 color=yes uv=yes (blas 0.79 ms, total builds=274)
+[rebuild] index=921 origin=(48,32,32) layers=2 verts=568 tris=284 color=yes uv=yes (blas 0.51 ms, total builds=275)
+[rebuild] index=922 origin=(64,32,32) layers=4 verts=2204 tris=1102 color=yes uv=yes (blas 1.11 ms, total builds=276)
+[rebuild] index=923 origin=(80,32,32) layers=1 verts=28 tris=14 color=yes uv=yes (blas 0.31 ms, total builds=277)
+[rebuild] index=927 origin=(-128,32,32) layers=1 verts=288 tris=144 color=yes uv=yes (blas 0.71 ms, total builds=278)
+[rebuild] index=928 origin=(-112,32,32) layers=2 verts=868 tris=434 color=yes uv=yes (blas 0.60 ms, total builds=279)
+[rebuild] index=929 origin=(-96,32,32) layers=2 verts=760 tris=380 color=yes uv=yes (blas 0.57 ms, total builds=280)
+[rebuild] index=930 origin=(-80,32,32) layers=3 verts=4592 tris=2296 color=yes uv=yes (blas 1.85 ms, total builds=281)
+[rebuild] index=931 origin=(-64,32,32) layers=3 verts=1520 tris=760 color=yes uv=yes (blas 0.86 ms, total builds=282)
+[rebuild] index=933 origin=(-32,32,32) layers=2 verts=1020 tris=510 color=yes uv=yes (blas 0.53 ms, total builds=283)
+[rebuild] index=934 origin=(-16,32,32) layers=3 verts=3136 tris=1568 color=yes uv=yes (blas 0.92 ms, total builds=284)
+[rebuild] index=935 origin=(0,48,32) layers=4 verts=2492 tris=1246 color=yes uv=yes (blas 0.68 ms, total builds=285)
+[rebuild] index=936 origin=(16,48,32) layers=3 verts=3988 tris=1994 color=yes uv=yes (blas 0.93 ms, total builds=286)
+[rebuild] index=937 origin=(32,48,32) layers=4 verts=4172 tris=2086 color=yes uv=yes (blas 1.32 ms, total builds=287)
+[rebuild] index=938 origin=(48,48,32) layers=3 verts=3968 tris=1984 color=yes uv=yes (blas 1.08 ms, total builds=288)
+[rebuild] index=939 origin=(64,48,32) layers=3 verts=5316 tris=2658 color=yes uv=yes (blas 1.43 ms, total builds=289)
+[rebuild] index=940 origin=(80,48,32) layers=2 verts=3888 tris=1944 color=yes uv=yes (blas 0.88 ms, total builds=290)
+[rebuild] index=941 origin=(96,48,32) layers=4 verts=3044 tris=1522 color=yes uv=yes (blas 0.76 ms, total builds=291)
+[rebuild] index=942 origin=(112,48,32) layers=2 verts=332 tris=166 color=yes uv=yes (blas 0.45 ms, total builds=292)
+[rebuild] index=944 origin=(-128,48,32) layers=1 verts=940 tris=470 color=yes uv=yes (blas 0.51 ms, total builds=293)
+[rebuild] index=945 origin=(-112,48,32) layers=4 verts=3528 tris=1764 color=yes uv=yes (blas 1.58 ms, total builds=294)
+[rebuild] index=946 origin=(-96,48,32) layers=2 verts=3488 tris=1744 color=yes uv=yes (blas 0.85 ms, total builds=295)
+[rebuild] index=947 origin=(-80,48,32) layers=3 verts=5332 tris=2666 color=yes uv=yes (blas 1.24 ms, total builds=296)
+[rebuild] index=948 origin=(-64,48,32) layers=3 verts=5388 tris=2694 color=yes uv=yes (blas 0.85 ms, total builds=297)
+[rebuild] index=949 origin=(-48,48,32) layers=3 verts=4632 tris=2316 color=yes uv=yes (blas 1.00 ms, total builds=298)
+[rebuild] index=950 origin=(-32,48,32) layers=3 verts=3480 tris=1740 color=yes uv=yes (blas 0.81 ms, total builds=299)
+[rebuild] index=951 origin=(-16,48,32) layers=4 verts=4248 tris=2124 color=yes uv=yes (blas 0.85 ms, total builds=300)
+[INFO ] rebuild #300: index=951 origin=(-16,48,32) layers=4 verts=4248 (3.0 ms)
+[rebuild] index=952 origin=(0,64,32) layers=2 verts=9336 tris=4668 color=yes uv=yes (blas 5.93 ms, total builds=301)
+[rebuild] index=958 origin=(96,64,32) layers=3 verts=484 tris=242 color=yes uv=yes (blas 0.51 ms, total builds=302)
+[rebuild] index=959 origin=(112,64,32) layers=3 verts=2960 tris=1480 color=yes uv=yes (blas 0.90 ms, total builds=303)
+[rebuild] index=960 origin=(128,64,32) layers=3 verts=1652 tris=826 color=yes uv=yes (blas 0.68 ms, total builds=304)
+[retired] releasing 6 deferred objects
+[tlas] rebuilt in 1.15 ms (instances=304, as=66240 B, tris=237136, colorSlots=304, pools=2845632+2845632 B, total=10 builds)
+[rebuild] index=961 origin=(-128,64,32) layers=2 verts=1516 tris=758 color=yes uv=yes (blas 0.75 ms, total builds=305)
+[rebuild] index=962 origin=(-112,64,32) layers=1 verts=304 tris=152 color=yes uv=yes (blas 0.46 ms, total builds=306)
+[rebuild] index=967 origin=(-32,64,32) layers=1 verts=192 tris=96 color=yes uv=yes (blas 0.30 ms, total builds=307)
+[rebuild] index=968 origin=(-16,64,32) layers=1 verts=4748 tris=2374 color=yes uv=yes (blas 0.88 ms, total builds=308)
+[rebuild] index=1224 origin=(0,-64,48) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 0.70 ms, total builds=309)
+[rebuild] index=1225 origin=(16,-64,48) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 0.42 ms, total builds=310)
+[rebuild] index=1226 origin=(32,-64,48) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 0.80 ms, total builds=311)
+[rebuild] index=1227 origin=(48,-64,48) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 0.45 ms, total builds=312)
+[rebuild] index=1228 origin=(64,-64,48) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 0.50 ms, total builds=313)
+[rebuild] index=1229 origin=(80,-64,48) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 1.57 ms, total builds=314)
+[rebuild] index=1230 origin=(96,-64,48) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 1.16 ms, total builds=315)
+[rebuild] index=1231 origin=(112,-64,48) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 0.66 ms, total builds=316)
+[rebuild] index=1232 origin=(128,-64,48) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 0.43 ms, total builds=317)
+[rebuild] index=1233 origin=(-128,-64,48) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 0.45 ms, total builds=318)
+[rebuild] index=1234 origin=(-112,-64,48) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 0.93 ms, total builds=319)
+[rebuild] index=1235 origin=(-96,-64,48) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 1.09 ms, total builds=320)
+[rebuild] index=1236 origin=(-80,-64,48) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 0.72 ms, total builds=321)
+[rebuild] index=1237 origin=(-64,-64,48) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 0.53 ms, total builds=322)
+[rebuild] index=1238 origin=(-48,-64,48) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 0.50 ms, total builds=323)
+[rebuild] index=1239 origin=(-32,-64,48) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 0.54 ms, total builds=324)
+[rebuild] index=1240 origin=(-16,-64,48) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 1.28 ms, total builds=325)
+[rebuild] index=1241 origin=(0,-48,48) layers=2 verts=2696 tris=1348 color=yes uv=yes (blas 1.14 ms, total builds=326)
+[rebuild] index=1242 origin=(16,-48,48) layers=3 verts=2464 tris=1232 color=yes uv=yes (blas 0.59 ms, total builds=327)
+[rebuild] index=1243 origin=(32,-48,48) layers=2 verts=352 tris=176 color=yes uv=yes (blas 0.53 ms, total builds=328)
+[rebuild] index=1248 origin=(112,-48,48) layers=1 verts=164 tris=82 color=yes uv=yes (blas 0.38 ms, total builds=329)
+[rebuild] index=1249 origin=(128,-48,48) layers=1 verts=196 tris=98 color=yes uv=yes (blas 1.05 ms, total builds=330)
+[rebuild] index=1250 origin=(-128,-48,48) layers=1 verts=8 tris=4 color=yes uv=yes (blas 0.85 ms, total builds=331)
+[rebuild] index=1251 origin=(-112,-48,48) layers=1 verts=400 tris=200 color=yes uv=yes (blas 0.41 ms, total builds=332)
+[rebuild] index=1252 origin=(-96,-48,48) layers=1 verts=452 tris=226 color=yes uv=yes (blas 0.49 ms, total builds=333)
+[rebuild] index=1253 origin=(-80,-48,48) layers=2 verts=848 tris=424 color=yes uv=yes (blas 0.58 ms, total builds=334)
+[rebuild] index=1254 origin=(-64,-48,48) layers=1 verts=936 tris=468 color=yes uv=yes (blas 1.16 ms, total builds=335)
+[rebuild] index=1255 origin=(-48,-48,48) layers=1 verts=20 tris=10 color=yes uv=yes (blas 0.25 ms, total builds=336)
+[retired] releasing 6 deferred objects
+[tlas] rebuilt in 1.42 ms (instances=336, as=73152 B, tris=253488, colorSlots=336, pools=3041856+3041856 B, total=11 builds)
+[rebuild] index=1256 origin=(-32,-48,48) layers=1 verts=40 tris=20 color=yes uv=yes (blas 0.39 ms, total builds=337)
+[rebuild] index=1257 origin=(-16,-48,48) layers=1 verts=648 tris=324 color=yes uv=yes (blas 0.32 ms, total builds=338)
+[rebuild] index=1258 origin=(0,-32,48) layers=1 verts=992 tris=496 color=yes uv=yes (blas 0.33 ms, total builds=339)
+[rebuild] index=1259 origin=(16,-32,48) layers=2 verts=548 tris=274 color=yes uv=yes (blas 0.59 ms, total builds=340)
+[rebuild] index=1262 origin=(64,-32,48) layers=1 verts=876 tris=438 color=yes uv=yes (blas 0.38 ms, total builds=341)
+[rebuild] index=1263 origin=(80,-32,48) layers=1 verts=276 tris=138 color=yes uv=yes (blas 0.44 ms, total builds=342)
+[rebuild] index=1267 origin=(-128,-32,48) layers=1 verts=36 tris=18 color=yes uv=yes (blas 0.53 ms, total builds=343)
+[rebuild] index=1268 origin=(-112,-32,48) layers=1 verts=1368 tris=684 color=yes uv=yes (blas 1.01 ms, total builds=344)
+[rebuild] index=1269 origin=(-96,-32,48) layers=1 verts=372 tris=186 color=yes uv=yes (blas 0.43 ms, total builds=345)
+[rebuild] index=1270 origin=(-80,-32,48) layers=1 verts=2556 tris=1278 color=yes uv=yes (blas 0.45 ms, total builds=346)
+[rebuild] index=1271 origin=(-64,-32,48) layers=1 verts=1396 tris=698 color=yes uv=yes (blas 0.58 ms, total builds=347)
+[rebuild] index=1272 origin=(-48,-32,48) layers=1 verts=44 tris=22 color=yes uv=yes (blas 0.29 ms, total builds=348)
+[rebuild] index=1273 origin=(-32,-32,48) layers=2 verts=892 tris=446 color=yes uv=yes (blas 0.62 ms, total builds=349)
+[rebuild] index=1274 origin=(-16,-32,48) layers=1 verts=584 tris=292 color=yes uv=yes (blas 0.44 ms, total builds=350)
+[INFO ] rebuild #350: index=1274 origin=(-16,-32,48) layers=1 verts=584 (1.3 ms)
+[rebuild] index=1275 origin=(0,-16,48) layers=1 verts=1276 tris=638 color=yes uv=yes (blas 0.34 ms, total builds=351)
+[rebuild] index=1276 origin=(16,-16,48) layers=1 verts=196 tris=98 color=yes uv=yes (blas 0.27 ms, total builds=352)
+[rebuild] index=1282 origin=(112,-16,48) layers=1 verts=72 tris=36 color=yes uv=yes (blas 0.34 ms, total builds=353)
+[rebuild] index=1283 origin=(128,-16,48) layers=1 verts=32 tris=16 color=yes uv=yes (blas 0.27 ms, total builds=354)
+[rebuild] index=1284 origin=(-128,-16,48) layers=1 verts=144 tris=72 color=yes uv=yes (blas 0.41 ms, total builds=355)
+[rebuild] index=1285 origin=(-112,-16,48) layers=1 verts=276 tris=138 color=yes uv=yes (blas 0.46 ms, total builds=356)
+[rebuild] index=1286 origin=(-96,-16,48) layers=1 verts=2140 tris=1070 color=yes uv=yes (blas 1.04 ms, total builds=357)
+[rebuild] index=1287 origin=(-80,-16,48) layers=1 verts=2612 tris=1306 color=yes uv=yes (blas 0.78 ms, total builds=358)
+[rebuild] index=1288 origin=(-64,-16,48) layers=1 verts=16 tris=8 color=yes uv=yes (blas 0.40 ms, total builds=359)
+[rebuild] index=1290 origin=(-32,-16,48) layers=1 verts=1252 tris=626 color=yes uv=yes (blas 0.75 ms, total builds=360)
+[rebuild] index=1291 origin=(-16,-16,48) layers=1 verts=2568 tris=1284 color=yes uv=yes (blas 1.12 ms, total builds=361)
+[rebuild] index=1292 origin=(0,0,48) layers=1 verts=2444 tris=1222 color=yes uv=yes (blas 0.98 ms, total builds=362)
+[rebuild] index=1293 origin=(16,0,48) layers=1 verts=552 tris=276 color=yes uv=yes (blas 0.39 ms, total builds=363)
+[rebuild] index=1298 origin=(96,0,48) layers=3 verts=2692 tris=1346 color=yes uv=yes (blas 0.82 ms, total builds=364)
+[rebuild] index=1299 origin=(112,0,48) layers=3 verts=3696 tris=1848 color=yes uv=yes (blas 0.59 ms, total builds=365)
+[rebuild] index=1300 origin=(128,0,48) layers=2 verts=1600 tris=800 color=yes uv=yes (blas 0.63 ms, total builds=366)
+[rebuild] index=1301 origin=(-128,0,48) layers=1 verts=424 tris=212 color=yes uv=yes (blas 0.51 ms, total builds=367)
+[rebuild] index=1302 origin=(-112,0,48) layers=2 verts=1748 tris=874 color=yes uv=yes (blas 0.95 ms, total builds=368)
+[retired] releasing 6 deferred objects
+[tlas] rebuilt in 0.97 ms (instances=368, as=80064 B, tris=270672, colorSlots=368, pools=3248064+3248064 B, total=12 builds)
+[rebuild] index=1303 origin=(-96,0,48) layers=2 verts=1592 tris=796 color=yes uv=yes (blas 0.93 ms, total builds=369)
+[rebuild] index=1304 origin=(-80,0,48) layers=2 verts=2404 tris=1202 color=yes uv=yes (blas 0.85 ms, total builds=370)
+[rebuild] index=1305 origin=(-64,0,48) layers=3 verts=2744 tris=1372 color=yes uv=yes (blas 1.34 ms, total builds=371)
+[rebuild] index=1306 origin=(-48,0,48) layers=2 verts=432 tris=216 color=yes uv=yes (blas 0.47 ms, total builds=372)
+[rebuild] index=1307 origin=(-32,0,48) layers=2 verts=1024 tris=512 color=yes uv=yes (blas 1.50 ms, total builds=373)
+[rebuild] index=1308 origin=(-16,0,48) layers=3 verts=3996 tris=1998 color=yes uv=yes (blas 1.28 ms, total builds=374)
+[rebuild] index=1309 origin=(0,16,48) layers=3 verts=224 tris=112 color=yes uv=yes (blas 1.57 ms, total builds=375)
+[rebuild] index=1310 origin=(16,16,48) layers=2 verts=580 tris=290 color=yes uv=yes (blas 1.05 ms, total builds=376)
+[rebuild] index=1313 origin=(64,16,48) layers=2 verts=1180 tris=590 color=yes uv=yes (blas 0.99 ms, total builds=377)
+[rebuild] index=1314 origin=(80,16,48) layers=2 verts=2268 tris=1134 color=yes uv=yes (blas 1.43 ms, total builds=378)
+[rebuild] index=1315 origin=(96,16,48) layers=2 verts=1348 tris=674 color=yes uv=yes (blas 0.71 ms, total builds=379)
+[rebuild] index=1316 origin=(112,16,48) layers=2 verts=1048 tris=524 color=yes uv=yes (blas 0.64 ms, total builds=380)
+[rebuild] index=1320 origin=(-96,16,48) layers=2 verts=928 tris=464 color=yes uv=yes (blas 0.57 ms, total builds=381)
+[rebuild] index=1321 origin=(-80,16,48) layers=2 verts=3164 tris=1582 color=yes uv=yes (blas 0.76 ms, total builds=382)
+[rebuild] index=1322 origin=(-64,16,48) layers=2 verts=1796 tris=898 color=yes uv=yes (blas 0.91 ms, total builds=383)
+[rebuild] index=1323 origin=(-48,16,48) layers=2 verts=512 tris=256 color=yes uv=yes (blas 0.47 ms, total builds=384)
+[rebuild] index=1326 origin=(0,32,48) layers=2 verts=3992 tris=1996 color=yes uv=yes (blas 0.83 ms, total builds=385)
+[rebuild] index=1327 origin=(16,32,48) layers=3 verts=1752 tris=876 color=yes uv=yes (blas 0.59 ms, total builds=386)
+[rebuild] index=1328 origin=(32,32,48) layers=2 verts=264 tris=132 color=yes uv=yes (blas 0.33 ms, total builds=387)
+[rebuild] index=1329 origin=(48,32,48) layers=1 verts=36 tris=18 color=yes uv=yes (blas 0.32 ms, total builds=388)
+[rebuild] index=1330 origin=(64,32,48) layers=2 verts=584 tris=292 color=yes uv=yes (blas 0.55 ms, total builds=389)
+[rebuild] index=1335 origin=(-128,32,48) layers=1 verts=1368 tris=684 color=yes uv=yes (blas 0.55 ms, total builds=390)
+[rebuild] index=1336 origin=(-112,32,48) layers=2 verts=1772 tris=886 color=yes uv=yes (blas 0.87 ms, total builds=391)
+[rebuild] index=1337 origin=(-96,32,48) layers=2 verts=1064 tris=532 color=yes uv=yes (blas 0.49 ms, total builds=392)
+[rebuild] index=1338 origin=(-80,32,48) layers=3 verts=4120 tris=2060 color=yes uv=yes (blas 0.72 ms, total builds=393)
+[rebuild] index=1339 origin=(-64,32,48) layers=3 verts=560 tris=280 color=yes uv=yes (blas 0.47 ms, total builds=394)
+[rebuild] index=1342 origin=(-16,32,48) layers=2 verts=1268 tris=634 color=yes uv=yes (blas 0.67 ms, total builds=395)
+[rebuild] index=1343 origin=(0,48,48) layers=4 verts=4768 tris=2384 color=yes uv=yes (blas 0.77 ms, total builds=396)
+[rebuild] index=1344 origin=(16,48,48) layers=2 verts=5076 tris=2538 color=yes uv=yes (blas 1.05 ms, total builds=397)
+[rebuild] index=1345 origin=(32,48,48) layers=3 verts=3976 tris=1988 color=yes uv=yes (blas 1.04 ms, total builds=398)
+[rebuild] index=1346 origin=(48,48,48) layers=2 verts=4028 tris=2014 color=yes uv=yes (blas 1.11 ms, total builds=399)
+[rebuild] index=1347 origin=(64,48,48) layers=3 verts=5056 tris=2528 color=yes uv=yes (blas 0.82 ms, total builds=400)
+[INFO ] rebuild #400: index=1347 origin=(64,48,48) layers=3 verts=5056 (2.2 ms)
+[retired] releasing 6 deferred objects
+[tlas] rebuilt in 2.10 ms (instances=400, as=86976 B, tris=303134, colorSlots=400, pools=3637608+3637608 B, total=13 builds)
+[rebuild] index=1348 origin=(80,48,48) layers=4 verts=4148 tris=2074 color=yes uv=yes (blas 0.84 ms, total builds=401)
+[rebuild] index=1349 origin=(96,48,48) layers=4 verts=1164 tris=582 color=yes uv=yes (blas 0.66 ms, total builds=402)
+[rebuild] index=1352 origin=(-128,48,48) layers=3 verts=3160 tris=1580 color=yes uv=yes (blas 1.12 ms, total builds=403)
+[rebuild] index=1353 origin=(-112,48,48) layers=4 verts=2196 tris=1098 color=yes uv=yes (blas 0.61 ms, total builds=404)
+[rebuild] index=1354 origin=(-96,48,48) layers=3 verts=6216 tris=3108 color=yes uv=yes (blas 1.11 ms, total builds=405)
+[rebuild] index=1355 origin=(-80,48,48) layers=3 verts=7044 tris=3522 color=yes uv=yes (blas 1.37 ms, total builds=406)
+[rebuild] index=1356 origin=(-64,48,48) layers=4 verts=6360 tris=3180 color=yes uv=yes (blas 1.52 ms, total builds=407)
+[rebuild] index=1357 origin=(-48,48,48) layers=4 verts=2628 tris=1314 color=yes uv=yes (blas 0.84 ms, total builds=408)
+[rebuild] index=1358 origin=(-32,48,48) layers=4 verts=1876 tris=938 color=yes uv=yes (blas 0.49 ms, total builds=409)
+[rebuild] index=1359 origin=(-16,48,48) layers=4 verts=2124 tris=1062 color=yes uv=yes (blas 1.14 ms, total builds=410)
+[rebuild] index=1360 origin=(0,64,48) layers=2 verts=11256 tris=5628 color=yes uv=yes (blas 1.31 ms, total builds=411)
+[rebuild] index=1366 origin=(96,64,48) layers=3 verts=2220 tris=1110 color=yes uv=yes (blas 1.00 ms, total builds=412)
+[rebuild] index=1367 origin=(112,64,48) layers=3 verts=1984 tris=992 color=yes uv=yes (blas 0.68 ms, total builds=413)
+[rebuild] index=1368 origin=(128,64,48) layers=2 verts=1024 tris=512 color=yes uv=yes (blas 0.42 ms, total builds=414)
+[rebuild] index=1369 origin=(-128,64,48) layers=3 verts=2184 tris=1092 color=yes uv=yes (blas 1.70 ms, total builds=415)
+[rebuild] index=1370 origin=(-112,64,48) layers=1 verts=240 tris=120 color=yes uv=yes (blas 0.36 ms, total builds=416)
+[rebuild] index=1373 origin=(-64,64,48) layers=1 verts=1352 tris=676 color=yes uv=yes (blas 0.46 ms, total builds=417)
+[rebuild] index=1374 origin=(-48,64,48) layers=1 verts=4452 tris=2226 color=yes uv=yes (blas 1.26 ms, total builds=418)
+[rebuild] index=1375 origin=(-32,64,48) layers=2 verts=7584 tris=3792 color=yes uv=yes (blas 1.39 ms, total builds=419)
+[rebuild] index=1376 origin=(-16,64,48) layers=2 verts=7988 tris=3994 color=yes uv=yes (blas 0.81 ms, total builds=420)
+[rebuild] index=1632 origin=(0,-64,64) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 0.43 ms, total builds=421)
+[rebuild] index=1633 origin=(16,-64,64) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 1.38 ms, total builds=422)
+[rebuild] index=1634 origin=(32,-64,64) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 1.90 ms, total builds=423)
+[rebuild] index=1635 origin=(48,-64,64) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 0.40 ms, total builds=424)
+[rebuild] index=1636 origin=(64,-64,64) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 0.96 ms, total builds=425)
+[rebuild] index=1637 origin=(80,-64,64) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 0.36 ms, total builds=426)
+[rebuild] index=1638 origin=(96,-64,64) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 0.60 ms, total builds=427)
+[rebuild] index=1639 origin=(112,-64,64) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 0.31 ms, total builds=428)
+[rebuild] index=1640 origin=(128,-64,64) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 0.41 ms, total builds=429)
+[rebuild] index=1641 origin=(-128,-64,64) layers=1 verts=1052 tris=526 color=yes uv=yes (blas 0.71 ms, total builds=430)
+[rebuild] index=1642 origin=(-112,-64,64) layers=1 verts=2928 tris=1464 color=yes uv=yes (blas 0.77 ms, total builds=431)
+[rebuild] index=1643 origin=(-96,-64,64) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 0.45 ms, total builds=432)
+[retired] releasing 6 deferred objects
+[tlas] rebuilt in 0.74 ms (instances=432, as=93952 B, tris=348844, colorSlots=432, pools=4186128+4186128 B, total=14 builds)
+[rebuild] index=1644 origin=(-80,-64,64) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 1.18 ms, total builds=433)
+[rebuild] index=1645 origin=(-64,-64,64) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 0.44 ms, total builds=434)
+[rebuild] index=1646 origin=(-48,-64,64) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 0.56 ms, total builds=435)
+[rebuild] index=1647 origin=(-32,-64,64) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 0.49 ms, total builds=436)
+[rebuild] index=1648 origin=(-16,-64,64) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 0.49 ms, total builds=437)
+[rebuild] index=1649 origin=(0,-48,64) layers=1 verts=228 tris=114 color=yes uv=yes (blas 1.03 ms, total builds=438)
+[rebuild] index=1656 origin=(112,-48,64) layers=2 verts=1280 tris=640 color=yes uv=yes (blas 0.80 ms, total builds=439)
+[rebuild] index=1657 origin=(128,-48,64) layers=1 verts=832 tris=416 color=yes uv=yes (blas 1.02 ms, total builds=440)
+[rebuild] index=1659 origin=(-112,-48,64) layers=1 verts=1484 tris=742 color=yes uv=yes (blas 0.56 ms, total builds=441)
+[rebuild] index=1660 origin=(-96,-48,64) layers=1 verts=708 tris=354 color=yes uv=yes (blas 0.71 ms, total builds=442)
+[rebuild] index=1661 origin=(-80,-48,64) layers=2 verts=2604 tris=1302 color=yes uv=yes (blas 1.37 ms, total builds=443)
+[rebuild] index=1662 origin=(-64,-48,64) layers=1 verts=84 tris=42 color=yes uv=yes (blas 0.33 ms, total builds=444)
+[rebuild] index=1664 origin=(-32,-48,64) layers=1 verts=116 tris=58 color=yes uv=yes (blas 0.37 ms, total builds=445)
+[rebuild] index=1666 origin=(0,-32,64) layers=1 verts=960 tris=480 color=yes uv=yes (blas 2.14 ms, total builds=446)
+[rebuild] index=1669 origin=(48,-32,64) layers=1 verts=212 tris=106 color=yes uv=yes (blas 0.37 ms, total builds=447)
+[rebuild] index=1670 origin=(64,-32,64) layers=1 verts=544 tris=272 color=yes uv=yes (blas 1.78 ms, total builds=448)
+[rebuild] index=1676 origin=(-112,-32,64) layers=2 verts=1552 tris=776 color=yes uv=yes (blas 1.62 ms, total builds=449)
+[rebuild] index=1677 origin=(-96,-32,64) layers=2 verts=3020 tris=1510 color=yes uv=yes (blas 0.63 ms, total builds=450)
+[INFO ] rebuild #450: index=1677 origin=(-96,-32,64) layers=2 verts=3020 (1.8 ms)
+[rebuild] index=1678 origin=(-80,-32,64) layers=1 verts=1016 tris=508 color=yes uv=yes (blas 0.51 ms, total builds=451)
+[rebuild] index=1680 origin=(-48,-32,64) layers=1 verts=888 tris=444 color=yes uv=yes (blas 1.00 ms, total builds=452)
+[rebuild] index=1681 origin=(-32,-32,64) layers=1 verts=1812 tris=906 color=yes uv=yes (blas 0.72 ms, total builds=453)
+[rebuild] index=1682 origin=(-16,-32,64) layers=1 verts=1236 tris=618 color=yes uv=yes (blas 0.48 ms, total builds=454)
+[rebuild] index=1683 origin=(0,-16,64) layers=2 verts=1516 tris=758 color=yes uv=yes (blas 0.71 ms, total builds=455)
+[rebuild] index=1684 origin=(16,-16,64) layers=2 verts=892 tris=446 color=yes uv=yes (blas 1.17 ms, total builds=456)
+[rebuild] index=1685 origin=(32,-16,64) layers=1 verts=20 tris=10 color=yes uv=yes (blas 0.31 ms, total builds=457)
+[rebuild] index=1686 origin=(48,-16,64) layers=1 verts=136 tris=68 color=yes uv=yes (blas 0.40 ms, total builds=458)
+[rebuild] index=1687 origin=(64,-16,64) layers=1 verts=112 tris=56 color=yes uv=yes (blas 0.36 ms, total builds=459)
+[rebuild] index=1692 origin=(-128,-16,64) layers=2 verts=804 tris=402 color=yes uv=yes (blas 1.07 ms, total builds=460)
+[rebuild] index=1693 origin=(-112,-16,64) layers=1 verts=328 tris=164 color=yes uv=yes (blas 0.44 ms, total builds=461)
+[rebuild] index=1694 origin=(-96,-16,64) layers=2 verts=1876 tris=938 color=yes uv=yes (blas 0.64 ms, total builds=462)
+[rebuild] index=1695 origin=(-80,-16,64) layers=1 verts=356 tris=178 color=yes uv=yes (blas 0.52 ms, total builds=463)
+[rebuild] index=1697 origin=(-48,-16,64) layers=1 verts=4 tris=2 color=yes uv=yes (blas 0.16 ms, total builds=464)
+[retired] releasing 6 deferred objects
+[tlas] rebuilt in 2.07 ms (instances=464, as=100864 B, tris=363714, colorSlots=464, pools=4364568+4364568 B, total=15 builds)
+[rebuild] index=1698 origin=(-32,-16,64) layers=1 verts=296 tris=148 color=yes uv=yes (blas 0.91 ms, total builds=465)
+[rebuild] index=1699 origin=(-16,-16,64) layers=2 verts=1620 tris=810 color=yes uv=yes (blas 0.58 ms, total builds=466)
+[rebuild] index=1700 origin=(0,0,64) layers=2 verts=1808 tris=904 color=yes uv=yes (blas 0.71 ms, total builds=467)
+[rebuild] index=1701 origin=(16,0,64) layers=3 verts=3068 tris=1534 color=yes uv=yes (blas 1.69 ms, total builds=468)
+[rebuild] index=1702 origin=(32,0,64) layers=2 verts=572 tris=286 color=yes uv=yes (blas 0.49 ms, total builds=469)
+[rebuild] index=1706 origin=(96,0,64) layers=2 verts=3844 tris=1922 color=yes uv=yes (blas 1.62 ms, total builds=470)
+[rebuild] index=1707 origin=(112,0,64) layers=2 verts=764 tris=382 color=yes uv=yes (blas 0.57 ms, total builds=471)
+[rebuild] index=1709 origin=(-128,0,64) layers=1 verts=204 tris=102 color=yes uv=yes (blas 0.37 ms, total builds=472)
+[rebuild] index=1710 origin=(-112,0,64) layers=2 verts=660 tris=330 color=yes uv=yes (blas 1.30 ms, total builds=473)
+[rebuild] index=1711 origin=(-96,0,64) layers=1 verts=208 tris=104 color=yes uv=yes (blas 0.62 ms, total builds=474)
+[rebuild] index=1712 origin=(-80,0,64) layers=2 verts=696 tris=348 color=yes uv=yes (blas 0.47 ms, total builds=475)
+[rebuild] index=1713 origin=(-64,0,64) layers=2 verts=708 tris=354 color=yes uv=yes (blas 0.56 ms, total builds=476)
+[rebuild] index=1714 origin=(-48,0,64) layers=2 verts=544 tris=272 color=yes uv=yes (blas 0.55 ms, total builds=477)
+[rebuild] index=1715 origin=(-32,0,64) layers=2 verts=960 tris=480 color=yes uv=yes (blas 1.12 ms, total builds=478)
+[rebuild] index=1716 origin=(-16,0,64) layers=3 verts=3840 tris=1920 color=yes uv=yes (blas 1.05 ms, total builds=479)
+[rebuild] index=1717 origin=(0,16,64) layers=1 verts=2608 tris=1304 color=yes uv=yes (blas 0.80 ms, total builds=480)
+[rebuild] index=1718 origin=(16,16,64) layers=2 verts=880 tris=440 color=yes uv=yes (blas 1.90 ms, total builds=481)
+[rebuild] index=1719 origin=(32,16,64) layers=2 verts=172 tris=86 color=yes uv=yes (blas 0.36 ms, total builds=482)
+[rebuild] index=1723 origin=(96,16,64) layers=3 verts=2576 tris=1288 color=yes uv=yes (blas 2.07 ms, total builds=483)
+[rebuild] index=1724 origin=(112,16,64) layers=1 verts=288 tris=144 color=yes uv=yes (blas 0.36 ms, total builds=484)
+[rebuild] index=1726 origin=(-128,16,64) layers=1 verts=1640 tris=820 color=yes uv=yes (blas 1.26 ms, total builds=485)
+[rebuild] index=1727 origin=(-112,16,64) layers=2 verts=1328 tris=664 color=yes uv=yes (blas 0.58 ms, total builds=486)
+[rebuild] index=1728 origin=(-96,16,64) layers=2 verts=2704 tris=1352 color=yes uv=yes (blas 0.58 ms, total builds=487)
+[rebuild] index=1729 origin=(-80,16,64) layers=2 verts=1456 tris=728 color=yes uv=yes (blas 0.50 ms, total builds=488)
+[rebuild] index=1730 origin=(-64,16,64) layers=1 verts=1320 tris=660 color=yes uv=yes (blas 1.64 ms, total builds=489)
+[rebuild] index=1731 origin=(-48,16,64) layers=1 verts=24 tris=12 color=yes uv=yes (blas 0.27 ms, total builds=490)
+[rebuild] index=1733 origin=(-16,16,64) layers=2 verts=288 tris=144 color=yes uv=yes (blas 0.45 ms, total builds=491)
+[rebuild] index=1735 origin=(16,32,64) layers=3 verts=4592 tris=2296 color=yes uv=yes (blas 1.04 ms, total builds=492)
+[rebuild] index=1736 origin=(32,32,64) layers=3 verts=2192 tris=1096 color=yes uv=yes (blas 0.57 ms, total builds=493)
+[rebuild] index=1737 origin=(48,32,64) layers=3 verts=1084 tris=542 color=yes uv=yes (blas 0.45 ms, total builds=494)
+[rebuild] index=1738 origin=(64,32,64) layers=2 verts=704 tris=352 color=yes uv=yes (blas 0.69 ms, total builds=495)
+[rebuild] index=1743 origin=(-128,32,64) layers=2 verts=868 tris=434 color=yes uv=yes (blas 0.40 ms, total builds=496)
+[retired] releasing 6 deferred objects
+[tlas] rebuilt in 2.82 ms (instances=496, as=107776 B, tris=385972, colorSlots=496, pools=4631664+4631664 B, total=16 builds)
+[rebuild] index=1744 origin=(-112,32,64) layers=2 verts=944 tris=472 color=yes uv=yes (blas 0.68 ms, total builds=497)
+[rebuild] index=1745 origin=(-96,32,64) layers=3 verts=5624 tris=2812 color=yes uv=yes (blas 1.19 ms, total builds=498)
+[rebuild] index=1746 origin=(-80,32,64) layers=2 verts=4328 tris=2164 color=yes uv=yes (blas 0.93 ms, total builds=499)
+[rebuild] index=1747 origin=(-64,32,64) layers=3 verts=2932 tris=1466 color=yes uv=yes (blas 0.69 ms, total builds=500)
+[INFO ] rebuild #500: index=1747 origin=(-64,32,64) layers=3 verts=2932 (2.1 ms)
+[rebuild] index=1748 origin=(-48,32,64) layers=2 verts=1528 tris=764 color=yes uv=yes (blas 0.78 ms, total builds=501)
+[rebuild] index=1751 origin=(0,48,64) layers=4 verts=2288 tris=1144 color=yes uv=yes (blas 0.87 ms, total builds=502)
+[rebuild] index=1752 origin=(16,48,64) layers=2 verts=4700 tris=2350 color=yes uv=yes (blas 1.31 ms, total builds=503)
+[rebuild] index=1753 origin=(32,48,64) layers=2 verts=3772 tris=1886 color=yes uv=yes (blas 1.72 ms, total builds=504)
+[rebuild] index=1754 origin=(48,48,64) layers=3 verts=3896 tris=1948 color=yes uv=yes (blas 1.24 ms, total builds=505)
+[rebuild] index=1755 origin=(64,48,64) layers=3 verts=4280 tris=2140 color=yes uv=yes (blas 0.77 ms, total builds=506)
+[rebuild] index=1756 origin=(80,48,64) layers=4 verts=4556 tris=2278 color=yes uv=yes (blas 1.22 ms, total builds=507)
+[rebuild] index=1757 origin=(96,48,64) layers=2 verts=164 tris=82 color=yes uv=yes (blas 0.41 ms, total builds=508)
+[rebuild] index=1760 origin=(-128,48,64) layers=4 verts=1860 tris=930 color=yes uv=yes (blas 0.73 ms, total builds=509)
+[rebuild] index=1761 origin=(-112,48,64) layers=4 verts=4484 tris=2242 color=yes uv=yes (blas 0.95 ms, total builds=510)
+[rebuild] index=1762 origin=(-96,48,64) layers=3 verts=5432 tris=2716 color=yes uv=yes (blas 0.99 ms, total builds=511)
+[rebuild] index=1763 origin=(-80,48,64) layers=4 verts=5060 tris=2530 color=yes uv=yes (blas 0.95 ms, total builds=512)
+[rebuild] index=1764 origin=(-64,48,64) layers=4 verts=3740 tris=1870 color=yes uv=yes (blas 0.91 ms, total builds=513)
+[rebuild] index=1765 origin=(-48,48,64) layers=4 verts=2024 tris=1012 color=yes uv=yes (blas 1.24 ms, total builds=514)
+[rebuild] index=1766 origin=(-32,48,64) layers=2 verts=756 tris=378 color=yes uv=yes (blas 1.56 ms, total builds=515)
+[rebuild] index=1767 origin=(-16,48,64) layers=1 verts=496 tris=248 color=yes uv=yes (blas 0.61 ms, total builds=516)
+[rebuild] index=1768 origin=(0,64,64) layers=3 verts=5708 tris=2854 color=yes uv=yes (blas 0.94 ms, total builds=517)
+[rebuild] index=1773 origin=(80,64,64) layers=1 verts=320 tris=160 color=yes uv=yes (blas 0.60 ms, total builds=518)
+[rebuild] index=1774 origin=(96,64,64) layers=3 verts=1600 tris=800 color=yes uv=yes (blas 0.68 ms, total builds=519)
+[rebuild] index=1775 origin=(112,64,64) layers=1 verts=1248 tris=624 color=yes uv=yes (blas 1.09 ms, total builds=520)
+[rebuild] index=1776 origin=(128,64,64) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 0.50 ms, total builds=521)
+[rebuild] index=1777 origin=(-128,64,64) layers=3 verts=2208 tris=1104 color=yes uv=yes (blas 1.07 ms, total builds=522)
+[rebuild] index=1781 origin=(-64,64,64) layers=3 verts=3828 tris=1914 color=yes uv=yes (blas 1.01 ms, total builds=523)
+[rebuild] index=1782 origin=(-48,64,64) layers=3 verts=9112 tris=4556 color=yes uv=yes (blas 2.19 ms, total builds=524)
+[rebuild] index=1783 origin=(-32,64,64) layers=3 verts=9248 tris=4624 color=yes uv=yes (blas 1.19 ms, total builds=525)
+[rebuild] index=1784 origin=(-16,64,64) layers=3 verts=11464 tris=5732 color=yes uv=yes (blas 2.44 ms, total builds=526)
+[rebuild] index=2040 origin=(0,-64,80) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 0.97 ms, total builds=527)
+[rebuild] index=2041 origin=(16,-64,80) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 0.62 ms, total builds=528)
+[retired] releasing 6 deferred objects
+[tlas] rebuilt in 1.21 ms (instances=528, as=114688 B, tris=441308, colorSlots=528, pools=5295696+5295696 B, total=17 builds)
+[rebuild] index=2042 origin=(32,-64,80) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 0.77 ms, total builds=529)
+[rebuild] index=2043 origin=(48,-64,80) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 1.10 ms, total builds=530)
+[rebuild] index=2044 origin=(64,-64,80) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 0.42 ms, total builds=531)
+[rebuild] index=2045 origin=(80,-64,80) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 0.45 ms, total builds=532)
+[rebuild] index=2046 origin=(96,-64,80) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 0.54 ms, total builds=533)
+[rebuild] index=2047 origin=(112,-64,80) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 1.30 ms, total builds=534)
+[rebuild] index=2048 origin=(128,-64,80) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 0.47 ms, total builds=535)
+[rebuild] index=2049 origin=(-128,-64,80) layers=1 verts=1968 tris=984 color=yes uv=yes (blas 0.69 ms, total builds=536)
+[rebuild] index=2050 origin=(-112,-64,80) layers=1 verts=2080 tris=1040 color=yes uv=yes (blas 0.77 ms, total builds=537)
+[rebuild] index=2051 origin=(-96,-64,80) layers=2 verts=2084 tris=1042 color=yes uv=yes (blas 1.12 ms, total builds=538)
+[rebuild] index=2052 origin=(-80,-64,80) layers=1 verts=1044 tris=522 color=yes uv=yes (blas 1.09 ms, total builds=539)
+[rebuild] index=2053 origin=(-64,-64,80) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 0.54 ms, total builds=540)
+[rebuild] index=2054 origin=(-48,-64,80) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 0.53 ms, total builds=541)
+[rebuild] index=2055 origin=(-32,-64,80) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 0.56 ms, total builds=542)
+[rebuild] index=2056 origin=(-16,-64,80) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 1.10 ms, total builds=543)
+[rebuild] index=2062 origin=(80,-48,80) layers=1 verts=144 tris=72 color=yes uv=yes (blas 0.66 ms, total builds=544)
+[rebuild] index=2063 origin=(96,-48,80) layers=1 verts=956 tris=478 color=yes uv=yes (blas 1.34 ms, total builds=545)
+[rebuild] index=2066 origin=(-128,-48,80) layers=1 verts=484 tris=242 color=yes uv=yes (blas 0.64 ms, total builds=546)
+[rebuild] index=2067 origin=(-112,-48,80) layers=1 verts=184 tris=92 color=yes uv=yes (blas 0.47 ms, total builds=547)
+[rebuild] index=2068 origin=(-96,-48,80) layers=2 verts=652 tris=326 color=yes uv=yes (blas 0.56 ms, total builds=548)
+[rebuild] index=2069 origin=(-80,-48,80) layers=2 verts=1516 tris=758 color=yes uv=yes (blas 1.12 ms, total builds=549)
+[rebuild] index=2075 origin=(16,-32,80) layers=1 verts=8 tris=4 color=yes uv=yes (blas 0.39 ms, total builds=550)
+[INFO ] rebuild #550: index=2075 origin=(16,-32,80) layers=1 verts=8 (1.3 ms)
+[rebuild] index=2076 origin=(32,-32,80) layers=1 verts=16 tris=8 color=yes uv=yes (blas 0.26 ms, total builds=551)
+[rebuild] index=2077 origin=(48,-32,80) layers=1 verts=132 tris=66 color=yes uv=yes (blas 0.69 ms, total builds=552)
+[rebuild] index=2078 origin=(64,-32,80) layers=1 verts=356 tris=178 color=yes uv=yes (blas 0.47 ms, total builds=553)
+[rebuild] index=2079 origin=(80,-32,80) layers=1 verts=1108 tris=554 color=yes uv=yes (blas 0.73 ms, total builds=554)
+[rebuild] index=2080 origin=(96,-32,80) layers=1 verts=508 tris=254 color=yes uv=yes (blas 0.45 ms, total builds=555)
+[rebuild] index=2083 origin=(-128,-32,80) layers=1 verts=1380 tris=690 color=yes uv=yes (blas 0.68 ms, total builds=556)
+[rebuild] index=2084 origin=(-112,-32,80) layers=1 verts=428 tris=214 color=yes uv=yes (blas 0.43 ms, total builds=557)
+[rebuild] index=2085 origin=(-96,-32,80) layers=1 verts=2616 tris=1308 color=yes uv=yes (blas 0.87 ms, total builds=558)
+[rebuild] index=2086 origin=(-80,-32,80) layers=1 verts=1216 tris=608 color=yes uv=yes (blas 1.07 ms, total builds=559)
+[rebuild] index=2087 origin=(-64,-32,80) layers=1 verts=992 tris=496 color=yes uv=yes (blas 0.64 ms, total builds=560)
+[retired] releasing 6 deferred objects
+[tlas] rebuilt in 2.29 ms (instances=560, as=121600 B, tris=456876, colorSlots=560, pools=5482512+5482512 B, total=18 builds)
+[rebuild] index=2088 origin=(-48,-32,80) layers=1 verts=1448 tris=724 color=yes uv=yes (blas 1.70 ms, total builds=561)
+[rebuild] index=2091 origin=(0,-16,80) layers=1 verts=400 tris=200 color=yes uv=yes (blas 0.60 ms, total builds=562)
+[rebuild] index=2092 origin=(16,-16,80) layers=1 verts=1904 tris=952 color=yes uv=yes (blas 0.72 ms, total builds=563)
+[rebuild] index=2093 origin=(32,-16,80) layers=2 verts=908 tris=454 color=yes uv=yes (blas 0.73 ms, total builds=564)
+[rebuild] index=2094 origin=(48,-16,80) layers=1 verts=308 tris=154 color=yes uv=yes (blas 0.42 ms, total builds=565)
+[rebuild] index=2100 origin=(-128,-16,80) layers=1 verts=832 tris=416 color=yes uv=yes (blas 0.60 ms, total builds=566)
+[rebuild] index=2101 origin=(-112,-16,80) layers=1 verts=868 tris=434 color=yes uv=yes (blas 0.58 ms, total builds=567)
+[rebuild] index=2102 origin=(-96,-16,80) layers=1 verts=12 tris=6 color=yes uv=yes (blas 0.28 ms, total builds=568)
+[rebuild] index=2103 origin=(-80,-16,80) layers=1 verts=316 tris=158 color=yes uv=yes (blas 1.42 ms, total builds=569)
+[rebuild] index=2104 origin=(-64,-16,80) layers=1 verts=48 tris=24 color=yes uv=yes (blas 0.30 ms, total builds=570)
+[rebuild] index=2105 origin=(-48,-16,80) layers=1 verts=56 tris=28 color=yes uv=yes (blas 0.24 ms, total builds=571)
+[rebuild] index=2106 origin=(-32,-16,80) layers=1 verts=764 tris=382 color=yes uv=yes (blas 0.54 ms, total builds=572)
+[rebuild] index=2107 origin=(-16,-16,80) layers=1 verts=1196 tris=598 color=yes uv=yes (blas 0.78 ms, total builds=573)
+[rebuild] index=2108 origin=(0,0,80) layers=1 verts=1664 tris=832 color=yes uv=yes (blas 1.48 ms, total builds=574)
+[rebuild] index=2109 origin=(16,0,80) layers=3 verts=3900 tris=1950 color=yes uv=yes (blas 0.86 ms, total builds=575)
+[rebuild] index=2110 origin=(32,0,80) layers=3 verts=3988 tris=1994 color=yes uv=yes (blas 1.65 ms, total builds=576)
+[rebuild] index=2111 origin=(48,0,80) layers=2 verts=436 tris=218 color=yes uv=yes (blas 1.02 ms, total builds=577)
+[rebuild] index=2113 origin=(80,0,80) layers=3 verts=1088 tris=544 color=yes uv=yes (blas 0.66 ms, total builds=578)
+[rebuild] index=2114 origin=(96,0,80) layers=3 verts=2228 tris=1114 color=yes uv=yes (blas 2.06 ms, total builds=579)
+[rebuild] index=2117 origin=(-128,0,80) layers=1 verts=1648 tris=824 color=yes uv=yes (blas 0.97 ms, total builds=580)
+[rebuild] index=2118 origin=(-112,0,80) layers=2 verts=688 tris=344 color=yes uv=yes (blas 1.19 ms, total builds=581)
+[rebuild] index=2119 origin=(-96,0,80) layers=1 verts=368 tris=184 color=yes uv=yes (blas 0.42 ms, total builds=582)
+[rebuild] index=2121 origin=(-64,0,80) layers=1 verts=196 tris=98 color=yes uv=yes (blas 0.42 ms, total builds=583)
+[rebuild] index=2122 origin=(-48,0,80) layers=2 verts=4084 tris=2042 color=yes uv=yes (blas 1.45 ms, total builds=584)
+[rebuild] index=2123 origin=(-32,0,80) layers=3 verts=2792 tris=1396 color=yes uv=yes (blas 0.67 ms, total builds=585)
+[rebuild] index=2124 origin=(-16,0,80) layers=2 verts=1464 tris=732 color=yes uv=yes (blas 0.93 ms, total builds=586)
+[rebuild] index=2125 origin=(0,16,80) layers=1 verts=2436 tris=1218 color=yes uv=yes (blas 0.82 ms, total builds=587)
+[rebuild] index=2126 origin=(16,16,80) layers=3 verts=3148 tris=1574 color=yes uv=yes (blas 0.71 ms, total builds=588)
+[rebuild] index=2127 origin=(32,16,80) layers=2 verts=824 tris=412 color=yes uv=yes (blas 0.53 ms, total builds=589)
+[rebuild] index=2128 origin=(48,16,80) layers=3 verts=572 tris=286 color=yes uv=yes (blas 0.56 ms, total builds=590)
+[rebuild] index=2129 origin=(64,16,80) layers=3 verts=568 tris=284 color=yes uv=yes (blas 1.10 ms, total builds=591)
+[rebuild] index=2130 origin=(80,16,80) layers=2 verts=712 tris=356 color=yes uv=yes (blas 1.14 ms, total builds=592)
+[retired] releasing 6 deferred objects
+[tlas] rebuilt in 2.04 ms (instances=592, as=128512 B, tris=477808, colorSlots=592, pools=5733696+5733696 B, total=19 builds)
+[rebuild] index=2131 origin=(96,16,80) layers=3 verts=3116 tris=1558 color=yes uv=yes (blas 1.03 ms, total builds=593)
+[rebuild] index=2134 origin=(-128,16,80) layers=2 verts=4964 tris=2482 color=yes uv=yes (blas 1.12 ms, total builds=594)
+[rebuild] index=2135 origin=(-112,16,80) layers=1 verts=512 tris=256 color=yes uv=yes (blas 0.59 ms, total builds=595)
+[rebuild] index=2136 origin=(-96,16,80) layers=2 verts=4024 tris=2012 color=yes uv=yes (blas 0.84 ms, total builds=596)
+[rebuild] index=2137 origin=(-80,16,80) layers=2 verts=888 tris=444 color=yes uv=yes (blas 0.60 ms, total builds=597)
+[rebuild] index=2138 origin=(-64,16,80) layers=2 verts=2148 tris=1074 color=yes uv=yes (blas 1.18 ms, total builds=598)
+[rebuild] index=2141 origin=(-16,16,80) layers=1 verts=336 tris=168 color=yes uv=yes (blas 0.54 ms, total builds=599)
+[rebuild] index=2143 origin=(16,32,80) layers=2 verts=1296 tris=648 color=yes uv=yes (blas 1.85 ms, total builds=600)
+[INFO ] rebuild #600: index=2143 origin=(16,32,80) layers=2 verts=1296 (3.4 ms)
+[rebuild] index=2144 origin=(32,32,80) layers=2 verts=4072 tris=2036 color=yes uv=yes (blas 0.92 ms, total builds=601)
+[rebuild] index=2145 origin=(48,32,80) layers=3 verts=4228 tris=2114 color=yes uv=yes (blas 1.19 ms, total builds=602)
+[rebuild] index=2146 origin=(64,32,80) layers=1 verts=4 tris=2 color=yes uv=yes (blas 0.41 ms, total builds=603)
+[rebuild] index=2148 origin=(96,32,80) layers=2 verts=592 tris=296 color=yes uv=yes (blas 0.50 ms, total builds=604)
+[rebuild] index=2149 origin=(112,32,80) layers=2 verts=1000 tris=500 color=yes uv=yes (blas 0.56 ms, total builds=605)
+[rebuild] index=2151 origin=(-128,32,80) layers=2 verts=3984 tris=1992 color=yes uv=yes (blas 1.12 ms, total builds=606)
+[rebuild] index=2152 origin=(-112,32,80) layers=2 verts=5220 tris=2610 color=yes uv=yes (blas 0.94 ms, total builds=607)
+[rebuild] index=2153 origin=(-96,32,80) layers=3 verts=6152 tris=3076 color=yes uv=yes (blas 1.06 ms, total builds=608)
+[rebuild] index=2154 origin=(-80,32,80) layers=3 verts=3272 tris=1636 color=yes uv=yes (blas 0.98 ms, total builds=609)
+[rebuild] index=2155 origin=(-64,32,80) layers=2 verts=1316 tris=658 color=yes uv=yes (blas 0.58 ms, total builds=610)
+[rebuild] index=2156 origin=(-48,32,80) layers=2 verts=1480 tris=740 color=yes uv=yes (blas 0.83 ms, total builds=611)
+[rebuild] index=2157 origin=(-32,32,80) layers=1 verts=420 tris=210 color=yes uv=yes (blas 1.37 ms, total builds=612)
+[rebuild] index=2158 origin=(-16,32,80) layers=1 verts=196 tris=98 color=yes uv=yes (blas 0.46 ms, total builds=613)
+[rebuild] index=2159 origin=(0,48,80) layers=4 verts=1320 tris=660 color=yes uv=yes (blas 0.75 ms, total builds=614)
+[rebuild] index=2160 origin=(16,48,80) layers=3 verts=4364 tris=2182 color=yes uv=yes (blas 0.89 ms, total builds=615)
+[rebuild] index=2161 origin=(32,48,80) layers=2 verts=4216 tris=2108 color=yes uv=yes (blas 1.51 ms, total builds=616)
+[rebuild] index=2162 origin=(48,48,80) layers=3 verts=3664 tris=1832 color=yes uv=yes (blas 0.73 ms, total builds=617)
+[rebuild] index=2163 origin=(64,48,80) layers=2 verts=3740 tris=1870 color=yes uv=yes (blas 0.78 ms, total builds=618)
+[rebuild] index=2164 origin=(80,48,80) layers=2 verts=2924 tris=1462 color=yes uv=yes (blas 1.46 ms, total builds=619)
+[rebuild] index=2165 origin=(96,48,80) layers=3 verts=2056 tris=1028 color=yes uv=yes (blas 1.01 ms, total builds=620)
+[rebuild] index=2166 origin=(112,48,80) layers=2 verts=132 tris=66 color=yes uv=yes (blas 0.36 ms, total builds=621)
+[rebuild] index=2167 origin=(128,48,80) layers=3 verts=1072 tris=536 color=yes uv=yes (blas 0.63 ms, total builds=622)
+[rebuild] index=2168 origin=(-128,48,80) layers=4 verts=2716 tris=1358 color=yes uv=yes (blas 1.31 ms, total builds=623)
+[rebuild] index=2169 origin=(-112,48,80) layers=4 verts=3552 tris=1776 color=yes uv=yes (blas 0.90 ms, total builds=624)
+[retired] releasing 6 deferred objects
+[tlas] rebuilt in 1.42 ms (instances=624, as=135488 B, tris=517296, colorSlots=624, pools=6207552+6207552 B, total=20 builds)
+[rebuild] index=2170 origin=(-96,48,80) layers=3 verts=5484 tris=2742 color=yes uv=yes (blas 0.98 ms, total builds=625)
+[rebuild] index=2171 origin=(-80,48,80) layers=4 verts=4000 tris=2000 color=yes uv=yes (blas 1.05 ms, total builds=626)
+[rebuild] index=2172 origin=(-64,48,80) layers=4 verts=1824 tris=912 color=yes uv=yes (blas 1.73 ms, total builds=627)
+[rebuild] index=2173 origin=(-48,48,80) layers=3 verts=1188 tris=594 color=yes uv=yes (blas 0.86 ms, total builds=628)
+[rebuild] index=2176 origin=(0,64,80) layers=3 verts=10160 tris=5080 color=yes uv=yes (blas 2.31 ms, total builds=629)
+[rebuild] index=2177 origin=(16,64,80) layers=2 verts=4056 tris=2028 color=yes uv=yes (blas 0.98 ms, total builds=630)
+[rebuild] index=2182 origin=(96,64,80) layers=1 verts=1528 tris=764 color=yes uv=yes (blas 0.81 ms, total builds=631)
+[rebuild] index=2183 origin=(112,64,80) layers=1 verts=1700 tris=850 color=yes uv=yes (blas 0.78 ms, total builds=632)
+[rebuild] index=2184 origin=(128,64,80) layers=1 verts=1592 tris=796 color=yes uv=yes (blas 0.88 ms, total builds=633)
+[rebuild] index=2185 origin=(-128,64,80) layers=3 verts=2732 tris=1366 color=yes uv=yes (blas 0.89 ms, total builds=634)
+[rebuild] index=2186 origin=(-112,64,80) layers=2 verts=152 tris=76 color=yes uv=yes (blas 0.90 ms, total builds=635)
+[rebuild] index=2188 origin=(-80,64,80) layers=2 verts=2848 tris=1424 color=yes uv=yes (blas 0.95 ms, total builds=636)
+[rebuild] index=2189 origin=(-64,64,80) layers=3 verts=7996 tris=3998 color=yes uv=yes (blas 1.11 ms, total builds=637)
+[rebuild] index=2190 origin=(-48,64,80) layers=3 verts=12804 tris=6402 color=yes uv=yes (blas 1.66 ms, total builds=638)
+[rebuild] index=2191 origin=(-32,64,80) layers=3 verts=9040 tris=4520 color=yes uv=yes (blas 1.20 ms, total builds=639)
+[rebuild] index=2192 origin=(-16,64,80) layers=3 verts=11112 tris=5556 color=yes uv=yes (blas 2.47 ms, total builds=640)
+[rebuild] index=2206 origin=(-64,80,80) layers=1 verts=96 tris=48 color=yes uv=yes (blas 0.39 ms, total builds=641)
+[rebuild] index=2207 origin=(-48,80,80) layers=1 verts=24 tris=12 color=yes uv=yes (blas 0.35 ms, total builds=642)
+[rebuild] index=2448 origin=(0,-64,96) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 0.48 ms, total builds=643)
+[rebuild] index=2449 origin=(16,-64,96) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 1.15 ms, total builds=644)
+[rebuild] index=2450 origin=(32,-64,96) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 0.49 ms, total builds=645)
+[rebuild] index=2451 origin=(48,-64,96) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 0.40 ms, total builds=646)
+[rebuild] index=2452 origin=(64,-64,96) layers=1 verts=1100 tris=550 color=yes uv=yes (blas 0.50 ms, total builds=647)
+[rebuild] index=2453 origin=(80,-64,96) layers=1 verts=1108 tris=554 color=yes uv=yes (blas 0.64 ms, total builds=648)
+[rebuild] index=2454 origin=(96,-64,96) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 0.85 ms, total builds=649)
+[rebuild] index=2455 origin=(112,-64,96) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 1.23 ms, total builds=650)
+[INFO ] rebuild #650: index=2455 origin=(112,-64,96) layers=1 verts=1024 (2.2 ms)
+[rebuild] index=2456 origin=(128,-64,96) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 0.48 ms, total builds=651)
+[rebuild] index=2457 origin=(-128,-64,96) layers=1 verts=2488 tris=1244 color=yes uv=yes (blas 0.84 ms, total builds=652)
+[rebuild] index=2458 origin=(-112,-64,96) layers=2 verts=2920 tris=1460 color=yes uv=yes (blas 0.83 ms, total builds=653)
+[rebuild] index=2459 origin=(-96,-64,96) layers=2 verts=2332 tris=1166 color=yes uv=yes (blas 0.70 ms, total builds=654)
+[rebuild] index=2460 origin=(-80,-64,96) layers=1 verts=1032 tris=516 color=yes uv=yes (blas 0.56 ms, total builds=655)
+[rebuild] index=2461 origin=(-64,-64,96) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 0.47 ms, total builds=656)
+[retired] releasing 6 deferred objects
+[tlas] rebuilt in 3.11 ms (instances=656, as=142400 B, tris=566050, colorSlots=656, pools=6792600+6792600 B, total=21 builds)
+[rebuild] index=2462 origin=(-48,-64,96) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 1.20 ms, total builds=657)
+[rebuild] index=2463 origin=(-32,-64,96) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 0.50 ms, total builds=658)
+[rebuild] index=2464 origin=(-16,-64,96) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 0.52 ms, total builds=659)
+[rebuild] index=2469 origin=(64,-48,96) layers=1 verts=444 tris=222 color=yes uv=yes (blas 0.86 ms, total builds=660)
+[rebuild] index=2470 origin=(80,-48,96) layers=1 verts=576 tris=288 color=yes uv=yes (blas 0.56 ms, total builds=661)
+[rebuild] index=2471 origin=(96,-48,96) layers=2 verts=1020 tris=510 color=yes uv=yes (blas 0.58 ms, total builds=662)
+[rebuild] index=2473 origin=(128,-48,96) layers=2 verts=360 tris=180 color=yes uv=yes (blas 0.94 ms, total builds=663)
+[rebuild] index=2474 origin=(-128,-48,96) layers=1 verts=1096 tris=548 color=yes uv=yes (blas 0.58 ms, total builds=664)
+[rebuild] index=2475 origin=(-112,-48,96) layers=1 verts=692 tris=346 color=yes uv=yes (blas 0.50 ms, total builds=665)
+[rebuild] index=2476 origin=(-96,-48,96) layers=3 verts=2024 tris=1012 color=yes uv=yes (blas 0.75 ms, total builds=666)
+[rebuild] index=2477 origin=(-80,-48,96) layers=3 verts=2104 tris=1052 color=yes uv=yes (blas 0.93 ms, total builds=667)
+[rebuild] index=2478 origin=(-64,-48,96) layers=2 verts=844 tris=422 color=yes uv=yes (blas 0.95 ms, total builds=668)
+[rebuild] index=2484 origin=(32,-32,96) layers=1 verts=576 tris=288 color=yes uv=yes (blas 0.69 ms, total builds=669)
+[rebuild] index=2485 origin=(48,-32,96) layers=1 verts=600 tris=300 color=yes uv=yes (blas 1.09 ms, total builds=670)
+[rebuild] index=2486 origin=(64,-32,96) layers=2 verts=1140 tris=570 color=yes uv=yes (blas 0.56 ms, total builds=671)
+[rebuild] index=2487 origin=(80,-32,96) layers=1 verts=168 tris=84 color=yes uv=yes (blas 0.42 ms, total builds=672)
+[rebuild] index=2488 origin=(96,-32,96) layers=1 verts=36 tris=18 color=yes uv=yes (blas 0.33 ms, total builds=673)
+[rebuild] index=2489 origin=(112,-32,96) layers=1 verts=3008 tris=1504 color=yes uv=yes (blas 0.65 ms, total builds=674)
+[rebuild] index=2490 origin=(128,-32,96) layers=2 verts=2748 tris=1374 color=yes uv=yes (blas 0.48 ms, total builds=675)
+[rebuild] index=2491 origin=(-128,-32,96) layers=1 verts=1348 tris=674 color=yes uv=yes (blas 0.60 ms, total builds=676)
+[rebuild] index=2492 origin=(-112,-32,96) layers=2 verts=1884 tris=942 color=yes uv=yes (blas 0.62 ms, total builds=677)
+[rebuild] index=2493 origin=(-96,-32,96) layers=1 verts=3052 tris=1526 color=yes uv=yes (blas 1.34 ms, total builds=678)
+[rebuild] index=2494 origin=(-80,-32,96) layers=2 verts=1500 tris=750 color=yes uv=yes (blas 0.76 ms, total builds=679)
+[rebuild] index=2495 origin=(-64,-32,96) layers=1 verts=248 tris=124 color=yes uv=yes (blas 0.65 ms, total builds=680)
+[rebuild] index=2496 origin=(-48,-32,96) layers=1 verts=72 tris=36 color=yes uv=yes (blas 0.28 ms, total builds=681)
+[rebuild] index=2498 origin=(-16,-32,96) layers=1 verts=24 tris=12 color=yes uv=yes (blas 0.62 ms, total builds=682)
+[rebuild] index=2500 origin=(16,-16,96) layers=1 verts=12 tris=6 color=yes uv=yes (blas 0.25 ms, total builds=683)
+[rebuild] index=2501 origin=(32,-16,96) layers=1 verts=2304 tris=1152 color=yes uv=yes (blas 0.47 ms, total builds=684)
+[rebuild] index=2502 origin=(48,-16,96) layers=2 verts=1568 tris=784 color=yes uv=yes (blas 0.58 ms, total builds=685)
+[rebuild] index=2503 origin=(64,-16,96) layers=2 verts=1964 tris=982 color=yes uv=yes (blas 0.55 ms, total builds=686)
+[rebuild] index=2508 origin=(-128,-16,96) layers=2 verts=2700 tris=1350 color=yes uv=yes (blas 1.51 ms, total builds=687)
+[rebuild] index=2509 origin=(-112,-16,96) layers=1 verts=2128 tris=1064 color=yes uv=yes (blas 1.06 ms, total builds=688)
+[retired] releasing 6 deferred objects
+[tlas] rebuilt in 1.14 ms (instances=688, as=149312 B, tris=585706, colorSlots=688, pools=7028472+7028472 B, total=22 builds)
+[rebuild] index=2510 origin=(-96,-16,96) layers=1 verts=260 tris=130 color=yes uv=yes (blas 0.48 ms, total builds=689)
+[rebuild] index=2511 origin=(-80,-16,96) layers=1 verts=2292 tris=1146 color=yes uv=yes (blas 0.93 ms, total builds=690)
+[rebuild] index=2512 origin=(-64,-16,96) layers=1 verts=132 tris=66 color=yes uv=yes (blas 0.82 ms, total builds=691)
+[rebuild] index=2514 origin=(-32,-16,96) layers=1 verts=28 tris=14 color=yes uv=yes (blas 0.59 ms, total builds=692)
+[rebuild] index=2515 origin=(-16,-16,96) layers=1 verts=276 tris=138 color=yes uv=yes (blas 0.51 ms, total builds=693)
+[rebuild] index=2517 origin=(16,0,96) layers=2 verts=1072 tris=536 color=yes uv=yes (blas 0.65 ms, total builds=694)
+[rebuild] index=2518 origin=(32,0,96) layers=2 verts=1768 tris=884 color=yes uv=yes (blas 0.78 ms, total builds=695)
+[rebuild] index=2519 origin=(48,0,96) layers=3 verts=3088 tris=1544 color=yes uv=yes (blas 0.95 ms, total builds=696)
+[rebuild] index=2520 origin=(64,0,96) layers=2 verts=2464 tris=1232 color=yes uv=yes (blas 0.90 ms, total builds=697)
+[rebuild] index=2521 origin=(80,0,96) layers=3 verts=2932 tris=1466 color=yes uv=yes (blas 2.10 ms, total builds=698)
+[rebuild] index=2522 origin=(96,0,96) layers=2 verts=504 tris=252 color=yes uv=yes (blas 1.20 ms, total builds=699)
+[rebuild] index=2525 origin=(-128,0,96) layers=2 verts=2160 tris=1080 color=yes uv=yes (blas 0.76 ms, total builds=700)
+[INFO ] rebuild #700: index=2525 origin=(-128,0,96) layers=2 verts=2160 (1.8 ms)
+[rebuild] index=2526 origin=(-112,0,96) layers=1 verts=2464 tris=1232 color=yes uv=yes (blas 0.82 ms, total builds=701)
+[rebuild] index=2527 origin=(-96,0,96) layers=2 verts=3628 tris=1814 color=yes uv=yes (blas 0.87 ms, total builds=702)
+[rebuild] index=2528 origin=(-80,0,96) layers=3 verts=3520 tris=1760 color=yes uv=yes (blas 1.21 ms, total builds=703)
+[rebuild] index=2529 origin=(-64,0,96) layers=3 verts=4856 tris=2428 color=yes uv=yes (blas 0.96 ms, total builds=704)
+[rebuild] index=1780 origin=(-80,64,64) layers=1 verts=8 tris=4 color=yes uv=yes (blas 0.38 ms, total builds=705)
+[rebuild] index=2530 origin=(-48,0,96) layers=2 verts=2288 tris=1144 color=yes uv=yes (blas 1.62 ms, total builds=706)
+[rebuild] index=2531 origin=(-32,0,96) layers=1 verts=28 tris=14 color=yes uv=yes (blas 0.46 ms, total builds=707)
+[rebuild] index=2532 origin=(-16,0,96) layers=1 verts=320 tris=160 color=yes uv=yes (blas 0.34 ms, total builds=708)
+[rebuild] index=2533 origin=(0,16,96) layers=1 verts=124 tris=62 color=yes uv=yes (blas 0.36 ms, total builds=709)
+[rebuild] index=2534 origin=(16,16,96) layers=2 verts=184 tris=92 color=yes uv=yes (blas 0.53 ms, total builds=710)
+[rebuild] index=2535 origin=(32,16,96) layers=2 verts=1824 tris=912 color=yes uv=yes (blas 0.76 ms, total builds=711)
+[rebuild] index=2536 origin=(48,16,96) layers=3 verts=3016 tris=1508 color=yes uv=yes (blas 0.96 ms, total builds=712)
+[rebuild] index=2537 origin=(64,16,96) layers=2 verts=1788 tris=894 color=yes uv=yes (blas 0.86 ms, total builds=713)
+[rebuild] index=2538 origin=(80,16,96) layers=2 verts=1852 tris=926 color=yes uv=yes (blas 1.67 ms, total builds=714)
+[rebuild] index=2539 origin=(96,16,96) layers=2 verts=440 tris=220 color=yes uv=yes (blas 0.44 ms, total builds=715)
+[rebuild] index=2540 origin=(112,16,96) layers=1 verts=264 tris=132 color=yes uv=yes (blas 0.43 ms, total builds=716)
+[rebuild] index=2542 origin=(-128,16,96) layers=2 verts=2384 tris=1192 color=yes uv=yes (blas 1.65 ms, total builds=717)
+[rebuild] index=2543 origin=(-112,16,96) layers=3 verts=3044 tris=1522 color=yes uv=yes (blas 0.76 ms, total builds=718)
+[rebuild] index=2544 origin=(-96,16,96) layers=3 verts=3092 tris=1546 color=yes uv=yes (blas 0.83 ms, total builds=719)
+[rebuild] index=2545 origin=(-80,16,96) layers=3 verts=5476 tris=2738 color=yes uv=yes (blas 1.91 ms, total builds=720)
+[retired] releasing 6 deferred objects
+[tlas] rebuilt in 2.77 ms (instances=720, as=156224 B, tris=614494, colorSlots=720, pools=7373928+7373928 B, total=23 builds)
+[rebuild] index=2546 origin=(-64,16,96) layers=2 verts=792 tris=396 color=yes uv=yes (blas 0.90 ms, total builds=721)
+[rebuild] index=2547 origin=(-48,16,96) layers=2 verts=2092 tris=1046 color=yes uv=yes (blas 0.80 ms, total builds=722)
+[rebuild] index=2548 origin=(-32,16,96) layers=1 verts=336 tris=168 color=yes uv=yes (blas 0.50 ms, total builds=723)
+[rebuild] index=2549 origin=(-16,16,96) layers=1 verts=84 tris=42 color=yes uv=yes (blas 0.37 ms, total builds=724)
+[rebuild] index=2550 origin=(0,32,96) layers=2 verts=388 tris=194 color=yes uv=yes (blas 1.21 ms, total builds=725)
+[rebuild] index=2552 origin=(32,32,96) layers=1 verts=1492 tris=746 color=yes uv=yes (blas 0.72 ms, total builds=726)
+[rebuild] index=2553 origin=(48,32,96) layers=2 verts=2364 tris=1182 color=yes uv=yes (blas 0.80 ms, total builds=727)
+[rebuild] index=2554 origin=(64,32,96) layers=1 verts=1616 tris=808 color=yes uv=yes (blas 0.77 ms, total builds=728)
+[rebuild] index=2555 origin=(80,32,96) layers=1 verts=12 tris=6 color=yes uv=yes (blas 0.30 ms, total builds=729)
+[rebuild] index=2557 origin=(112,32,96) layers=1 verts=588 tris=294 color=yes uv=yes (blas 0.55 ms, total builds=730)
+[rebuild] index=2558 origin=(128,32,96) layers=1 verts=28 tris=14 color=yes uv=yes (blas 0.33 ms, total builds=731)
+[rebuild] index=2559 origin=(-128,32,96) layers=3 verts=4328 tris=2164 color=yes uv=yes (blas 0.95 ms, total builds=732)
+[rebuild] index=2560 origin=(-112,32,96) layers=3 verts=4512 tris=2256 color=yes uv=yes (blas 1.00 ms, total builds=733)
+[rebuild] index=2561 origin=(-96,32,96) layers=2 verts=3536 tris=1768 color=yes uv=yes (blas 0.90 ms, total builds=734)
+[rebuild] index=2562 origin=(-80,32,96) layers=2 verts=3384 tris=1692 color=yes uv=yes (blas 2.30 ms, total builds=735)
+[rebuild] index=2563 origin=(-64,32,96) layers=2 verts=616 tris=308 color=yes uv=yes (blas 0.94 ms, total builds=736)
+[rebuild] index=2564 origin=(-48,32,96) layers=2 verts=1292 tris=646 color=yes uv=yes (blas 1.96 ms, total builds=737)
+[rebuild] index=2565 origin=(-32,32,96) layers=2 verts=996 tris=498 color=yes uv=yes (blas 0.69 ms, total builds=738)
+[rebuild] index=2566 origin=(-16,32,96) layers=1 verts=336 tris=168 color=yes uv=yes (blas 0.39 ms, total builds=739)
+[rebuild] index=2567 origin=(0,48,96) layers=2 verts=172 tris=86 color=yes uv=yes (blas 0.52 ms, total builds=740)
+[rebuild] index=2568 origin=(16,48,96) layers=3 verts=2508 tris=1254 color=yes uv=yes (blas 1.63 ms, total builds=741)
+[rebuild] index=2569 origin=(32,48,96) layers=2 verts=3396 tris=1698 color=yes uv=yes (blas 1.32 ms, total builds=742)
+[rebuild] index=2570 origin=(48,48,96) layers=2 verts=2232 tris=1116 color=yes uv=yes (blas 0.66 ms, total builds=743)
+[rebuild] index=2571 origin=(64,48,96) layers=2 verts=3528 tris=1764 color=yes uv=yes (blas 0.85 ms, total builds=744)
+[rebuild] index=2572 origin=(80,48,96) layers=2 verts=4080 tris=2040 color=yes uv=yes (blas 0.72 ms, total builds=745)
+[rebuild] index=2573 origin=(96,48,96) layers=2 verts=4540 tris=2270 color=yes uv=yes (blas 0.86 ms, total builds=746)
+[rebuild] index=2574 origin=(112,48,96) layers=2 verts=2980 tris=1490 color=yes uv=yes (blas 0.87 ms, total builds=747)
+[rebuild] index=2575 origin=(128,48,96) layers=3 verts=3384 tris=1692 color=yes uv=yes (blas 0.86 ms, total builds=748)
+[rebuild] index=2576 origin=(-128,48,96) layers=2 verts=156 tris=78 color=yes uv=yes (blas 0.36 ms, total builds=749)
+[rebuild] index=2577 origin=(-112,48,96) layers=4 verts=3912 tris=1956 color=yes uv=yes (blas 0.92 ms, total builds=750)
+[INFO ] rebuild #750: index=2577 origin=(-112,48,96) layers=4 verts=3912 (3.2 ms)
+[rebuild] index=2578 origin=(-96,48,96) layers=4 verts=3636 tris=1818 color=yes uv=yes (blas 1.45 ms, total builds=751)
+[rebuild] index=2579 origin=(-80,48,96) layers=3 verts=492 tris=246 color=yes uv=yes (blas 1.18 ms, total builds=752)
+[retired] releasing 6 deferred objects
+[tlas] rebuilt in 2.81 ms (instances=752, as=163136 B, tris=646398, colorSlots=752, pools=7756776+7756776 B, total=24 builds)
+[rebuild] index=2581 origin=(-48,48,96) layers=1 verts=72 tris=36 color=yes uv=yes (blas 0.64 ms, total builds=753)
+[rebuild] index=2584 origin=(0,64,96) layers=3 verts=6976 tris=3488 color=yes uv=yes (blas 1.01 ms, total builds=754)
+[rebuild] index=2585 origin=(16,64,96) layers=2 verts=760 tris=380 color=yes uv=yes (blas 0.69 ms, total builds=755)
+[rebuild] index=2590 origin=(96,64,96) layers=1 verts=196 tris=98 color=yes uv=yes (blas 0.54 ms, total builds=756)
+[rebuild] index=2591 origin=(112,64,96) layers=1 verts=204 tris=102 color=yes uv=yes (blas 0.35 ms, total builds=757)
+[rebuild] index=2592 origin=(128,64,96) layers=1 verts=216 tris=108 color=yes uv=yes (blas 0.36 ms, total builds=758)
+[rebuild] index=2593 origin=(-128,64,96) layers=3 verts=1368 tris=684 color=yes uv=yes (blas 0.77 ms, total builds=759)
+[rebuild] index=2594 origin=(-112,64,96) layers=3 verts=508 tris=254 color=yes uv=yes (blas 1.44 ms, total builds=760)
+[rebuild] index=2595 origin=(-96,64,96) layers=3 verts=5368 tris=2684 color=yes uv=yes (blas 1.80 ms, total builds=761)
+[rebuild] index=2596 origin=(-80,64,96) layers=3 verts=12256 tris=6128 color=yes uv=yes (blas 1.29 ms, total builds=762)
+[rebuild] index=2597 origin=(-64,64,96) layers=3 verts=8836 tris=4418 color=yes uv=yes (blas 1.75 ms, total builds=763)
+[rebuild] index=2598 origin=(-48,64,96) layers=3 verts=10108 tris=5054 color=yes uv=yes (blas 1.20 ms, total builds=764)
+[rebuild] index=2599 origin=(-32,64,96) layers=3 verts=9636 tris=4818 color=yes uv=yes (blas 1.47 ms, total builds=765)
+[rebuild] index=2600 origin=(-16,64,96) layers=3 verts=9796 tris=4898 color=yes uv=yes (blas 1.22 ms, total builds=766)
+[rebuild] index=2856 origin=(0,-64,112) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 0.81 ms, total builds=767)
+[rebuild] index=2857 origin=(16,-64,112) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 0.47 ms, total builds=768)
+[rebuild] index=2858 origin=(32,-64,112) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 0.95 ms, total builds=769)
+[rebuild] index=2859 origin=(48,-64,112) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 0.54 ms, total builds=770)
+[rebuild] index=2860 origin=(64,-64,112) layers=1 verts=1028 tris=514 color=yes uv=yes (blas 0.69 ms, total builds=771)
+[rebuild] index=2861 origin=(80,-64,112) layers=1 verts=1036 tris=518 color=yes uv=yes (blas 1.42 ms, total builds=772)
+[rebuild] index=2862 origin=(96,-64,112) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 0.42 ms, total builds=773)
+[rebuild] index=2863 origin=(112,-64,112) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 0.56 ms, total builds=774)
+[rebuild] index=2864 origin=(128,-64,112) layers=1 verts=2048 tris=1024 color=yes uv=yes (blas 0.76 ms, total builds=775)
+[rebuild] index=2865 origin=(-128,-64,112) layers=1 verts=2048 tris=1024 color=yes uv=yes (blas 0.96 ms, total builds=776)
+[rebuild] index=2866 origin=(-112,-64,112) layers=1 verts=1104 tris=552 color=yes uv=yes (blas 0.63 ms, total builds=777)
+[rebuild] index=2867 origin=(-96,-64,112) layers=1 verts=2044 tris=1022 color=yes uv=yes (blas 0.74 ms, total builds=778)
+[rebuild] index=2868 origin=(-80,-64,112) layers=1 verts=1064 tris=532 color=yes uv=yes (blas 0.49 ms, total builds=779)
+[rebuild] index=2869 origin=(-64,-64,112) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 0.67 ms, total builds=780)
+[rebuild] index=2870 origin=(-48,-64,112) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 0.44 ms, total builds=781)
+[rebuild] index=2871 origin=(-32,-64,112) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 0.56 ms, total builds=782)
+[rebuild] index=2872 origin=(-16,-64,112) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 0.49 ms, total builds=783)
+[rebuild] index=2877 origin=(64,-48,112) layers=1 verts=4 tris=2 color=yes uv=yes (blas 0.32 ms, total builds=784)
+[retired] releasing 6 deferred objects
+[tlas] rebuilt in 1.49 ms (instances=784, as=170048 B, tris=689856, colorSlots=784, pools=8278272+8278272 B, total=25 builds)
+[rebuild] index=2878 origin=(80,-48,112) layers=2 verts=560 tris=280 color=yes uv=yes (blas 0.60 ms, total builds=785)
+[rebuild] index=2879 origin=(96,-48,112) layers=2 verts=460 tris=230 color=yes uv=yes (blas 0.74 ms, total builds=786)
+[rebuild] index=2881 origin=(128,-48,112) layers=1 verts=1340 tris=670 color=yes uv=yes (blas 0.73 ms, total builds=787)
+[rebuild] index=2882 origin=(-128,-48,112) layers=2 verts=4388 tris=2194 color=yes uv=yes (blas 0.99 ms, total builds=788)
+[rebuild] index=2883 origin=(-112,-48,112) layers=2 verts=1928 tris=964 color=yes uv=yes (blas 0.90 ms, total builds=789)
+[rebuild] index=2884 origin=(-96,-48,112) layers=1 verts=240 tris=120 color=yes uv=yes (blas 0.42 ms, total builds=790)
+[rebuild] index=2885 origin=(-80,-48,112) layers=1 verts=2068 tris=1034 color=yes uv=yes (blas 2.01 ms, total builds=791)
+[rebuild] index=2886 origin=(-64,-48,112) layers=1 verts=2200 tris=1100 color=yes uv=yes (blas 0.88 ms, total builds=792)
+[rebuild] index=2887 origin=(-48,-48,112) layers=1 verts=612 tris=306 color=yes uv=yes (blas 0.63 ms, total builds=793)
+[rebuild] index=2897 origin=(112,-32,112) layers=1 verts=1284 tris=642 color=yes uv=yes (blas 0.84 ms, total builds=794)
+[rebuild] index=2898 origin=(128,-32,112) layers=1 verts=2200 tris=1100 color=yes uv=yes (blas 0.65 ms, total builds=795)
+[rebuild] index=2899 origin=(-128,-32,112) layers=1 verts=3172 tris=1586 color=yes uv=yes (blas 1.91 ms, total builds=796)
+[rebuild] index=2900 origin=(-112,-32,112) layers=1 verts=804 tris=402 color=yes uv=yes (blas 1.22 ms, total builds=797)
+[rebuild] index=2901 origin=(-96,-32,112) layers=2 verts=1480 tris=740 color=yes uv=yes (blas 0.61 ms, total builds=798)
+[rebuild] index=2902 origin=(-80,-32,112) layers=3 verts=744 tris=372 color=yes uv=yes (blas 0.60 ms, total builds=799)
+[rebuild] index=2903 origin=(-64,-32,112) layers=2 verts=1356 tris=678 color=yes uv=yes (blas 0.65 ms, total builds=800)
+[INFO ] rebuild #800: index=2903 origin=(-64,-32,112) layers=2 verts=1356 (1.7 ms)
+[rebuild] index=2904 origin=(-48,-32,112) layers=1 verts=96 tris=48 color=yes uv=yes (blas 0.52 ms, total builds=801)
+[rebuild] index=2909 origin=(32,-16,112) layers=2 verts=368 tris=184 color=yes uv=yes (blas 0.61 ms, total builds=802)
+[rebuild] index=2910 origin=(48,-16,112) layers=2 verts=1124 tris=562 color=yes uv=yes (blas 0.75 ms, total builds=803)
+[rebuild] index=2911 origin=(64,-16,112) layers=2 verts=92 tris=46 color=yes uv=yes (blas 0.37 ms, total builds=804)
+[rebuild] index=2915 origin=(128,-16,112) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 0.64 ms, total builds=805)
+[rebuild] index=2916 origin=(-128,-16,112) layers=1 verts=1588 tris=794 color=yes uv=yes (blas 0.87 ms, total builds=806)
+[rebuild] index=2917 origin=(-112,-16,112) layers=2 verts=2132 tris=1066 color=yes uv=yes (blas 0.86 ms, total builds=807)
+[rebuild] index=2919 origin=(-80,-16,112) layers=1 verts=304 tris=152 color=yes uv=yes (blas 0.47 ms, total builds=808)
+[rebuild] index=2920 origin=(-64,-16,112) layers=1 verts=2344 tris=1172 color=yes uv=yes (blas 1.16 ms, total builds=809)
+[rebuild] index=2921 origin=(-48,-16,112) layers=1 verts=60 tris=30 color=yes uv=yes (blas 0.64 ms, total builds=810)
+[rebuild] index=2922 origin=(-32,-16,112) layers=3 verts=1900 tris=950 color=yes uv=yes (blas 0.77 ms, total builds=811)
+[rebuild] index=2923 origin=(-16,-16,112) layers=1 verts=228 tris=114 color=yes uv=yes (blas 0.44 ms, total builds=812)
+[rebuild] index=2924 origin=(0,0,112) layers=3 verts=2152 tris=1076 color=yes uv=yes (blas 0.86 ms, total builds=813)
+[rebuild] index=2925 origin=(16,0,112) layers=2 verts=992 tris=496 color=yes uv=yes (blas 0.81 ms, total builds=814)
+[rebuild] index=2926 origin=(32,0,112) layers=2 verts=628 tris=314 color=yes uv=yes (blas 0.50 ms, total builds=815)
+[rebuild] index=2927 origin=(48,0,112) layers=2 verts=724 tris=362 color=yes uv=yes (blas 0.51 ms, total builds=816)
+[retired] releasing 6 deferred objects
+[tlas] rebuilt in 3.41 ms (instances=816, as=177024 B, tris=710152, colorSlots=816, pools=8521824+8521824 B, total=26 builds)
+[rebuild] index=2928 origin=(64,0,112) layers=3 verts=1344 tris=672 color=yes uv=yes (blas 1.25 ms, total builds=817)
+[rebuild] index=2929 origin=(80,0,112) layers=1 verts=268 tris=134 color=yes uv=yes (blas 0.45 ms, total builds=818)
+[rebuild] index=2932 origin=(128,0,112) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 1.14 ms, total builds=819)
+[rebuild] index=2933 origin=(-128,0,112) layers=2 verts=2644 tris=1322 color=yes uv=yes (blas 0.94 ms, total builds=820)
+[rebuild] index=2934 origin=(-112,0,112) layers=3 verts=2572 tris=1286 color=yes uv=yes (blas 1.01 ms, total builds=821)
+[rebuild] index=2935 origin=(-96,0,112) layers=2 verts=4048 tris=2024 color=yes uv=yes (blas 0.75 ms, total builds=822)
+[rebuild] index=2936 origin=(-80,0,112) layers=3 verts=2464 tris=1232 color=yes uv=yes (blas 1.21 ms, total builds=823)
+[rebuild] index=2937 origin=(-64,0,112) layers=2 verts=1104 tris=552 color=yes uv=yes (blas 0.70 ms, total builds=824)
+[rebuild] index=2938 origin=(-48,0,112) layers=3 verts=1560 tris=780 color=yes uv=yes (blas 0.74 ms, total builds=825)
+[rebuild] index=2939 origin=(-32,0,112) layers=2 verts=1072 tris=536 color=yes uv=yes (blas 0.79 ms, total builds=826)
+[rebuild] index=2940 origin=(-16,0,112) layers=1 verts=1140 tris=570 color=yes uv=yes (blas 0.68 ms, total builds=827)
+[rebuild] index=2941 origin=(0,16,112) layers=2 verts=1024 tris=512 color=yes uv=yes (blas 0.85 ms, total builds=828)
+[rebuild] index=2942 origin=(16,16,112) layers=2 verts=2536 tris=1268 color=yes uv=yes (blas 0.79 ms, total builds=829)
+[rebuild] index=2943 origin=(32,16,112) layers=2 verts=264 tris=132 color=yes uv=yes (blas 0.44 ms, total builds=830)
+[rebuild] index=2944 origin=(48,16,112) layers=2 verts=128 tris=64 color=yes uv=yes (blas 0.36 ms, total builds=831)
+[rebuild] index=2945 origin=(64,16,112) layers=2 verts=116 tris=58 color=yes uv=yes (blas 0.45 ms, total builds=832)
+[rebuild] index=2946 origin=(80,16,112) layers=2 verts=104 tris=52 color=yes uv=yes (blas 0.46 ms, total builds=833)
+[rebuild] index=2949 origin=(128,16,112) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 0.83 ms, total builds=834)
+[rebuild] index=2950 origin=(-128,16,112) layers=2 verts=4532 tris=2266 color=yes uv=yes (blas 2.14 ms, total builds=835)
+[rebuild] index=2951 origin=(-112,16,112) layers=3 verts=3364 tris=1682 color=yes uv=yes (blas 1.81 ms, total builds=836)
+[rebuild] index=2952 origin=(-96,16,112) layers=2 verts=3272 tris=1636 color=yes uv=yes (blas 1.45 ms, total builds=837)
+[rebuild] index=2953 origin=(-80,16,112) layers=3 verts=5476 tris=2738 color=yes uv=yes (blas 1.30 ms, total builds=838)
+[rebuild] index=2954 origin=(-64,16,112) layers=2 verts=3332 tris=1666 color=yes uv=yes (blas 1.38 ms, total builds=839)
+[rebuild] index=2955 origin=(-48,16,112) layers=2 verts=1744 tris=872 color=yes uv=yes (blas 0.90 ms, total builds=840)
+[rebuild] index=2956 origin=(-32,16,112) layers=3 verts=1668 tris=834 color=yes uv=yes (blas 0.90 ms, total builds=841)
+[rebuild] index=2957 origin=(-16,16,112) layers=3 verts=2084 tris=1042 color=yes uv=yes (blas 1.18 ms, total builds=842)
+[rebuild] index=2958 origin=(0,32,112) layers=2 verts=592 tris=296 color=yes uv=yes (blas 1.51 ms, total builds=843)
+[rebuild] index=2959 origin=(16,32,112) layers=1 verts=44 tris=22 color=yes uv=yes (blas 0.40 ms, total builds=844)
+[rebuild] index=2961 origin=(48,32,112) layers=1 verts=1056 tris=528 color=yes uv=yes (blas 1.80 ms, total builds=845)
+[rebuild] index=2962 origin=(64,32,112) layers=2 verts=2504 tris=1252 color=yes uv=yes (blas 1.34 ms, total builds=846)
+[rebuild] index=2963 origin=(80,32,112) layers=1 verts=264 tris=132 color=yes uv=yes (blas 0.76 ms, total builds=847)
+[rebuild] index=2964 origin=(96,32,112) layers=1 verts=152 tris=76 color=yes uv=yes (blas 0.66 ms, total builds=848)
+[retired] releasing 6 deferred objects
+[tlas] rebuilt in 2.03 ms (instances=848, as=183936 B, tris=737412, colorSlots=848, pools=8848944+8848944 B, total=27 builds)
+[rebuild] index=2965 origin=(112,32,112) layers=1 verts=4 tris=2 color=yes uv=yes (blas 0.30 ms, total builds=849)
+[rebuild] index=2966 origin=(128,32,112) layers=2 verts=1632 tris=816 color=yes uv=yes (blas 0.72 ms, total builds=850)
+[INFO ] rebuild #850: index=2966 origin=(128,32,112) layers=2 verts=1632 (2.0 ms)
+[rebuild] index=2967 origin=(-128,32,112) layers=3 verts=2500 tris=1250 color=yes uv=yes (blas 0.80 ms, total builds=851)
+[rebuild] index=2969 origin=(-96,32,112) layers=2 verts=896 tris=448 color=yes uv=yes (blas 0.55 ms, total builds=852)
+[rebuild] index=2970 origin=(-80,32,112) layers=2 verts=1128 tris=564 color=yes uv=yes (blas 0.61 ms, total builds=853)
+[rebuild] index=2971 origin=(-64,32,112) layers=2 verts=256 tris=128 color=yes uv=yes (blas 0.47 ms, total builds=854)
+[rebuild] index=2972 origin=(-48,32,112) layers=3 verts=1648 tris=824 color=yes uv=yes (blas 0.84 ms, total builds=855)
+[rebuild] index=2973 origin=(-32,32,112) layers=2 verts=972 tris=486 color=yes uv=yes (blas 0.64 ms, total builds=856)
+[rebuild] index=2974 origin=(-16,32,112) layers=2 verts=700 tris=350 color=yes uv=yes (blas 0.71 ms, total builds=857)
+[rebuild] index=2975 origin=(0,48,112) layers=1 verts=112 tris=56 color=yes uv=yes (blas 0.37 ms, total builds=858)
+[rebuild] index=2976 origin=(16,48,112) layers=2 verts=1128 tris=564 color=yes uv=yes (blas 0.63 ms, total builds=859)
+[rebuild] index=2977 origin=(32,48,112) layers=2 verts=3932 tris=1966 color=yes uv=yes (blas 1.41 ms, total builds=860)
+[rebuild] index=2978 origin=(48,48,112) layers=2 verts=2964 tris=1482 color=yes uv=yes (blas 0.68 ms, total builds=861)
+[rebuild] index=2979 origin=(64,48,112) layers=3 verts=3192 tris=1596 color=yes uv=yes (blas 1.18 ms, total builds=862)
+[rebuild] index=2980 origin=(80,48,112) layers=2 verts=3860 tris=1930 color=yes uv=yes (blas 0.82 ms, total builds=863)
+[rebuild] index=2981 origin=(96,48,112) layers=2 verts=3936 tris=1968 color=yes uv=yes (blas 0.85 ms, total builds=864)
+[rebuild] index=2982 origin=(112,48,112) layers=2 verts=4044 tris=2022 color=yes uv=yes (blas 1.50 ms, total builds=865)
+[rebuild] index=2983 origin=(128,48,112) layers=2 verts=5788 tris=2894 color=yes uv=yes (blas 1.63 ms, total builds=866)
+[rebuild] index=2984 origin=(-128,48,112) layers=2 verts=2100 tris=1050 color=yes uv=yes (blas 0.70 ms, total builds=867)
+[rebuild] index=2985 origin=(-112,48,112) layers=3 verts=5012 tris=2506 color=yes uv=yes (blas 0.95 ms, total builds=868)
+[rebuild] index=2986 origin=(-96,48,112) layers=3 verts=2248 tris=1124 color=yes uv=yes (blas 1.04 ms, total builds=869)
+[rebuild] index=2989 origin=(-48,48,112) layers=3 verts=380 tris=190 color=yes uv=yes (blas 0.61 ms, total builds=870)
+[rebuild] index=2990 origin=(-32,48,112) layers=3 verts=1172 tris=586 color=yes uv=yes (blas 0.55 ms, total builds=871)
+[rebuild] index=2991 origin=(-16,48,112) layers=2 verts=184 tris=92 color=yes uv=yes (blas 0.38 ms, total builds=872)
+[rebuild] index=2992 origin=(0,64,112) layers=1 verts=1492 tris=746 color=yes uv=yes (blas 1.41 ms, total builds=873)
+[rebuild] index=2993 origin=(16,64,112) layers=1 verts=1004 tris=502 color=yes uv=yes (blas 0.61 ms, total builds=874)
+[rebuild] index=3001 origin=(-128,64,112) layers=1 verts=1212 tris=606 color=yes uv=yes (blas 0.63 ms, total builds=875)
+[rebuild] index=3003 origin=(-96,64,112) layers=3 verts=6244 tris=3122 color=yes uv=yes (blas 1.17 ms, total builds=876)
+[rebuild] index=3004 origin=(-80,64,112) layers=3 verts=11488 tris=5744 color=yes uv=yes (blas 1.58 ms, total builds=877)
+[rebuild] index=3005 origin=(-64,64,112) layers=3 verts=7424 tris=3712 color=yes uv=yes (blas 1.18 ms, total builds=878)
+[rebuild] index=3006 origin=(-48,64,112) layers=3 verts=11092 tris=5546 color=yes uv=yes (blas 1.94 ms, total builds=879)
+[rebuild] index=3007 origin=(-32,64,112) layers=3 verts=12132 tris=6066 color=yes uv=yes (blas 1.29 ms, total builds=880)
+[retired] releasing 6 deferred objects
+[tlas] rebuilt in 3.68 ms (instances=880, as=190848 B, tris=788350, colorSlots=880, pools=9460200+9460200 B, total=28 builds)
+[rebuild] index=3008 origin=(-16,64,112) layers=3 verts=4160 tris=2080 color=yes uv=yes (blas 0.93 ms, total builds=881)
+[rebuild] index=3020 origin=(-96,80,112) layers=1 verts=2768 tris=1384 color=yes uv=yes (blas 0.83 ms, total builds=882)
+[rebuild] index=3021 origin=(-80,80,112) layers=1 verts=3020 tris=1510 color=yes uv=yes (blas 0.83 ms, total builds=883)
+[rebuild] index=3264 origin=(0,-64,128) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 0.46 ms, total builds=884)
+[rebuild] index=3265 origin=(16,-64,128) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 0.82 ms, total builds=885)
+[rebuild] index=3266 origin=(32,-64,128) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 1.18 ms, total builds=886)
+[rebuild] index=3267 origin=(48,-64,128) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 0.48 ms, total builds=887)
+[rebuild] index=3268 origin=(64,-64,128) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 0.50 ms, total builds=888)
+[rebuild] index=3269 origin=(80,-64,128) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 0.87 ms, total builds=889)
+[rebuild] index=3270 origin=(96,-64,128) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 1.22 ms, total builds=890)
+[rebuild] index=3271 origin=(112,-64,128) layers=1 verts=1024 tris=512 color=yes uv=yes (blas 0.52 ms, total builds=891)
+[rebuild] index=3272 origin=(128,-64,128) layers=1 verts=3072 tris=1536 color=yes uv=yes (blas 0.79 ms, total builds=892)
+[rebuild] index=3273 origin=(-128,-64,128) layers=1 verts=4940 tris=2470 color=yes uv=yes (blas 1.82 ms, total builds=893)
+[rebuild] index=3274 origin=(-112,-64,128) layers=1 verts=1116 tris=558 color=yes uv=yes (blas 1.09 ms, total builds=894)
+[rebuild] index=3275 origin=(-96,-64,128) layers=1 verts=1568 tris=784 color=yes uv=yes (blas 0.61 ms, total builds=895)
+[rebuild] index=3276 origin=(-80,-64,128) layers=1 verts=1164 tris=582 color=yes uv=yes (blas 0.65 ms, total builds=896)
+[PASS ] 摄取窗口完成（896 次重建 / 6936 非空区块 / 积压 4210 / 39.5s）
+
+---- S5 统计汇总 ----
+[INFO ] Java 侧: polls=69 rebuilds=896 invalidations=11505 relocations=0 非空区块=6936
+[INFO ] Native 侧: readyBLAS=896 BLAS构建=896 TLAS重建=28（含 shading pools）
+[INFO ] 几何: 三角形=803350 顶点=1606700 顶点缓冲=25104.7 KB 索引缓冲=9414.3 KB TLAS=186.4 KB
+
+---- S6 场景摆放抽查（哨兵 + 相机姿态 + 整数格线） ----
+[PASS ] 相机姿态: pos=(4.50, 70.62, 22.50) yaw=1.5 pitch=90.0
+[sentinel] vert readback: (0.0, 0.0, 0.0) (1024.0, 0.0, 0.0) (0.0, 0.0, 1024.0) — stride 16 B, buffer 48 B
+[sentinel] identity instance: ray (256,64,256)-Y -> HIT (dist=64.00 instance=0, expect HIT dist~64 instance=0)
+[sentinel] translated instance K=(4096,0,4096): ray (4352,64,4352)-Y -> HIT (dist=64.00 instance=1, expect HIT dist~64 instance=1)
+[sentinel] negative control: ray (256,64,256)+Y -> MISS (expect MISS)
+[sentinel] verdict: identity=OK translated=OK control=OK
+[PASS ] 哨兵求交 PASS（位码=7：单位实例/平移实例/阴性对照全部正确——矩阵平移编码 flat[9..11] 维持 2.1 v0.5 真机结论）
+[INFO ] ray +X: miss（512 格内无几何）
+[INFO ] ray -X: miss（512 格内无几何）
+[INFO ] ray +Y(上): miss（512 格内无几何）
+[PASS ] ray -Y(下): HIT distance=1.62 hitPoint=(4.50, 69.00, 22.50) [整数格线 y] (instance=196) → section=(0,64,16)
+[PASS ] ray +Z: HIT distance=35.50 hitPoint=(4.50, 70.62, 58.00) [整数格线 z] (instance=410) → section=(0,64,48)
+[INFO ] ray -Z: miss（512 格内无几何）
+[PASS ] 摆放抽查 PASS（2 命中 / 2 整数格线 / 脚下地板命中——免 recentring + t=origin 与 2.1 已验证布局等价）
+
+---- S6.5 判别审计（raw AABB / 顶点回读 / 矩阵回读 / 隔离 TLAS 对照电池） ----
+[audit] slot (0,-64,0) raw=[0.00..16.00, 0.00..0.00, 0.00..16.00]
+[audit] slot (16,-64,0) raw=[0.00..16.00, 0.00..0.00, 0.00..16.00]
+[audit] slot (32,-64,0) raw=[0.00..16.00, 0.00..0.00, 0.00..16.00]
+[audit] slot (48,-64,0) raw=[0.00..16.00, 0.00..12.00, 0.00..16.00]
+[audit] slot (64,-64,0) raw=[0.00..16.00, 0.00..12.00, 0.00..16.00]
+[audit] global raw AABB over 896 slots: [-0.25..16.22, -0.20..16.00, -0.22..16.25] (garbage=0)
+[audit] raw verdict: SECTION-LOCAL (within [-1..17]^3) — 2.1 v0.5 契约成立
+[audit] camera slot (0,64,16) verts=6656 readback: v0=(2.00, 0.00, 1.00) v3328=(3.00, 3.00, 8.00) v6655=(4.00, 4.00, 15.00) — stride 16 B
+[audit] camera slot COLOR readback: v0=(44,87,24) v1=(44,87,24) v2=(44,87,24) v3=(44,87,24) — 顶点色=albedo 输入
+[audit] COLOR stats over 4096/6656 verts: R[8..204] G[17..204] B[4..204] mean=(34,64,20) distinct=26 white=0 greenish=3924 — distinct 偏低/全白 ⇒ albedo 通路缺陷（2.3 换 atlas 采样）；有绿有方差 ⇒ 通路健康
+[audit] pool tri #143010 (slot tri 0): (44,87,24) (44,87,24) (44,87,24)
+[audit] pool tri #144674 (slot tri 1664): (8,17,4) (17,34,9) (26,52,14)
+[audit] pool tri #146337 (slot tri 3327): (42,83,23) (53,104,28) (53,104,28)
+[audit] live TLAS instance #196 matrix: flat[9..11]=(0.0, 64.0, 16.0) — expect (0, 64, 16)
+[audit] ISO +X: MISS  |  LIVE +X: MISS
+[audit] ISO -X: MISS  |  LIVE -X: MISS
+[audit] ISO +Y(up): MISS  |  LIVE +Y(up): MISS
+[audit] ISO -Y(down): HIT dist=1.62 hitPoint=(4.50, 69.00, 22.50) (grid-y)  |  LIVE -Y(down): HIT dist=1.62 hitPoint=(4.50, 69.00, 22.50)
+[audit] ISO +Z: MISS  |  LIVE +Z: HIT dist=35.50 hitPoint=(4.50, 70.62, 58.00)
+[audit] ISO -Z: MISS  |  LIVE -Z: MISS
+[audit] ISO summary: hits=1/6 grid=1/6 down=1 — iso-HIT+live-MISS ⇒ live TLAS 组装缺陷；iso-MISS ⇒ 相机 BLAS 内容缺陷（结合 raw AABB 与 readback 判读）
+[INFO ] 审计汇总: raw=SECTION-LOCAL（2.1 契约成立） 相机槽位=1 live矩阵=正确 ISO命中=1/6(格线1) LIVE命中=2/6
+
+---- S7 离屏路径追踪渲染（相机 ray → TLAS → albedo → 太阳直射+阴影 → 弹射 → 累积 → tonemap → PNG） ----
+[retired] releasing 6 deferred objects
+[tlas] rebuilt in 1.37 ms (instances=896, as=194304 B, tris=803350, colorSlots=896, pools=9640200+9640200 B, total=29 builds)
+[refresh] TLAS re-anchored on probe thread (instances=896, tlas builds=29)
+[PASS ] 中心 ray 预测: HIT distance=1.62 hitPoint=(4.50, 69.00, 22.50) —— 画面中心应为几何表面
+[render] pathtrace: 480x270 spp=24 bounces=2 -> 49.5 ms, queries=7153907 (camHit=100.0%, 144.42 Mray/s measured)
+[PASS ] PNG 落盘: /var/mobile/Containers/Data/Application/8BCCCFC1-5C33-44BA-811F-FC58EE9FCC6E/Documents/instances/default/versions/fabric-loader-0.20.1-1.21.4/game/pathtrace_frame.png (162251 B, 480x270, spp=24, bounces=2)
+[INFO ] 图像统计: 平均亮度=0.733 范围=[0.277..0.885] 量化颜色数=105
+[INFO ] 分带亮度: 上1/3=0.760 中1/3=0.731 下1/3=0.709
+[INFO ] 主色 top-4（4-bit 量化）: #BDA 40.3%  #BD9 7.0%  #AC9 6.3%  #BC9 6.0%
+[PASS ] 图像自证 PASS（非全黑/非平场/颜色多样性足够）
+
+==============================================================
+最终判定: PATHTRACE_OK
+2.2 路径追踪引擎首帧成立：摄取链在简化摆放契约下复现健康度，哨兵与整数格线维持 2.1 结论，离屏路径追踪渲染出可目检图像（pathtrace_frame.png，眼见为实；camHit%/分带亮度见 [render]/图像统计行）。实测吞吐见 [render] 行（atomic 计数，非估算）。—— 2.2 达成：下一步渐进积累/实时化与 GL 管线合成（2.3）。
+==============================================================
+
+---- S8 实时会话（渐进累积 + GL 合成 + atlas albedo——眼见为实） ----
+[live] session begun: 480x270 spp/frame=4 bounces=2 (atlas=white-vertex-color)
+[PASS ] [S8.0] 实时会话开启: 480x270 spp/帧=4 bounces=2（静止收敛 / 移动重置；场景变化 native 自检重置）
+[PASS ] [S8.0] 合成钩子武装（mixin swapBuffers HEAD 回调已激活，下一次游戏帧交换时初始化 GL 合成器）
+[PASS ] [S8.3] 实时累积开始（TLAS = 探针线程构建，本线程零重建——v0.4.1 实证模式；哨兵电池见 [live-sentinel] 行）
+[PASS ] [S8.1] GL 合成器初始化: vendor=Mesa renderer=zink Vulkan 1.4(Apple A20 Pro GPU (MOLTENVK)) version=4.1 (Compatibility Profile) Mesa 25.0.7 (git-742a20f48c)
+[PASS ] [S8.1] RT 纹理+FBO 就绪: 480x270 RGBA8 (tex=55 fbo=6)
+[PASS ] [live-sentinel atlas 前基线（t≈0，epoch=0）] worker 直查 TLAS：2/6 命中，-Y 脚下 1.62 格（instance=196） | verified：2/6 | 六射线 7 ms（慢+全miss=毒化签名） | tlas=build#29 ptr=0x7F7DA9D380 verified=build#29 | cam=(4.50, 70.62, 22.50) yaw=1.5 pitch=90.0 —— 与 [live] camHit 互证；g_tlas 与 verified 分歧 ⇒ 句柄陈旧，双 0 ⇒ 毒化/GPU 层
+[live] atlas uploaded: 1024x512 RGBA8 -> MTLTexture (albedo path: ATLAS_RGB x vertex tint)
+[PASS ] [S8.2] atlas 采集 PASS: glId=10 1024x512 RGBA8 已上传 MTLTexture（albedo = texel × 顶点色）
+[INFO ] [live] 0s: frames=1 (5.0 f/s) wall=111.1 f/s loop=111Hz spp=4 resets=0 tlas=build#29 | 上帧 0 查询 camHit=0.0% (0.00 Mray/s) | atlas=顶点色回退
+[PASS ] [compose] 捕获时像素传输状态: row=0 align=4 skipPx=0 skipRows=0（skip=0——本轮上传源无平移）
+[INFO ] [compose] pname 支持探测: SKIP_PIXELS=ok SKIP_ROWS=ok SWAP_BYTES=ok——掩码=0x0（被拒 pname 跳过读/重置/恢复三连；被拒即不可能被污染，无残留风险）
+[PASS ] [compose] 首帧几何: RT=480x270 win=2796(反射链) dst=2796x1290 blit_src=(0,0,480,270) blit_dst=(0,1290,2796,0) viewport=[0,0 2796x1290] scissor=off[0,320 2800x730]
+[PASS ] [compose] 首帧调用归因梯: 重置=0x0500 bind=0x0000 段0=0x0000 段0重试=0x0000 段1=0x0000（0=净；非 0 即该步被驱动拒——INVALID_ENUM 出生地一步定谳）
+[PASS ] [compose] 段上传误记自愈: y=0 rows=64 重试后成功（首错 0x0500 为排空前遗留误记，非上传失败）
+[PASS ] [live-sentinel atlas 后即时（epoch=1）] worker 直查 TLAS：2/6 命中，-Y 脚下 1.62 格（instance=196） | verified：2/6 | 六射线 5 ms（慢+全miss=毒化签名） | tlas=build#29 ptr=0x7F7DA9D380 verified=build#29 | cam=(4.50, 70.62, 22.50) yaw=1.5 pitch=90.0 —— 与 [live] camHit 互证；g_tlas 与 verified 分歧 ⇒ 句柄陈旧，双 0 ⇒ 毒化/GPU 层
+[PASS ] [compose] 段上传误记自愈: y=0 rows=64 重试后成功（首错 0x0500 为排空前遗留误记，非上传失败）
+[PASS ] [compose] 段上传误记自愈: y=0 rows=64 重试后成功（首错 0x0500 为排空前遗留误记，非上传失败）
+[INFO ] [live] 1s: frames=102 (100.2 f/s) wall=100.1 f/s loop=99Hz spp=408 resets=0 tlas=build#29 | 上帧 530266 查询 camHit=1.9% (53.08 Mray/s) | atlas=ATLAS_RGB
+[PASS ] [live-sentinel 1.5s 早期（毒化窗口加密点）] worker 直查 TLAS：0/6 命中 | verified：0/6 | 六射线 5 ms（慢+全miss=毒化签名） | tlas=build#29 ptr=0x7F7DA9D380 verified=build#29 | cam=(4.50, 70.62, 22.50) yaw=1.5 pitch=90.0 —— 与 [live] camHit 互证；g_tlas 与 verified 分歧 ⇒ 句柄陈旧，双 0 ⇒ 毒化/GPU 层
+[INFO ] [live-sentinel] 零命中 → 已请求探针线程交叉复测（[probe-sentinel] 行约 0.5s 内出现——同 TLAS 同射线仅换线程：probe 命中=worker 派发坏；双 miss=AS 内容坏）
+[INFO ] ray +X [probe]: miss（512 格内无几何）
+[INFO ] ray -X [probe]: miss（512 格内无几何）
+[INFO ] ray +Y(上) [probe]: miss（512 格内无几何）
+[INFO ] ray -Y(下) [probe]: miss（512 格内无几何）
+[INFO ] ray +Z [probe]: miss（512 格内无几何）
+[INFO ] ray -Z [probe]: miss（512 格内无几何）
+[PASS ] [probe-sentinel worker 0/6 交叉复测#1] 探针线程直查 TLAS：0/6 命中（格线 0，-Y 脚下 0）| cam=(4.50, 70.62, 22.50) yaw=1.5 pitch=90.0 —— 与 [live-sentinel] 行互证
+[PASS ] [live-sentinel 2s 重锚前基线] worker 直查 TLAS：0/6 命中 | verified：0/6 | 六射线 8 ms（慢+全miss=毒化签名） | tlas=build#29 ptr=0x7F7DA9D380 verified=build#29 | cam=(4.50, 70.62, 22.50) yaw=1.5 pitch=90.0 —— 与 [live] camHit 互证；g_tlas 与 verified 分歧 ⇒ 句柄陈旧，双 0 ⇒ 毒化/GPU 层
+[INFO ] [live] 2s: frames=195 (95.9 f/s) wall=91.6 f/s loop=46Hz spp=780 resets=0 tlas=build#29 | 上帧 521567 查询 camHit=0.6% (47.79 Mray/s) | atlas=ATLAS_RGB
+[INFO ] [live] 3s: frames=294 (96.6 f/s) wall=98.1 f/s loop=33Hz spp=1176 resets=0 tlas=build#29 | 上帧 521567 查询 camHit=0.6% (51.17 Mray/s) | atlas=ATLAS_RGB
+[INFO ] [live] 4s: frames=395 (97.6 f/s) wall=100.4 f/s loop=25Hz spp=1580 resets=0 tlas=build#29 | 上帧 521567 查询 camHit=0.6% (52.36 Mray/s) | atlas=ATLAS_RGB
+[INFO ] [compose] 心跳 #256: texSubErr=0 blitErr=0 shortBuf=0 drained=0 retryOk=254 chunkFail=0 mask=0x0 (RT=480x270 chunks=64行/段)
+[INFO ] [live] 5s: frames=497 (98.4 f/s) wall=101.9 f/s loop=20Hz spp=1988 resets=0 tlas=build#29 | 上帧 521567 查询 camHit=0.6% (53.15 Mray/s) | atlas=ATLAS_RGB
+[INFO ] [live] 6s: frames=600 (99.0 f/s) wall=102.1 f/s loop=17Hz spp=2400 resets=0 tlas=build#29 | 上帧 521567 查询 camHit=0.6% (53.24 Mray/s) | atlas=ATLAS_RGB
+[INFO ] [live] 7s: frames=702 (99.4 f/s) wall=101.6 f/s loop=14Hz spp=2808 resets=0 tlas=build#29 | 上帧 521567 查询 camHit=0.6% (52.99 Mray/s) | atlas=ATLAS_RGB
+[INFO ] [compose] 心跳 #512: texSubErr=0 blitErr=0 shortBuf=0 drained=0 retryOk=510 chunkFail=0 mask=0x0 (RT=480x270 chunks=64行/段)
+[INFO ] [live] 8s: frames=805 (99.8 f/s) wall=102.3 f/s loop=13Hz spp=3220 resets=0 tlas=build#29 | 上帧 521567 查询 camHit=0.6% (53.35 Mray/s) | atlas=ATLAS_RGB
+[INFO ] [live] 9s: frames=907 (100.0 f/s) wall=101.5 f/s loop=11Hz spp=3628 resets=0 tlas=build#29 | 上帧 521567 查询 camHit=0.6% (52.94 Mray/s) | atlas=ATLAS_RGB
+[INFO ] [compose] 心跳 #768: texSubErr=0 blitErr=0 shortBuf=0 drained=0 retryOk=766 chunkFail=0 mask=0x0 (RT=480x270 chunks=64行/段)
+[PASS ] [live-sentinel 12s 重锚前基线] worker 直查 TLAS：0/6 命中 | verified：0/6 | 六射线 3 ms（慢+全miss=毒化签名） | tlas=build#29 ptr=0x7F7DA9D380 verified=build#29 | cam=(4.50, 70.62, 22.50) yaw=1.5 pitch=90.0 —— 与 [live] camHit 互证；g_tlas 与 verified 分歧 ⇒ 句柄陈旧，双 0 ⇒ 毒化/GPU 层
+[INFO ] [live-sentinel] 零命中 → 已请求探针线程交叉复测（[probe-sentinel] 行约 0.5s 内出现——同 TLAS 同射线仅换线程：probe 命中=worker 派发坏；双 miss=AS 内容坏）
+[INFO ] ray +X [probe]: miss（512 格内无几何）
+[INFO ] ray -X [probe]: miss（512 格内无几何）
+[INFO ] ray +Y(上) [probe]: miss（512 格内无几何）
+[INFO ] ray -Y(下) [probe]: miss（512 格内无几何）
+[INFO ] ray +Z [probe]: miss（512 格内无几何）
+[INFO ] ray -Z [probe]: miss（512 格内无几何）
+[PASS ] [probe-sentinel worker 0/6 交叉复测#2] 探针线程直查 TLAS：0/6 命中（格线 0，-Y 脚下 0）| cam=(4.50, 70.62, 22.50) yaw=1.5 pitch=90.0 —— 与 [live-sentinel] 行互证
+[INFO ] [compose] 心跳 #1024: texSubErr=0 blitErr=0 shortBuf=0 drained=0 retryOk=1022 chunkFail=0 mask=0x0 (RT=480x270 chunks=64行/段)
+[INFO ] [live] 14s: frames=1411 (100.2 f/s) wall=100.7 f/s loop=36Hz spp=5644 resets=0 tlas=build#29 | 上帧 521567 查询 camHit=0.6% (52.52 Mray/s) | atlas=ATLAS_RGB
+[PASS ] [S8.5 早期收敛快照] PNG 落盘: /var/mobile/Containers/Data/Application/8BCCCFC1-5C33-44BA-811F-FC58EE9FCC6E/Documents/instances/default/versions/fabric-loader-0.20.1-1.21.4/game/pathtrace_live.png (54974 B, 480x270, @15s)
+[INFO ] [compose] 心跳 #1280: texSubErr=0 blitErr=0 shortBuf=0 drained=0 retryOk=1278 chunkFail=0 mask=0x0 (RT=480x270 chunks=64行/段)
+[INFO ] [live] 19s: frames=1915 (100.3 f/s) wall=100.7 f/s loop=26Hz spp=7660 resets=0 tlas=build#29 | 上帧 521567 查询 camHit=0.6% (52.52 Mray/s) | atlas=ATLAS_RGB
+[INFO ] [compose] 心跳 #1536: texSubErr=0 blitErr=0 shortBuf=0 drained=0 retryOk=1534 chunkFail=0 mask=0x0 (RT=480x270 chunks=64行/段)
+[INFO ] [compose] 心跳 #1792: texSubErr=0 blitErr=0 shortBuf=0 drained=0 retryOk=1790 chunkFail=0 mask=0x0 (RT=480x270 chunks=64行/段)
+[INFO ] [live] 24s: frames=2424 (100.6 f/s) wall=101.6 f/s loop=21Hz spp=9696 resets=0 tlas=build#29 | 上帧 521567 查询 camHit=0.6% (53.01 Mray/s) | atlas=ATLAS_RGB
+[INFO ] [compose] 心跳 #2048: texSubErr=0 blitErr=0 shortBuf=0 drained=0 retryOk=2046 chunkFail=0 mask=0x0 (RT=480x270 chunks=64行/段)
+[INFO ] [compose] 心跳 #2304: texSubErr=0 blitErr=0 shortBuf=0 drained=0 retryOk=2302 chunkFail=0 mask=0x0 (RT=480x270 chunks=64行/段)
+[INFO ] [live] 29s: frames=2932 (100.8 f/s) wall=101.5 f/s loop=17Hz spp=11728 resets=0 tlas=build#29 | 上帧 521567 查询 camHit=0.6% (52.93 Mray/s) | atlas=ATLAS_RGB
+[retired] releasing 6 deferred objects
+[tlas] rebuilt in 7.67 ms (instances=896, as=194304 B, tris=803350, colorSlots=896, pools=9640200+9640200 B, total=30 builds)
+[refresh] TLAS re-anchored on probe thread (instances=896, tlas builds=30)
+[PASS ] [S8.4] 探针线程 30s 定时重锚（A/B 后半段：探针构建 + worker 查询——对比 [live] 行 30s 前后的 camHit）
+[live] reset: TLAS rebuilt (builds=30)
+[INFO ] ray +X [probe]: miss（512 格内无几何）
+[INFO ] ray -X [probe]: miss（512 格内无几何）
+[INFO ] ray +Y(上) [probe]: miss（512 格内无几何）
+[PASS ] ray -Y(下) [probe]: HIT distance=1.62 hitPoint=(4.50, 69.00, 22.50) [整数格线 y] (instance=196) → section=(0,64,16)
+[PASS ] ray +Z [probe]: HIT distance=35.50 hitPoint=(4.50, 70.62, 58.00) [整数格线 z] (instance=410) → section=(0,64,48)
+[INFO ] ray -Z [probe]: miss（512 格内无几何）
+[PASS ] [probe-sentinel S8.4 重锚后（探针线程）] 探针线程直查 TLAS：2/6 命中（格线 2，-Y 脚下 1）| cam=(4.50, 70.62, 22.50) yaw=1.5 pitch=90.0 —— 与 [live-sentinel] 行互证
+[PASS ] [live-sentinel 32s 探针重锚后] worker 直查 TLAS：0/6 命中 | verified：0/6 | 六射线 3 ms（慢+全miss=毒化签名） | tlas=build#30 ptr=0x7F7DB9CF00 verified=build#30 | cam=(4.50, 70.62, 22.50) yaw=1.5 pitch=90.0 —— 与 [live] camHit 互证；g_tlas 与 verified 分歧 ⇒ 句柄陈旧，双 0 ⇒ 毒化/GPU 层
+[INFO ] [live-sentinel] 零命中 → 已请求探针线程交叉复测（[probe-sentinel] 行约 0.5s 内出现——同 TLAS 同射线仅换线程：probe 命中=worker 派发坏；双 miss=AS 内容坏）
+[INFO ] [compose] 心跳 #2560: texSubErr=0 blitErr=0 shortBuf=0 drained=0 retryOk=2558 chunkFail=0 mask=0x0 (RT=480x270 chunks=64行/段)
+[INFO ] ray +X [probe]: miss（512 格内无几何）
+[INFO ] ray -X [probe]: miss（512 格内无几何）
+[INFO ] ray +Y(上) [probe]: miss（512 格内无几何）
+[INFO ] ray -Y(下) [probe]: miss（512 格内无几何）
+[INFO ] ray +Z [probe]: miss（512 格内无几何）
+[INFO ] ray -Z [probe]: miss（512 格内无几何）
+[PASS ] [probe-sentinel worker 0/6 交叉复测#3] 探针线程直查 TLAS：0/6 命中（格线 0，-Y 脚下 0）| cam=(4.50, 70.62, 22.50) yaw=1.5 pitch=90.0 —— 与 [live-sentinel] 行互证
+[PASS ] [live-sentinel 34s 延迟复测（毒化半衰期）] worker 直查 TLAS：0/6 命中 | verified：0/6 | 六射线 3 ms（慢+全miss=毒化签名） | tlas=build#30 ptr=0x7F7DB9CF00 verified=build#30 | cam=(4.50, 70.62, 22.50) yaw=1.5 pitch=90.0 —— 与 [live] camHit 互证；g_tlas 与 verified 分歧 ⇒ 句柄陈旧，双 0 ⇒ 毒化/GPU 层
+[INFO ] [live] 34s: frames=388 (1940.0 f/s) wall=100.4 f/s loop=15Hz spp=1552 resets=1 tlas=build#30 | 上帧 521567 查询 camHit=0.6% (52.39 Mray/s) | atlas=ATLAS_RGB
+[INFO ] [compose] 心跳 #2816: texSubErr=0 blitErr=0 shortBuf=0 drained=0 retryOk=2814 chunkFail=0 mask=0x0 (RT=480x270 chunks=64行/段)
+[INFO ] [compose] 心跳 #3072: texSubErr=0 blitErr=0 shortBuf=0 drained=0 retryOk=3070 chunkFail=0 mask=0x0 (RT=480x270 chunks=64行/段)
+[INFO ] [live] 39s: frames=894 (178.8 f/s) wall=101.2 f/s loop=13Hz spp=3576 resets=1 tlas=build#30 | 上帧 521567 查询 camHit=0.6% (52.77 Mray/s) | atlas=ATLAS_RGB
+[INFO ] [compose] 心跳 #3328: texSubErr=0 blitErr=0 shortBuf=0 drained=0 retryOk=3326 chunkFail=0 mask=0x0 (RT=480x270 chunks=64行/段)
+[INFO ] [live] 44s: frames=1399 (139.9 f/s) wall=101.0 f/s loop=11Hz spp=5596 resets=1 tlas=build#30 | 上帧 521567 查询 camHit=0.6% (52.66 Mray/s) | atlas=ATLAS_RGB
+[INFO ] [compose] 心跳 #3584: texSubErr=0 blitErr=0 shortBuf=0 drained=0 retryOk=3582 chunkFail=0 mask=0x0 (RT=480x270 chunks=64行/段)
+[INFO ] [compose] 心跳 #3840: texSubErr=0 blitErr=0 shortBuf=0 drained=0 retryOk=3838 chunkFail=0 mask=0x0 (RT=480x270 chunks=64行/段)
+[INFO ] [live] 49s: frames=1909 (127.2 f/s) wall=101.9 f/s loop=10Hz spp=7636 resets=1 tlas=build#30 | 上帧 521567 查询 camHit=0.6% (53.16 Mray/s) | atlas=ATLAS_RGB
+[INFO ] [compose] 心跳 #4096: texSubErr=0 blitErr=0 shortBuf=0 drained=0 retryOk=4094 chunkFail=0 mask=0x0 (RT=480x270 chunks=64行/段)
+[INFO ] [live] 54s: frames=2418 (120.8 f/s) wall=101.7 f/s loop=9Hz spp=9672 resets=1 tlas=build#30 | 上帧 521567 查询 camHit=0.6% (53.05 Mray/s) | atlas=ATLAS_RGB
+[INFO ] [compose] 心跳 #4352: texSubErr=0 blitErr=0 shortBuf=0 drained=0 retryOk=4350 chunkFail=0 mask=0x0 (RT=480x270 chunks=64行/段)
+[PASS ] [S8.5 高 spp 收敛快照] PNG 落盘: /var/mobile/Containers/Data/Application/8BCCCFC1-5C33-44BA-811F-FC58EE9FCC6E/Documents/instances/default/versions/fabric-loader-0.20.1-1.21.4/game/pathtrace_live_final.png (40192 B, 480x270, @55s)
+[INFO ] [compose] 心跳 #4608: texSubErr=0 blitErr=0 shortBuf=0 drained=0 retryOk=4606 chunkFail=0 mask=0x0 (RT=480x270 chunks=64行/段)
+[INFO ] [live] 59s: frames=2926 (116.9 f/s) wall=101.4 f/s loop=9Hz spp=11704 resets=1 tlas=build#30 | 上帧 521567 查询 camHit=0.6% (52.90 Mray/s) | atlas=ATLAS_RGB
+
+---- S8.6 实时会话判定（60s 观察窗收口） ----
+[INFO ] 会话统计: frames=3015 spp=12060 resets=1 refreshes=0 | 上帧 camHit=0.6% | wall=101.0 f/s | hook: swap=9970 blit=4753 glErrors=0
+
+==============================================================
+实时会话判定: LIVE_OK
+2.3 三件事闭环：渐进累积（静止收敛 spp=12060，移动 resets=1 自动重置）+ GL 合成（blit=4753 帧，整帧替换游戏画面）+ atlas albedo（ATLAS_RGB × 顶点色）。v0.4.2 证据链：camHit 见 [live] 行（分母已修——v0.4 显示 bug 曾把真命中率抹成 0.0%）、TLAS 线程归责见 [live-sentinel]/[probe-sentinel]/[S8.4] 行（探针构建 + 双线程查询 A/B）、GL 错误分类学见 [compose] 行。会话继续运行直到游戏退出——眼见为实。下一步（2.4）：反射/GI 质量与阴影 ray 复用、事件驱动摄取（mixin 化 SceneProxy）。
+==============================================================
+[INFO ] [S8] 会话继续运行（不上屏即熄）——原生资源随游戏进程退出释放
+[INFO ] [compose] 心跳 #4864: texSubErr=0 blitErr=0 shortBuf=0 drained=0 retryOk=4862 chunkFail=0 mask=0x0 (RT=480x270 chunks=64行/段)
+[INFO ] [live] 64s: frames=3434 (114.4 f/s) wall=101.5 f/s loop=8Hz spp=13736 resets=1 tlas=build#30 | 上帧 521567 查询 camHit=0.6% (52.94 Mray/s) | atlas=ATLAS_RGB
+[INFO ] [compose] 心跳 #5120: texSubErr=0 blitErr=0 shortBuf=0 drained=0 retryOk=5118 chunkFail=0 mask=0x0 (RT=480x270 chunks=64行/段)
+[INFO ] [compose] 心跳 #5376: texSubErr=0 blitErr=0 shortBuf=0 drained=0 retryOk=5374 chunkFail=0 mask=0x0 (RT=480x270 chunks=64行/段)
+[INFO ] [live] 69s: frames=3940 (112.5 f/s) wall=101.1 f/s loop=7Hz spp=15760 resets=1 tlas=build#30 | 上帧 521567 查询 camHit=0.6% (52.73 Mray/s) | atlas=ATLAS_RGB
+[INFO ] [compose] 心跳 #5632: texSubErr=0 blitErr=0 shortBuf=0 drained=0 retryOk=5630 chunkFail=0 mask=0x0 (RT=480x270 chunks=64行/段)
+[INFO ] [live] 74s: frames=4453 (111.2 f/s) wall=102.5 f/s loop=7Hz spp=17812 resets=1 tlas=build#30 | 上帧 521567 查询 camHit=0.6% (53.44 Mray/s) | atlas=ATLAS_RGB
+[INFO ] [compose] 心跳 #5888: texSubErr=0 blitErr=0 shortBuf=0 drained=0 retryOk=5886 chunkFail=0 mask=0x0 (RT=480x270 chunks=64行/段)
+[INFO ] [compose] 心跳 #6144: texSubErr=0 blitErr=0 shortBuf=0 drained=0 retryOk=6142 chunkFail=0 mask=0x0 (RT=480x270 chunks=64行/段)
+[INFO ] [live] 79s: frames=4965 (110.2 f/s) wall=102.4 f/s loop=6Hz spp=19860 resets=1 tlas=build#30 | 上帧 521567 查询 camHit=0.6% (53.40 Mray/s) | atlas=ATLAS_RGB

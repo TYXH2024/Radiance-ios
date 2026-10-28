@@ -100,6 +100,27 @@ final class Native {
     static native long[] tlasIdentityNative();
 
     /**
+     * v0.4.5：实例普查——每实例（section 槽位）一条 -Y 金丝瑞射线
+     * （盒内顶部中心向下贯穿 16 格）。v0.4.4 现场定谳毒化为时间级
+     * （重建后 0.05s 命中 / +2s 双线程双亡），残存命中是相机本地一小片；
+     * 本仪器把幸存集展开成分布地图：连续索引区段=TLAS 实例记录线性扫写 /
+     * 空间聚集=距离选择性失效 / 散布=BLAS 层。
+     * 返回 int[n]：0=miss；>0=命中实例号+1（i 位自身命中 = out[i]==i+1）。
+     */
+    static native int[] instanceCensusNative();
+
+    /**
+     * v0.4.5：共享内存审计——实例缓冲 vs 构建时影子 + 64KB 金丝瑞图案。
+     * 实例缓冲是 SHARED 存储：驱动/邻居越界写的首异偏移与 hexdump 即写手
+     * 签名（native 侧 [audit] 行）。两项均干净而 TLAS 仍死亡 ⇒ 毒化在
+     * GPU 私有内存（zink/MoltenVK GPU 侧写手——用户侧二分轮收口）。
+     * 返回 long[8]：[0] inst 匹配(1/0/-1) [1] inst 首异偏移(-1=无)
+     * [2] 影子 FNV [3] 现场 FNV [4] 金丝瑞匹配 [5] 金丝瑞首异偏移
+     * [6] 金丝瑞被改字节 [7] 审计时 build#。
+     */
+    static native long[] sharedAuditNative();
+
+    /**
      * 哨兵求交（2.1 v0.5 真机验证的原样保留）：隔离的单三角 BLAS + 双实例
      * TLAS（单位 + 平移 K=(4096,0,4096)），三条 ray（两阳一阴）。
      * 返回位码：b0 单位实例命中 / b1 平移实例命中 / b2 阴性对照正确 miss。
