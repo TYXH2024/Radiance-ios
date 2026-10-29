@@ -4,7 +4,8 @@
   "package": "net.prisma.pathtrace.mixin",
   "compatibilityLevel": "JAVA_8",
   "client": [
-    "PathtraceWindowMixin"
+    "PathtraceWindowMixin",
+    "PathtraceBuiltChunkMixin"
   ],
   "injectors": {
     "defaultRequire": 0

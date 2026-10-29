@@ -559,3 +559,26 @@ Work Log:
 Stage Summary:
 - v0.5.0 回收闭环：CANOPY 两刀真机全部生效、用户零缺陷反馈——探针完成从「取证协议」到「产品协议」的转变，2.2/2.3 章节全部关闭
 - 待办：①v0.5.1 事件驱动摄取开发（2.4 第一刀）②A20 Pro v0.5.0 复验（可与开发并行，不打版本号）③Apple bug report 提交（素材已齐）
+
+## 2026-10-29（二十八）· pathtrace v0.5.1 EVENT-DRIVEN：2.4 第一刀——事件驱动摄取（mixin 钩 BuiltChunk.setData mesh 发布点 + 摄取线程常驻 + 2s 哨兵兜底）——探针转正为正式组件
+
+Task: 用户裁决开工 2.4 第一刀（v0.5.0 判读落账后顺承：摄取有界窗口 = 6572/6936 段永远进不了 RT 世界）
+
+Work Log:
+- **设计定稿（三个关键决策）**：
+  1. 钩点选型：yarn 1.21.4+build.8 映射核验（本地下载 tiny v2 全文检索）——class_846$class_851（ChunkBuilder$BuiltChunk）候选三法：scheduleRebuild（太早——region 未定）/ setSectionPos（重定位非重建）/ **method_60908 setData(ChunkData)（mesh 发布点——vanilla 写 BuiltChunk.data field_4459 的唯一通路，即 v0.4.x 轮询 dirty 判定观察的同一事件源）**。选 setData HEAD：语义精确（MC 已重建该 section）、CallbackInfo-only 签名零参数类型依赖、(Object)this 恒合法；摄取内容不变（仍自建 SectionBuilder.build——2.1 契约），钩子只提供【何时】不碰【取什么】
+  2. 线程拓扑：SceneProxy.run() 窗口语义不变（S4/S5 阻塞至 ready 判定，主编排线程照走 S6/S7/S8）；窗口结束点（完成/超时两路）改为 startIngestLoop()——新 daemon 线程 Pathtrace-Ingest 无限运行（旧版此处 return 即线程死 = 6572 段证据链的根）。run() 窗口内主循环也先 drain 事件批再哨兵——窗口期即事件驱动
+  3. 双保险永不退化：mixin require=0 + json required:false + 回调全 try/catch（崩游戏零风险纪律同 WindowMixin）；mixin 未命中时哨兵自动维持 500ms 全量轮询 = v0.5.0 等价回退（meshEventArmed 自适应节奏：命中 2s / 未命中 500ms）——哨兵保留 dirty 扫描全部既有语义（重定位/失效/空试重试/neverIngested 远段——事件通道不覆盖的三类信号）
+- **实现（4 Java 文件 + 3 配置，零 native 改动）**：
+  - 新增 PathtraceBuiltChunkMixin（class_851#method_60908 HEAD，intermediary 字面名 + remap=false 零 refmap——与 WindowMixin 同惯例；targets 字符串不 import MC 类，编译期零 MC 依赖）
+  - PathtraceHook 事件泵：无锁队列 ConcurrentLinkedQueue + ConcurrentHashMap 身份去重（putIfAbsent；消费侧 poll 后立刻 remove——竞态窗口极小且方向安全：宁可重复摄取（rebuild 幂等）不可丢事件（哨兵 2s 兜底修复））；OFF 态一次 volatile 读（armMeshEvents 由 SceneProxy 构造器武装）
+  - SceneProxy：扫描段原样抽成 sweep(chunks)（v0.4.6 距离优先逻辑不动——run() 与常驻线程共用）；drainMeshEvents(max)（批 ≤8 + Phase D gate；事件成功后 syncSlotState 同步 lastDataRef/lastSectionPos 防哨兵重复摄取）；ingestLoop 常驻循环（事件批 20ms 节流 ≈ 400 段/s 上限防切渲染距离 flood；TLAS tick 1s 节流聚合；世界退出清队列挂起、重进后哨兵全量重扫——slots 世代沿 data 引用变化自然失效；[ingest] 心跳 10s：事件+哨兵重建+队列深+模式）；readChunksArray/sleepQuiet 辅助
+  - Mappings 软审计 M_BC_SET_DATA=method_60908（[S8soft] 行——钩点符号运行时存在性取证；失败仅降级事件通道）
+  - mixins.json client +PathtraceBuiltChunkMixin；版本三元组 0.5.1（build.sh/fabric.mod.json/报告头）；PathtraceMod S4/S5 stage 文案改事件驱动；workflow 重写（tag pathtrace-v0.5.1、JAR 验证加 BuiltChunk mixin 类、release notes 全量）
+- **native 零改动的设计依据**：rebuildSingleNative/invalidate/frameTickNative 任意时刻可调（S8.4 探针重锚与 ping-pong 500ms 节拍已实证 live 期间探针线程 rebuild 与 worker dispatch 并行安全——retired 延迟释放机制在岗）；content 变化 rebuild → epoch 递增 → live 累积按需清零（v0.4.8 场景纪元机制天然复用——场景变了就该重收敛，物理正确）；S7 离屏诊断帧与 scene_trace_kernel 逐字不动（字节级可比锚点保持）
+- **风险审查**：事件批 native BLAS rebuild ~2-5ms/段 × 400 段/s 上限 ≈ 探针线程既有 ping-pong 同量级负载；世界重进首版语义=哨兵全量重扫（真机验证后精修）；stop() 无调用点（历史防御保留）
+- smoke（Linux 沙箱）：ecj 14 源文件 16 class 零错误（real fabric-loader/lifecycle/api-base/sponge-mixin jars）；mixins.json JSON 合法 + 双 mixin 条目；mixin 类在编译产物；版本三元组一致 + 无操作字符串 0.5.0 残留（注释历史锚点豁免——上轮惯例）；method_60908 五处存在性检查；yarn 交叉验证 class_851#method_60908 = setData(ChunkData)V 恰一命中；花括号平衡 5 文件全平（151:151/27:27/166:166/50:50/3:3）
+
+Stage Summary:
+- v0.5.1 落地：发现延迟 500ms→≤50ms、摄取窗口死亡→常驻、RT 世界覆盖开局 208 段→全量——探针完成从「产品协议」到「活世界组件」的转正
+- 待办：①CI 过绿 + Release pathtrace-v0.5.1 ②用户真机回报（重点：[ingest] mixin 事件命中/转常驻/心跳行、挖掘验证 ≤2s 反映、[S8soft] method_60908；mixin 未命中回退行也请回报）③A20 Pro v0.5.0/v0.5.1 合并复验 ④Apple bug report 提交（素材已齐）⑤2.4 下一刀：移动相机累积策略

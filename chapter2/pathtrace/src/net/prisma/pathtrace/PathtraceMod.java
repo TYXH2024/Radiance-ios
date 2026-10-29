@@ -89,7 +89,7 @@ public final class PathtraceMod {
             return;
         }
         ProbeReport r = new ProbeReport("pathtrace_report.txt");
-        r.header("路径追踪探针 (pathtrace 0.5.0)");
+        r.header("路径追踪探针 (pathtrace 0.5.1)");
         r.info("触发方式: " + triggerSource);
 
         if (isDisabled()) {
@@ -149,8 +149,9 @@ public final class PathtraceMod {
         }
         r.pass("符号表全量解析通过（" + Mappings.RESOLVED.size() + " 项）");
 
-        // ---- S4/S5 网格发现 + 摄取（SceneProxy 主循环阻塞运行）----
-        r.stage("S4/S5 网格发现与摄取（轮询 500ms，等待进入世界；顶点+COLOR 双提取）");
+        // ---- S4/S5 网格发现 + 摄取（事件驱动 + 哨兵；窗口后摄取转常驻）----
+        r.stage("S4/S5 网格发现与摄取（事件驱动（mixin setData HEAD）+ 500ms 哨兵全量扫描；"
+                + "窗口结束后摄取线程转常驻——世界变化持续入库（v0.5.1 探针转正））");
         SceneProxy proxy = new SceneProxy(r, metallib.toAbsolutePath().toString());
         try {
             proxy.run();

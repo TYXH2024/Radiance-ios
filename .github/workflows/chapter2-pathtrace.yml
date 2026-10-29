@@ -13,7 +13,10 @@ permissions:
 
 jobs:
   # ------------------------------------------------------------------
-  # 第二章 2.3 阶段交付：pathtrace mod JAR（实时累积 + GL 合成 + atlas）。
+  # 第二章 2.4 阶段交付：pathtrace mod JAR（2.2/2.3 闭环 + v0.5.1 事件驱动摄取）。
+#   v0.5.1 EVENT-DRIVEN：PathtraceBuiltChunkMixin（class_851#method_60908 setData
+#   HEAD，intermediary 字面名 + remap=false 零 refmap）→ 事件泵 → 常驻
+#   Pathtrace-Ingest 线程；哨兵全量扫描兜底（mixin 未命中回退 500ms）。
   #   1. 交叉编译 libradiance_pathtrace.dylib (iphoneos arm64, JNI 场景
   #      管理 + 离屏 pathtrace + live 会话族)
   #   2. 编译 pathtrace.metallib (MSL metal3: scene_trace_kernel 2.1 原样
@@ -42,16 +45,16 @@ jobs:
           set -ex
           chmod +x chapter2/pathtrace/build.sh
           bash chapter2/pathtrace/build.sh
-          JAR="chapter2/pathtrace/pathtrace-0.5.0.jar"
+          JAR="chapter2/pathtrace/pathtrace-0.5.1.jar"
           test -f "$JAR"
-          cp "$JAR" ./pathtrace-0.5.0.jar
+          cp "$JAR" ./pathtrace-0.5.1.jar
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: pathtrace-jar
           path: |
-            pathtrace-0.5.0.jar
+            pathtrace-0.5.1.jar
             chapter2/pathtrace/build/native/libradiance_pathtrace.dylib
             chapter2/pathtrace/build/native/pathtrace.metallib
           if-no-files-found: error
@@ -120,64 +123,78 @@ jobs:
           file "$METALLIB"
           test -s "$METALLIB"
           # JAR 内容验证：mixin 类 + mixins.json 必须在包内
-          JAR="chapter2/pathtrace/pathtrace-0.5.0.jar"
+          JAR="chapter2/pathtrace/pathtrace-0.5.1.jar"
           unzip -l "$JAR" | grep -q "net/prisma/pathtrace/mixin/PathtraceWindowMixin.class" \
             && echo "JAR_MIXIN_CLASS_OK"
+          # v0.5.1: 事件驱动摄取 mixin（BuiltChunk.setData HEAD）
+          unzip -l "$JAR" | grep -q "net/prisma/pathtrace/mixin/PathtraceBuiltChunkMixin.class" \
+            && echo "JAR_MIXIN_CLASS_OK(BuiltChunk)"
           unzip -l "$JAR" | grep -q "pathtrace.mixins.json" \
             && echo "JAR_MIXIN_JSON_OK"
           unzip -l "$JAR" | grep -q "fabric.mod.json" \
             && echo "JAR_FABRIC_MOD_OK"
 
-      - name: Release (pathtrace-v0.5.0, prerelease)
+      - name: Release (pathtrace-v0.5.1, prerelease)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -ex
-          TAG="pathtrace-v0.5.0"
-          TITLE="pathtrace v0.5.0 CANOPY — 树叶/玻璃/草丛 alpha 镂空（cutoutTrace + 阴影射线镂空：树冠见孔、树影斑驳）+ ping-pong 自 t=0（孪生默认关——开场闪屏消亡）——噪点按指示不动（性能优先）"
+          TAG="pathtrace-v0.5.1"
+          TITLE="pathtrace v0.5.1 EVENT-DRIVEN — 事件驱动摄取（mixin 钩 BuiltChunk.setData：网格发布点直连，发现延迟 500ms→50ms）+ 摄取线程常驻（窗口结束后世界变化持续入库——RT 世界覆盖从开局 208 段扩至全量）+ 2s 哨兵兜底（mixin 未命中自动回退 500ms 全量轮询，永不退化）——探针转正（2.4 第一刀）"
           NOTES_FILE=release-notes.md
           cat > "$NOTES_FILE" <<'EOF'
-          # pathtrace v0.5.0 — CANOPY（树叶镂空 + 开场无闪屏）
-          
-          **背景**：v0.4.9 CLARITY 真机回收（A20 Pro 完整 90s 窗）：画质四刀全部生效——用户判词「画质可以了（原来的感觉像抗锯齿）」，阴影 ✓，LIVE_OK 收口；ping-pong 时代零死亡、spp 6404（104s 仍在收敛）、稳态吞吐 ~107-110 Mray/s、resets 30s 后冻结。三问剩两：①树叶不透明——截屏树冠「绿黑像素交错」= alpha 镂空缺失（透明纹素被当不透明面着色，atlas 透明纹素处 RGB 为黑）②开场闪屏——旧协议 0-30s 基线期 5 次死亡、每次 5-10s 全 miss 帧（天空色铺满，即用户描述的「灰色遮罩/全世界材质丢失呈天空色」）。
-          
-          **两刀**：
-          1. **alpha cutout（pathtrace.metal，唯一内核改动）**：新增
-             cutoutTrace()——命中后采样 atlas alpha，低于 0.5（MC cutout
-             阈值）的纹素视为孔洞，射线推进 tMin 重查（≤8 轮）；阴影射线
-             同样处理（≤6 轮，耗尽保守遮挡）。效果：树叶见孔、玻璃透亮、
-             草丛成簇，树影变斑驳光影而非实心黑板。UV 哨兵层与无 atlas
-             白纹理回退天然不透明（零行为变化）。每轮重查如实计入
-             rayStats——Mray/s 仍是诚实计量值。scene_trace_kernel
-             （2.1 仪器）逐字不动：哨兵/census 行字节级可比。
-          2. **ping-pong 自 t=0（协议默认翻转，纯 Java）**：孪生默认关
-             （M3 0/6 外部写手 / A20 Pro 两型定谳均已归档——科学环节功成
-             身退）→ ping-pong 于 LiveSession 首个 tick（t≈0）激活：
-             替换件年龄恒 <0.5s，基线期死亡循环（=开场闪屏）自本版起
-             不存在。-Dpathtrace.twin=true 恢复 v0.4.8/0.4.9 的 90s
-             取证协议（t=10s 装填 → t=30s 定谳）。
-          
-          **噪点按用户指示不动**（性能优先）：cutout 会小幅增加树冠
-          视角的查询数（每帧 ~1.3-2×，全部计入计量）——若帧率不可接受
-          回报 [live] 行的 f/s 与场景描述。
-          
-          **使用协议（简化：进世界即稳定）**：替换 mods/ 内旧 JAR，
-          同一存档静止同一姿态。回报 pathtrace_report.txt + 三 PNG，
-          v0.5.0 新增重点行：
-          - **[pingpong] 激活 @0s**——开场闪屏消亡的直接证据
-          - **[pingpong 收口]** 行——窗内 canary 死亡应为 0
-            （旧称 [v0.4.8 收口]）
-          - **SNAP1 改 8s**（旧死亡窗内的稳定画面证据）
-          - 树冠/玻璃屏摄：树叶应见孔洞、树影应斑驳、玻璃应透
-          
+          # pathtrace v0.5.1 — EVENT-DRIVEN（事件驱动摄取：探针转正）
+
+          **背景**：v0.5.0 CANOPY 真机回收（M3 完整 90s 窗 + 会话续跑）：
+          用户判词「没看出啥毛病」——两刀全部落地（树冠见孔、树影斑驳、
+          开局闪屏消亡 resets=0 全程实锚），画质三问收口，2.2/2.3 章节
+          关闭。唯一遗留的是**摄取的有界窗口**：S4/S5 窗口（~40s）结束
+          后摄取线程死亡——真机实测 208/6936 段入库、积压 6572：开局
+          之外的区块变化（挖掘/放置/加载新地形）永远进不了 RT 世界，
+          远处 ±X/+Y 射线 miss 即此边界。
+
+          **本版一刀（2.4 第一刀：探针转正）——事件驱动摄取**：
+          1. **mixin 事件泵**：新增 PathtraceBuiltChunkMixin，钩
+             ChunkBuilder$BuiltChunk.setData（class_851#method_60908，
+             HEAD——vanilla 发布新 mesh 的唯一写点，即旧轮询 dirty
+             判定观察的同一信号源）。发布即入无锁队列（渲染线程 O(1)，
+             OFF 态一次 volatile 读）。发现延迟 500ms → ≤50ms。
+          2. **摄取线程常驻**：窗口结束后不再 return——Pathtrace-Ingest
+             daemon 线程无限运行（事件批 ≤8/轮 + 20ms 节流 ≈ 400 段/s
+             上限防 flood；TLAS tick 1s 聚合；世界退出挂起、重进后
+             哨兵全量重扫）。世界变化持续入库：rebuild → epoch 递增 →
+             live 累积按需重收敛（物理正确——场景变了就该重收敛）。
+          3. **2s 哨兵兜底**：全量 dirty 扫描（重定位/失效/未摄取远段
+             ——事件通道不覆盖的三类信号）。mixin 未命中时自动升回
+             500ms 全量轮询 = v0.5.0 等价回退，**永不退化**。
+          4. **零 native 改动**：rebuildSingleNative/invalidate/
+             frameTickNative 任意时刻可调（S8.4 重锚与 ping-pong 已实证
+             live 期间并行安全）；S7 离屏诊断帧与 scene_trace_kernel
+             逐字不动（字节级可比锚点保持）。
+
+          **效果**：RT 世界覆盖从开局 ~208 段 → 全量（挖掘即见、
+          走出去即加载）；发现延迟 10× 收窄；CPU 轮询空转消除。
+
+          **使用协议**：替换 mods/ 内旧 JAR，进世界后正常游玩（本版
+          重点恰是【动起来】：挖掘/放置/走远）。回报
+          pathtrace_report.txt + 三 PNG，v0.5.1 新增重点行：
+          - **[ingest] mixin 事件命中**——事件通道激活的直接证据
+            （未出现 ⇒ mixin 未命中，哨兵回退 500ms 轮询——功能零损失
+            但请回报）
+          - **[ingest] 摄取线程转常驻**——窗口结束后摄取持续
+          - **[ingest] 心跳**——事件 +N / 哨兵重建 +N / 队列深度 /
+            模式（EVENT+SENTRY 或 SENTRY(回退)）
+          - **挖掘验证**：挖/放几个方块，画面应在 ≤2s 内反映变化
+            （重收敛会有短暂噪点——物理正确）
+          - **[S8soft] method_60908** 行——钩点符号运行时存在性取证
+
           开关：-Dpathtrace.twin=true（复现 90s 取证协议）/
-          -Dpathtrace.pingpong=false（对照）/
-          -Dpathtrace.rtW=480（回退旧分辨率档）
+          -Dpathtrace.pingpong=false（对照）
           EOF
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release upload "$TAG" ./pathtrace-0.5.0.jar --clobber --repo "$GITHUB_REPOSITORY"
+            gh release upload "$TAG" ./pathtrace-0.5.1.jar --clobber --repo "$GITHUB_REPOSITORY"
           else
-            gh release create "$TAG" ./pathtrace-0.5.0.jar \
+            gh release create "$TAG" ./pathtrace-0.5.1.jar \
                  --title "$TITLE" --notes-file "$NOTES_FILE" \
                  --prerelease --repo "$GITHUB_REPOSITORY"
           fi

@@ -116,6 +116,9 @@ final class Mappings {
     static final String M_MC_GET_INSTANCE = "method_1551";
     static final String M_BC_GET_ORIGIN   = "method_3670";
     static final String M_BC_GET_SECTION_POS = "method_62975";
+    /** v0.5.1：mesh 发布点（PathtraceBuiltChunkMixin 钩 setData HEAD——
+     * 软审计：失败仅意味事件通道不可用，哨兵自动回退 500ms 全量轮询）。 */
+    static final String M_BC_SET_DATA      = "method_60908";
     static final String M_VEC3I_GET_X     = "method_10263";
     static final String M_VEC3I_GET_Y     = "method_10264";
     static final String M_VEC3I_GET_Z     = "method_10260";
@@ -287,6 +290,16 @@ final class Mappings {
         Class<?> ve = clsOpt(C_VERTEX_ELEM);
         if (ve != null) {
             softField(r, ve, F_VE_UV);
+        }
+        // v0.5.1 事件驱动摄取：BuiltChunk.setData（class_851#method_60908）
+        // —— mixin 目标符号运行时存在性取证（[S8soft] 行；缺失 ⇒ mixin
+        // require=0 静默未注入，哨兵回退全量轮询，摄取功能零损失）
+        Class<?> bc2 = clsOpt(C_BUILT_CHUNK);
+        if (bc2 == null) {
+            bc2 = softClass(r, C_BUILT_CHUNK);
+        }
+        if (bc2 != null) {
+            softMethod(r, bc2, M_BC_SET_DATA);
         }
     }
 

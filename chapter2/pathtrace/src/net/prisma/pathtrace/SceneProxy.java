@@ -34,6 +34,21 @@ import java.util.concurrent.atomic.AtomicLong;
  * 金丝雀 miss（“检测不到脚底”）、[tlas-health] t=0.01s 死亡——三者同源。
  * 修复后按 origin 的 AABB-clamp 距离排序，相机段距离 0 必然首轮入库，
  * 周围 26 邻居次之，远处按距离补齐（对 vanilla 中心漂移/回绕免疫）。
+ *
+ * v0.5.1 事件驱动摄取（探针转正，2.4 第一刀）：发现时机从【500ms 轮询
+ * 扫描】升级为【mixin 事件 + 低频哨兵】双通道。事件源 =
+ * PathtraceBuiltChunkMixin 钩 BuiltChunk.setData（class_851#method_60908
+ * HEAD——vanilla 发布新 mesh 的唯一写点，即旧轮询 dirty 判定观察的同一
+ * 信号）；哨兵 = 保留的全量 dirty 扫描（频率自适应：mixin 命中 2s /
+ * 未命中 500ms——后者 = v0.5.0 等价回退，永不退化）。摄取内容不变
+ * （仍自建 SectionBuilder.build，2.1 契约）。窗口语义不变（S4/S5 阻塞
+ * 至 ready 判定）——窗口结束后【摄取线程转常驻】（Pathtrace-Ingest
+ * daemon）：事件批处理 + 哨兵 + TLAS tick 活到游戏退出，世界重进后哨兵
+ * 全量重扫。旧 v0.4.x 的【窗口结束即死】（6572/6936 段永远进不了 RT
+ * 世界）自本版不存在。native 侧零改动：rebuildSingleNative/invalidate/
+ * frameTickNative 任意时刻可调（S8.4 重锚与 ping-pong 已实证 live 期间
+ * 探针线程 rebuild 并行安全）；content 变化 → epoch 递增 → live 累积
+ * 按需清零（物理正确：场景变了就该重收敛）。
  */
 final class SceneProxy {
 
@@ -41,6 +56,18 @@ final class SceneProxy {
     private static final long POLL_MS = 500L;
     /** 每轮最大重建区块数（v0.3：8→16，全量 600 槽位排空约 19s）。 */
     private static final int MAX_REBUILD_PER_POLL = 16;
+    /** v0.5.1：事件批上限（每轮循环消费的最大 mixin 事件数——防 flood
+     * （切渲染距离）压死 native；批后 20ms 节流 ≈ 400 段/s 上限）。 */
+    private static final int EVENT_BATCH = 8;
+    /** v0.5.1：哨兵扫描间隔（mixin 命中时——重定位/失效/未摄取远段的
+     * 兜底通道；未命中时自动回退 POLL_MS = v0.5.0 等价行为）。 */
+    private static final long SENTRY_MS = 2_000L;
+    /** v0.5.1：[ingest] 心跳间隔（ms）。 */
+    private static final long INGEST_HEARTBEAT_MS = 10_000L;
+    /** v0.5.1：事件批后节流（ms）。 */
+    private static final long EVENT_BATCH_THROTTLE_MS = 20L;
+    /** v0.5.1：空转睡眠（ms）——事件驱动响应粒度。 */
+    private static final long IDLE_SLEEP_MS = 50L;
     /** 摄取运行下限（ms）——S6 验证前的最短积累窗口（v0.3：20s→15s）。 */
     private static final long MIN_INGEST_MS = 15_000L;
     /** 摄取运行上限（ms）——超时强制进入 S6（SCENE_EMPTY 候选）。 */
@@ -85,6 +112,26 @@ final class SceneProxy {
     private final long startNs = System.nanoTime();
     private final AtomicLong generation = new AtomicLong(1);
 
+    // ---- v0.5.1 事件驱动统计 ----
+    /** 已消费的 mixin 事件总数（含窗口内）。 */
+    long eventsProcessed = 0;
+    /** 事件批数（心跳行用）。 */
+    private long eventBatches = 0;
+    /** 哨兵扫描轮数（含窗口内每轮）。 */
+    private long sweepCount = 0;
+    /** 常驻摄取线程（窗口结束时创建，幂等）。 */
+    private Thread ingestThread;
+    /** [ingest] mixin 命中回显（一次）。 */
+    private boolean meshHitEchoed = false;
+    /** [ingest] 常驻模式回显（一次）。 */
+    private boolean residentEchoed = false;
+    /** [ingest] 心跳累计器。 */
+    private long lastIngestHeartbeatMs = 0;
+    /** 心跳窗口内事件计数（打完归零）。 */
+    private long heartbeatEvents = 0;
+    /** 心跳窗口内哨兵重建计数（打完归零）。 */
+    private int heartbeatSweepRebuilds = 0;
+
     private static final class SlotState {
         Object lastDataRef;
         long lastSectionPos;
@@ -101,6 +148,9 @@ final class SceneProxy {
     SceneProxy(ProbeReport r, String metallibPath) {
         this.r = r;
         this.metallibPath = metallibPath;
+        // v0.5.1：事件通道开启（mixin 回调自此刻起入队；OFF 态零副作用）。
+        // 窗口内与常驻期共用同一队列——窗口主循环每轮先 drain 事件再哨兵。
+        PathtraceHook.armMeshEvents();
     }
 
     void stop() {
@@ -184,104 +234,25 @@ final class SceneProxy {
                 firstGridInit(chunks.length, storage);
             }
 
-            // 扫描脏区块（data 引用变化 / sectionPos 变化 / 从未摄取）。
-            // v0.4.6：先全量收集 dirty 候选（保序＝数组序，相机不可读时的
-            // 回退路径），再按相机距离近先挑选——见类头注释。
-            int nonEmpty = 0;
-            int rebuiltThisPoll = 0;
-            int pendingDirty = 0;
-            List<Candidate> candidates = new ArrayList<>(64);
-
-            for (Object builtChunk : chunks) {
-                if (builtChunk == null) {
-                    continue;
-                }
-                int index = (Integer) Mappings.get(builtChunk, Mappings.C_BUILT_CHUNK,
-                        Mappings.F_BC_INDEX);
-                long sectionPos = (Long) Mappings.call(builtChunk, Mappings.C_BUILT_CHUNK,
-                        Mappings.M_BC_GET_SECTION_POS);
-                Object data = Mappings.get(builtChunk, Mappings.C_BUILT_CHUNK, Mappings.F_BC_DATA);
-                // data 是 AtomicReference（JDK 类，直接 cast）
-                Object chunkData = data instanceof java.util.concurrent.atomic.AtomicReference
-                        ? ((java.util.concurrent.atomic.AtomicReference<?>) data).get() : null;
-
-                SlotState st = slots.computeIfAbsent(index, k -> new SlotState());
-                boolean dataChanged = chunkData != st.lastDataRef;
-                boolean moved = sectionPos != st.lastSectionPos;
-                // v0.3：从未摄取（generation==0）的槽位永远视为脏——v0.2 的
-                // 根因是首轮扫描把全部 600 个 data 引用快照进 lastDataRef，
-                // 每轮 8 个 cap 截流后其余 592 个被标记为“干净”永不摄取
-                //（真机实测 30/600 的机制）。
-                boolean neverIngested = st.generation == 0;
-                // v0.2：空试重试（世界加载时序容错）。首次空试不致命——
-                // 区块源可能尚未就绪；窗口内每 4 poll（2s）重试一次，上限 6 次。
-                boolean retryEmpty = st.generation > 0 && !st.ready
-                        && st.emptyAttempts > 0 && st.emptyAttempts < 6
-                        && chunkData != null
-                        && (polls - st.lastEmptyPoll) >= 4;
-                st.lastDataRef = chunkData;
-                st.lastSectionPos = sectionPos;
-
-                if (chunkData != null) {
-                    nonEmpty++;
-                }
-
-                if (moved) {
-                    // v0.4.6：重定位即失效 origin 缓存（不论世代——未摄取的
-                    // 候选也可能在两轮之间移动，距离排序需新鲜 origin）
-                    originCache.remove(index);
-                }
-
-                if (moved && st.generation > 0) {
-                    // 重定位（网格平移）：首版直接按重建处理（rebuild 更新 origin）
-                    relocations++;
-                }
-
-                boolean dirty = (dataChanged || moved || neverIngested || retryEmpty)
-                        && chunkData != null;
-                if (dirty) {
-                    pendingDirty++;
-                    candidates.add(new Candidate(builtChunk, index));
-                } else if (dataChanged && chunkData == null && st.generation > 0) {
-                    invalidate(builtChunk, index);
-                    lastActivityMs = elapsedMs();
-                }
+            // v0.5.1：事件批消费（窗口内已事件驱动——mixin 命中时发现
+            // 延迟从 ≤500ms 降至 ≤50ms；哨兵轮只负责它独有的三类信号：
+            // 重定位 / 失效 / 从未摄取远段）。成功后同步槽位状态，哨兵
+            // 不会重复摄取同一批段。
+            int eventBatch = drainMeshEvents(EVENT_BATCH);
+            if (eventBatch > 0) {
+                eventsProcessed += eventBatch;
+                lastActivityMs = elapsedMs();
             }
 
-            // v0.4.6：候选按相机距离近先挑选（相机段距离 0 必然首轮入选）。
-            float[] cam = lastCameraPos;
-            if (cam != null && !candidates.isEmpty()) {
-                resolveOrigins(candidates, cam);
-                if (!priorityEchoed) {
-                    priorityEchoed = true;
-                    r.info("v0.4.6 摄取优先级：相机距离近先（数组序把相机段饿死"
-                            + "在 relZ 尾行的根因修复；本轮候选 " + candidates.size() + "）");
-                }
-                if (candidates.size() > MAX_REBUILD_PER_POLL) {
-                    candidates.sort(CANDIDATE_ORDER);
-                }
-            }
-            // v0.4.6：预算按成功数计（空试不占名额——与 v0.4.5 语义一致，
-            // 近处空区块跳过后名额顺延给更远候选）
-            for (int ci = 0; ci < candidates.size()
-                    && rebuiltThisPoll < MAX_REBUILD_PER_POLL; ci++) {
-                Candidate c = candidates.get(ci);
-                if (rebuild(c.chunk, c.index)) {
-                    rebuiltThisPoll++;
-                    lastActivityMs = elapsedMs();
-                    if (!cameraSectionEchoed && cam != null && c.hasOrigin) {
-                        int tx = (int) Math.floor(cam[0] / 16.0) * 16;
-                        int ty = (int) Math.floor(cam[1] / 16.0) * 16;
-                        int tz = (int) Math.floor(cam[2] / 16.0) * 16;
-                        if (c.ox == tx && c.oy == ty && c.oz == tz) {
-                            cameraSectionEchoed = true;
-                            r.pass(String.format(
-                                    "[camera-first] 相机段 (%d,%d,%d) 已摄取（rebuild #%d）"
-                                    + "——近景几何与 -Y 脚下金丝雀从此有据可依",
-                                    c.ox, c.oy, c.oz, rebuilds));
-                        }
-                    }
-                }
+            // 哨兵全量扫描（v0.4.6 距离优先逻辑原样；mixin 命中后由常驻
+            // 线程降频到 2s，窗口期内仍每轮跑——ready 判定的积压计数
+            // 依赖全量视角）
+            int[] s = sweep(chunks);
+            int rebuiltThisPoll = s[0];
+            int pendingDirty = s[1];
+            int nonEmpty = s[2];
+            if (rebuiltThisPoll > 0 || eventBatch > 0) {
+                lastActivityMs = elapsedMs();
             }
             if (nonEmpty != this.nonEmptyChunks) {
                 this.nonEmptyChunks = nonEmpty;
@@ -308,12 +279,341 @@ final class SceneProxy {
             if (firstReadyMs >= 0 && elapsedMs - firstReadyMs > 4000L) {
                 r.pass(String.format("摄取窗口完成（%d 次重建 / %d 非空区块 / 积压 %d / %.1fs）",
                         rebuilds, nonEmpty, pendingDirty, elapsedMs / 1000.0));
+                // v0.5.1：窗口结束不再终止摄取——转常驻（事件驱动 +
+                // 哨兵），活到游戏退出。旧 v0.4.x 此处 return 即线程死：
+                // 6572/6936 段永远进不了 RT 世界。
+                startIngestLoop("窗口完成");
                 return;
             }
             if (elapsedMs > MAX_INGEST_MS) {
                 r.info("摄取超时上限（150s）——进入验证段");
+                startIngestLoop("窗口超时兜底");
                 return;
             }
+        }
+    }
+
+    // ==================================================================
+    // v0.5.1 事件驱动摄取：哨兵扫描 / 事件消费 / 常驻摄取线程
+    // ==================================================================
+
+    /**
+     * 哨兵全量扫描（v0.4.6 距离优先逻辑原样抽出——run() 窗口期每轮、
+     * 常驻线程 mixin 命中 2s / 未命中 500ms）。
+     *
+     * @return {本轮哨兵重建数, 积压 dirty 数, 非空区块数}
+     */
+    private int[] sweep(Object[] chunks) {
+        sweepCount++;
+        int nonEmpty = 0;
+        int rebuilt = 0;
+        int pendingDirty = 0;
+        List<Candidate> candidates = new ArrayList<>(64);
+
+        for (Object builtChunk : chunks) {
+            if (builtChunk == null) {
+                continue;
+            }
+            int index = (Integer) Mappings.get(builtChunk, Mappings.C_BUILT_CHUNK,
+                    Mappings.F_BC_INDEX);
+            long sectionPos = (Long) Mappings.call(builtChunk, Mappings.C_BUILT_CHUNK,
+                    Mappings.M_BC_GET_SECTION_POS);
+            Object data = Mappings.get(builtChunk, Mappings.C_BUILT_CHUNK, Mappings.F_BC_DATA);
+            // data 是 AtomicReference（JDK 类，直接 cast）
+            Object chunkData = data instanceof java.util.concurrent.atomic.AtomicReference
+                    ? ((java.util.concurrent.atomic.AtomicReference<?>) data).get() : null;
+
+            SlotState st = slots.computeIfAbsent(index, k -> new SlotState());
+            boolean dataChanged = chunkData != st.lastDataRef;
+            boolean moved = sectionPos != st.lastSectionPos;
+            // v0.3：从未摄取（generation==0）的槽位永远视为脏——v0.2 的
+            // 根因是首轮扫描把全部 600 个 data 引用快照进 lastDataRef，
+            // 每轮 8 个 cap 截流后其余 592 个被标记为"干净"永不摄取
+            //（真机实测 30/600 的机制）。
+            boolean neverIngested = st.generation == 0;
+            // v0.2：空试重试（世界加载时序容错）。首次空试不致命——
+            // 区块源可能尚未就绪；窗口内每 4 poll（2s）重试一次，上限 6 次。
+            boolean retryEmpty = st.generation > 0 && !st.ready
+                    && st.emptyAttempts > 0 && st.emptyAttempts < 6
+                    && chunkData != null
+                    && (polls - st.lastEmptyPoll) >= 4;
+            st.lastDataRef = chunkData;
+            st.lastSectionPos = sectionPos;
+
+            if (chunkData != null) {
+                nonEmpty++;
+            }
+
+            if (moved) {
+                // v0.4.6：重定位即失效 origin 缓存（不论世代——未摄取的
+                // 候选也可能在两轮之间移动，距离排序需新鲜 origin）
+                originCache.remove(index);
+            }
+
+            if (moved && st.generation > 0) {
+                // 重定位（网格平移）：首版直接按重建处理（rebuild 更新 origin）
+                relocations++;
+            }
+
+            boolean dirty = (dataChanged || moved || neverIngested || retryEmpty)
+                    && chunkData != null;
+            if (dirty) {
+                pendingDirty++;
+                candidates.add(new Candidate(builtChunk, index));
+            } else if (dataChanged && chunkData == null && st.generation > 0) {
+                invalidate(builtChunk, index);
+            }
+        }
+
+        // v0.4.6：候选按相机距离近先挑选（相机段距离 0 必然首轮入选）。
+        float[] cam = lastCameraPos;
+        if (cam != null && !candidates.isEmpty()) {
+            resolveOrigins(candidates, cam);
+            if (!priorityEchoed) {
+                priorityEchoed = true;
+                r.info("v0.4.6 摄取优先级：相机距离近先（数组序把相机段饿死"
+                        + "在 relZ 尾行的根因修复；本轮候选 " + candidates.size() + "）");
+            }
+            if (candidates.size() > MAX_REBUILD_PER_POLL) {
+                candidates.sort(CANDIDATE_ORDER);
+            }
+        }
+        // v0.4.6：预算按成功数计（空试不占名额——与 v0.4.5 语义一致，
+        // 近处空区块跳过后名额顺延给更远候选）
+        for (int ci = 0; ci < candidates.size()
+                && rebuilt < MAX_REBUILD_PER_POLL; ci++) {
+            Candidate c = candidates.get(ci);
+            if (rebuild(c.chunk, c.index)) {
+                rebuilt++;
+                if (!cameraSectionEchoed && cam != null && c.hasOrigin) {
+                    int tx = (int) Math.floor(cam[0] / 16.0) * 16;
+                    int ty = (int) Math.floor(cam[1] / 16.0) * 16;
+                    int tz = (int) Math.floor(cam[2] / 16.0) * 16;
+                    if (c.ox == tx && c.oy == ty && c.oz == tz) {
+                        cameraSectionEchoed = true;
+                        r.pass(String.format(
+                                "[camera-first] 相机段 (%d,%d,%d) 已摄取（rebuild #%d）"
+                                + "——近景几何与 -Y 脚下金丝雀从此有据可依",
+                                c.ox, c.oy, c.oz, rebuilds));
+                    }
+                }
+            }
+        }
+        return new int[] {rebuilt, pendingDirty, nonEmpty};
+    }
+
+    /**
+     * v0.5.1：事件批消费（mixin setData HEAD → PathtraceHook 队列）。
+     * 每事件 = MC 已重建该 section（新 ChunkData 已发布）——直接重建
+     * 摄取；成功后同步槽位状态（哨兵不重复摄取）。region 未就绪等容错
+     * 沿用 rebuild() 既有路径（noteEmptyAttempt + invalidate）。
+     *
+     * @return 本批实际消费事件数
+     */
+    private int drainMeshEvents(int max) {
+        int n = 0;
+        while (n < max) {
+            Object bc = PathtraceHook.pollMeshEvent();
+            if (bc == null) {
+                break;
+            }
+            n++;
+            if (PathtraceMod.bisectIngestOff) {
+                continue; // Phase D：事件丢弃（与哨兵同语义——摄取暂停）
+            }
+            if (!meshHitEchoed) {
+                meshHitEchoed = true;
+                r.pass("[ingest] mixin 事件命中（class_851#method_60908 setData"
+                        + " HEAD——MC mesh 发布点直连）：发现延迟 ≤50ms，哨兵降频 2s"
+                        + "（兜底重定位/失效/远段）");
+            }
+            try {
+                int index = (Integer) Mappings.get(bc, Mappings.C_BUILT_CHUNK,
+                        Mappings.F_BC_INDEX);
+                if (rebuild(bc, index)) {
+                    syncSlotState(bc, index);
+                }
+            } catch (Throwable t) {
+                r.fail("[ingest] 事件处理异常（队列继续）: " + t);
+            }
+        }
+        if (n > 0) {
+            eventBatches++;
+        }
+        return n;
+    }
+
+    /**
+     * v0.5.1：事件处理后同步槽位状态（哨兵 dirty 判定的两个快照字段——
+     * 不同步则哨兵会把刚处理过的段再次视为 dirty 重复摄取）。
+     */
+    private void syncSlotState(Object builtChunk, int index) {
+        try {
+            long sectionPos = (Long) Mappings.call(builtChunk, Mappings.C_BUILT_CHUNK,
+                    Mappings.M_BC_GET_SECTION_POS);
+            Object data = Mappings.get(builtChunk, Mappings.C_BUILT_CHUNK, Mappings.F_BC_DATA);
+            Object chunkData = data instanceof java.util.concurrent.atomic.AtomicReference
+                    ? ((java.util.concurrent.atomic.AtomicReference<?>) data).get() : null;
+            SlotState st = slots.get(index);
+            if (st != null) {
+                st.lastDataRef = chunkData;
+                st.lastSectionPos = sectionPos;
+                originCache.remove(index);
+            }
+        } catch (Throwable ignored) {
+            // 状态同步失败最多导致哨兵重复摄取一次（rebuild 幂等）——无害
+        }
+    }
+
+    /**
+     * v0.5.1：窗口结束 → 摄取线程转常驻（幂等）。双通道：事件（mixin
+     * 命中，≤50ms 响应）+ 哨兵（2s 全量兜底；mixin 未命中自动升回
+     * 500ms = v0.5.0 等价回退）。TLAS tick 1s 聚合重建；世界退出挂起
+     * 等重进（哨兵全量重扫）。活到游戏退出（daemon）。
+     */
+    private void startIngestLoop(String reason) {
+        if (ingestThread != null) {
+            return; // 幂等（窗口完成/超时两路只启一次）
+        }
+        boolean mixinArmed = PathtraceHook.meshEventArmed;
+        r.pass(String.format(
+                "[ingest] 摄取线程转常驻（%s）：事件驱动%s + %dms 哨兵全量兜底——"
+                + "世界变化持续入库（rebuild→epoch 递增→live 累积按需重收敛），"
+                + "活到游戏退出；世界重进后哨兵全量重扫",
+                reason,
+                mixinArmed ? "（mixin 已命中）" : "（mixin 未命中——哨兵维持 500ms 全量轮询，v0.5.0 等价回退）",
+                mixinArmed ? SENTRY_MS : POLL_MS));
+        residentEchoed = true;
+        lastIngestHeartbeatMs = elapsedMs();
+        ingestThread = new Thread(() -> {
+            try {
+                ingestLoop();
+            } catch (Throwable t) {
+                r.fail("[ingest] 常驻摄取线程致命异常（已退出——哨兵通道随线程消亡）: " + t);
+            }
+        }, "Pathtrace-Ingest");
+        ingestThread.setDaemon(true);
+        ingestThread.start();
+    }
+
+    /** 常驻摄取主循环（Pathtrace-Ingest 线程体）。 */
+    private void ingestLoop() {
+        long lastSweepMs = elapsedMs();
+        long lastTlasTick = 0;
+        boolean worldLostEchoed = false;
+        while (running) {
+            try {
+                Object mc = Mappings.call(null, Mappings.C_MC, Mappings.M_MC_GET_INSTANCE);
+                Object world = Mappings.get(mc, Mappings.C_MC, Mappings.F_MC_WORLD);
+                if (world == null) {
+                    if (!worldLostEchoed) {
+                        worldLostEchoed = true;
+                        r.info("[ingest] 世界已退出——事件队列清空，挂起等待重进"
+                                + "（重进后哨兵全量重扫，slots 世代沿 data 引用变化自然失效）");
+                    }
+                    PathtraceHook.clearMeshEvents();
+                    sleepQuiet(500L);
+                    continue;
+                }
+                worldLostEchoed = false;
+                if (PathtraceMod.bisectIngestOff) {
+                    sleepQuiet(500L);
+                    continue;
+                }
+                // 相机缓存（哨兵距离排序用；失败容忍）
+                try {
+                    lastCameraPos = readCameraPos();
+                } catch (Throwable ignored) {
+                    // 菜单/加载中——哨兵本轮退回数组序（既有容错路径）
+                }
+
+                // 1) 事件批（mixin setData HEAD → 无锁队列）
+                int batch = drainMeshEvents(EVENT_BATCH);
+
+                // 2) 哨兵全量扫描（节奏自适应：命中 2s / 未命中 500ms）
+                long now = elapsedMs();
+                boolean mixinArmed = PathtraceHook.meshEventArmed;
+                long sweepPeriod = mixinArmed ? SENTRY_MS : POLL_MS;
+                if (now - lastSweepMs >= sweepPeriod) {
+                    lastSweepMs = now;
+                    Object[] chunks = readChunksArray(mc, world);
+                    if (chunks != null && chunks.length > 0) {
+                        int[] s = sweep(chunks);
+                        heartbeatSweepRebuilds += s[0];
+                        if (s[2] != this.nonEmptyChunks) {
+                            this.nonEmptyChunks = s[2];
+                        }
+                    }
+                }
+
+                // 3) TLAS tick（1s 节流聚合——事件批后的 BLAS 变更在下一
+                // tick 进 TLAS；epoch 递增自动通知 live 累积重收敛）
+                if (now - lastTlasTick > TLAS_TICK_MS) {
+                    lastTlasTick = now;
+                    try {
+                        Native.frameTickNative();
+                    } catch (Throwable ignored) {
+                        // ping-pong 维护环在同周期会重锚——此处静默容忍
+                    }
+                }
+
+                // 4) 心跳（10s；仅在有活动或模式切换后打——不刷屏）
+                if (now - lastIngestHeartbeatMs >= INGEST_HEARTBEAT_MS) {
+                    long hbEvents = heartbeatEvents;
+                    int hbSweep = heartbeatSweepRebuilds;
+                    heartbeatEvents = 0;
+                    heartbeatSweepRebuilds = 0;
+                    lastIngestHeartbeatMs = now;
+                    if (hbEvents > 0 || hbSweep > 0 || eventsProcessed > 0) {
+                        r.info(String.format(
+                                "[ingest] 心跳 t=%.0fs: 事件 +%d（累计 %d，批 %d）/ 哨兵重建 +%d"
+                                + "（扫描 %d 轮）/ 总 rebuild %d / 队列 %d / 模式 %s",
+                                now / 1000.0, hbEvents, eventsProcessed, eventBatches,
+                                hbSweep, sweepCount, rebuilds,
+                                PathtraceHook.meshQueueDepth(),
+                                PathtraceHook.meshEventArmed ? "EVENT+SENTRY" : "SENTRY(回退)"));
+                    }
+                }
+                heartbeatEvents += batch;
+                eventsProcessed += batch;
+                if (batch > 0) {
+                    lastActivityMs = elapsedMs();
+                    sleepQuiet(EVENT_BATCH_THROTTLE_MS);
+                } else {
+                    sleepQuiet(IDLE_SLEEP_MS);
+                }
+            } catch (Throwable t) {
+                r.fail("[ingest] 摄取轮异常（继续）: " + t);
+                sleepQuiet(500L);
+            }
+        }
+    }
+
+    /** mc+world → BuiltChunkStorage.chunks[]（失败 null）。 */
+    private Object[] readChunksArray(Object mc, Object world) {
+        Object worldRenderer = Mappings.get(world, Mappings.C_CLIENT_WORLD,
+                Mappings.F_CW_WORLD_RENDERER);
+        if (worldRenderer == null) {
+            return null;
+        }
+        Object storage = Mappings.get(worldRenderer, Mappings.C_WORLD_RENDERER,
+                Mappings.F_WR_CHUNKS);
+        if (storage == null) {
+            return null;
+        }
+        Object chunkArr = Mappings.get(storage, Mappings.C_STORAGE, Mappings.F_ST_CHUNKS);
+        if (chunkArr instanceof Object[] && ((Object[]) chunkArr).length > 0) {
+            return (Object[]) chunkArr;
+        }
+        return null;
+    }
+
+    /** 吞中断的睡眠（常驻线程标准姿势）。 */
+    private static void sleepQuiet(long ms) {
+        try {
+            Thread.sleep(ms);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
         }
     }
 

@@ -25,6 +25,16 @@ import java.nio.ByteBuffer;
  *
  * 线程：本类全部方法只在游戏渲染线程被调（swapBuffers 调用栈内）——GL
  * 上下文在该线程，所有 GL 反射调用天然合法。
+ *
+ * v0.5.1 事件泵（2.4 事件驱动摄取）—— mixin 注入点
+ * PathtraceBuiltChunkMixin 的唯一回调 onChunkMeshPublished：
+ * BuiltChunk.setData(ChunkData)（class_851#method_60908，HEAD）是
+ * vanilla 发布新 mesh 的唯一写点，钩它 = “MC 已重建该 section”的
+ * 精确时刻。回调用无锁队列把 (Object)BuiltChunk 转交摄取线程消费
+ * （身份去重 putIfAbsent，消费侧 poll 后立刻 remove——竞态窗口极小
+ * 且方向安全：宁可多重摄一次（rebuild 幂等），丢了也有 2s 哨兵
+ * dirty 扫描兜底）。mixinArmed 标志供报告判据与哨兵节奏自适应
+ * （未命中→哨兵维持 500ms 全量轮询 = v0.5.0 等价回退）。
  */
 public final class PathtraceHook {
 
@@ -41,6 +51,18 @@ public final class PathtraceHook {
     static volatile int glErrors;
     /** 是否已武装（compose=false 时永远 false——判定语义用）。 */
     static volatile boolean hookArmed;
+
+    // ---- v0.5.1 事件泵（mixin → 摄取线程）----
+    /** 事件队列（身份去重，见类头）。元素为 BuiltChunk 实例（Object 视图）。 */
+    private static final java.util.concurrent.ConcurrentLinkedQueue<Object> MESH_QUEUE =
+            new java.util.concurrent.ConcurrentLinkedQueue<>();
+    /** 在队标记（身份去重：同一 BuiltChunk 连续发布只保留一次）。 */
+    private static final java.util.concurrent.ConcurrentHashMap<Object, Boolean> MESH_QUEUED =
+            new java.util.concurrent.ConcurrentHashMap<>();
+    /** 事件通道开启（SceneProxy 构造时 arm；OFF 态回调零副作用）。 */
+    static volatile boolean meshEventsEnabled;
+    /** mixin 首事件已命中（报告判据 + 哨兵节奏自适应）。 */
+    static volatile boolean meshEventArmed;
 
     private static volatile int state = OFF;
     private static ProbeReport report;
@@ -64,6 +86,49 @@ public final class PathtraceHook {
 
     static boolean isActive() {
         return state == ACTIVE;
+    }
+
+    /** 摄取线程：事件通道开启（SceneProxy 构造时调用；幂等）。 */
+    static void armMeshEvents() {
+        meshEventsEnabled = true;
+    }
+
+    /** mixin 回调（渲染线程，setData HEAD；跨包访问故 public）。
+     * O(1) 无锁；OFF 态一次 volatile 读即返回；任何异常吞掉（游戏零影响）。 */
+    public static void onChunkMeshPublished(Object builtChunk) {
+        if (!meshEventsEnabled) {
+            return;
+        }
+        try {
+            if (!meshEventArmed) {
+                meshEventArmed = true;
+            }
+            if (MESH_QUEUED.putIfAbsent(builtChunk, Boolean.TRUE) == null) {
+                MESH_QUEUE.add(builtChunk);
+            }
+        } catch (Throwable ignored) {
+            // 判死事件通道是摄取线程的职责（哨兵兜底），这里绝不外抛
+        }
+    }
+
+    /** 摄取线程：取一个待处理事件（null = 空队）。消费即出队标记。 */
+    static Object pollMeshEvent() {
+        Object bc = MESH_QUEUE.poll();
+        if (bc != null) {
+            MESH_QUEUED.remove(bc);
+        }
+        return bc;
+    }
+
+    /** 摄取线程：当前队列深度（心跳行用）。 */
+    static int meshQueueDepth() {
+        return MESH_QUEUE.size();
+    }
+
+    /** 摄取线程：清空事件队列（世界退出时调用——旧 BuiltChunk 引用全部作废）。 */
+    static void clearMeshEvents() {
+        MESH_QUEUE.clear();
+        MESH_QUEUED.clear();
     }
 
     /** mixin 回调（渲染线程，每帧一次；跨包访问故 public）。 */
