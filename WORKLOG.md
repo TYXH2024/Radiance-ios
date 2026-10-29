@@ -488,3 +488,27 @@ Work Log:
 Stage Summary:
 - v0.4.8 跨设备定谳：ping-pong+纪元+毒帧守卫在 M3/A20 Pro 同等零死亡——2.2/2.3 工程闭环双机成立；孪生分岔把 A20 Pro 毒化归因「射线接触触发」（query-encode 布雷+1-2s 延迟引爆），M3 另有接触无关写手——bug report 素材齐（最小复现+对照+定时签名+audit 双净+AS 驱动托管分配）
 - 待办（v0.4.9 画质轮，回应用户模糊/噪点反馈）：①渲染比例 -Dpathtrace.scale（A20 Pro 建议 1.5=720×405→~40fps；scale 2 将落 ~23fps——分辨率帧率取舍可调）②RT 宽高比随窗（省 18% 光线+消拉伸）③自适应 spp（reset 后 spp<512 期间 8-16 样本/帧，早期噪点 4× 快收敛）④atlas 采样 nearest→linear 可选 ⑤Apple bug report 提交（A20 Pro 最小复现为主案）
+
+## 2026-10-29（二十五）· pathtrace v0.4.9 CLARITY 画质轮：VLM 屏摄鉴定 + 代码级诊断双源定谳四根因（480×270 拉伸 / LINEAR 采样像素画 / 间接射线太阳盘 firefly / 平原 Reinhard 灰雾）→ 四刀齐落（分辨率 720×窗口比 + NEAREST + 噪点双修 + 白点 tonemap）
+
+Task: 回应用户实机屏摄三问与「画质都解决完就能见到第一束光吗」的确认——判读：第一束光 v0.4.8 已亮（双机零死亡收敛），模糊/噪点是这束光的「聚焦/显影」而非门槛 → 代码级诊断 + VLM 双源归因 → v0.4.9 落地
+
+Work Log:
+- **双源诊断（VLM 屏摄鉴定与代码审计完全互证）**：
+  - 模糊主因=渲染分辨率：`PathtraceMod.LIVE_W/H` 默认 480×270，LINEAR blit 拉伸至 2796×1290（横向 5.8×）——VLM 判词「整图性发软、几何边缘圆润无阶梯、纹理成糊斑、目测 480p 级」；相机为纯针孔模型（origin 恒 camPos，无 DOF）——景深假说排除
+  - 模糊次因=atlas 采样：`ensure_pt_resources` 的 sampler LINEAR+LINEAR 且纹理 `mipmapped:NO`——16×16 像素画被双线性抹平 + atlas 格间 bleed（原版 MC 是 NEAREST 硬像素）
+  - 噪点放大器=firefly：`skyRadiance()` 的太阳盘（radiance 8.0，dot>0.9995 ≈ 0.05% 立体角）对间接反弹射线开放——cosine 采样极难命中但单次命中吞吐×8 入单像素=方差炸弹；太阳直射已由 NEE 项（ndl×2.2）计入，盘面留给 BSDF 采样纯属双重路径
+  - 灰雾=tonemap：平原 Reinhard c/(1+c) 渐近 1.0 永不抵达——天空/受光面峰值 ~0.67 灰（VLM 判词「黑不黑白不白、蒙纱」）
+- **四刀（v0.4.9 CLARITY）**：
+  1. 分辨率 480×270 → 720×窗口比（rtW 默认 720；rtH 降为反射链失败回退 405）：像素密度 ×1.84，方块不再横向变胖（v0.4.8 的 16:9 RT 对 19.5:9 窗口拉伸 1.35×），顺带省 ~18% 射线；spp/帧 4→2 使每帧射线预算反而略降（720×332×2 ≈ 480×270×4 的 0.92×）——模糊立消、帧率不掉、吞吐守恒
+  2. atlas sampler LINEAR→NEAREST（两档）：像素质感回归；远处 minification 走样由累积循环逐样本抖动带限（收敛后=箱式滤波）；附带免疫 compute 内 sample() 的 quad 衍生 LOD 不确定性
+  3. 噪点双修：①native 早期收敛加档（g_liveSppEarly=min(16,spp×4)=8，sppTotal<512 期间生效，三类累积重启自动再装填——相机一动=最噪时段=自动 ×4）②shader firefly 拆分（skyRadianceIndirect 无盘版，b>0 逃逸走它）
+  4. present_kernel tonemap：Reinhard extended 白点 W=2（c×(1+c/4)/(1+c)）——高光可到纯白、暗部不动、中间调抬升
+- **A20 Pro 复验闭环确认（上条待办①）**：A20Pro-v0.4.8-report.txt 已在档——90s 完整窗、ping-pong 时代零死亡、spp 22172、峰值 172.98 Mray/s 双破纪录、wall 93.3 f/s；孪生判词分岔已在案（A20 Pro 接触必要性 vs M3 外部写手）
+- 改动面：pathtrace.metal（sky 拆分+tonemap）/ metal_pathtrace.m（sampler+g_liveSppEarly/g_liveEarlyDone+三 reset 位再装填+shutdown 清理）/ PathtraceMod.java（rtW/rtH 语义+窗口比反射+报告头）/ build.sh+fabric.mod.json+workflow（0.4.9）/ README（v0.4.9 协议行）——S7 离屏诊断帧（RENDER_W/H 独立常量）刻意不动：与历史报告 PNG 保持字节级可比
+- 射线预算自洽验算：A20 Pro @172 Mray/s 稳态 478k 样本×3.5 射线≈1.67M→9.7ms（60fps 锁）；M3 @108→15.5ms（~60fps 边缘）。早期加档窗（spp=8）A20 ~19ms/M3 ~31ms——持续 ~64 帧（512/8），可容忍
+- 新报告行（真机验证锚点）：[S8.0] 宽高比随窗行 / [live] session begun 的 early=8 until 512, adaptive / [live] 早期收敛窗口完成（每次重启打一条）/ [compose] 首帧几何行 blit_src=720×~332
+
+Stage Summary:
+- v0.4.9 CLARITY：画质四刀齐落——模糊（分辨率+采样双根因）、噪点（firefly+早期加档双修）、灰雾（白点 tonemap）一次对症；孪生/ping-pong 协议不变，生存性改动为零（不碰 TLAS/重建/守卫路径）
+- 待办：①CI 过绿 + Release pathtrace-v0.4.9 ②用户真机回报（重点：屏摄纹理像素块清晰度、噪点可见期是否缩短、方块是否不再变胖、双快照对比）③Apple bug report 提交（A20 Pro 最小复现为主案）④2.4 议程：事件驱动摄取、GI 质量、阴影 ray 复用、移动相机累积策略（重建降噪/时域复用）

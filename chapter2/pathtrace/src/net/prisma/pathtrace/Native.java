@@ -207,9 +207,11 @@ final class Native {
     /** 呈现图像回读（0xAARRGGBB，PNG 证据写入用；RT 工作线程）。 */
     static native int[] liveReadbackNative();
 
-    /** 会话计数器：long[10] {frames, sppTotal, resets, refreshes, totalQueries,
+    /** 会话计数器：long[12] {frames, sppTotal, resets, refreshes, totalQueries,
      * lastQueries, lastCamHits, atlasMode(0=白色/顶点色, 1=ATLAS_RGB),
-     * tlasBuilds, tlasAgeMs(-1=从未构建——v0.4.7 死亡行 age=)}。 */
+     * tlasBuilds, tlasAgeMs(-1=从未构建——v0.4.7 死亡行 age=), sceneEpoch
+     * (v0.4.8), lastSpp(v0.4.9: 末帧有效 spp——早期加档窗内=early 档；
+     * 0=尚无帧——camHit 分母与 [live] 行 spp/帧 随此值)}。 */
     static native long[] liveStatsNative();
 
     /** 会话尺寸 int[2] {w, h}；未开启返回 null。 */

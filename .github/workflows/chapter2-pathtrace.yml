@@ -42,16 +42,16 @@ jobs:
           set -ex
           chmod +x chapter2/pathtrace/build.sh
           bash chapter2/pathtrace/build.sh
-          JAR="chapter2/pathtrace/pathtrace-0.4.8.jar"
+          JAR="chapter2/pathtrace/pathtrace-0.4.9.jar"
           test -f "$JAR"
-          cp "$JAR" ./pathtrace-0.4.8.jar
+          cp "$JAR" ./pathtrace-0.4.9.jar
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: pathtrace-jar
           path: |
-            pathtrace-0.4.8.jar
+            pathtrace-0.4.9.jar
             chapter2/pathtrace/build/native/libradiance_pathtrace.dylib
             chapter2/pathtrace/build/native/pathtrace.metallib
           if-no-files-found: error
@@ -120,7 +120,7 @@ jobs:
           file "$METALLIB"
           test -s "$METALLIB"
           # JAR 内容验证：mixin 类 + mixins.json 必须在包内
-          JAR="chapter2/pathtrace/pathtrace-0.4.8.jar"
+          JAR="chapter2/pathtrace/pathtrace-0.4.9.jar"
           unzip -l "$JAR" | grep -q "net/prisma/pathtrace/mixin/PathtraceWindowMixin.class" \
             && echo "JAR_MIXIN_CLASS_OK"
           unzip -l "$JAR" | grep -q "pathtrace.mixins.json" \
@@ -128,64 +128,57 @@ jobs:
           unzip -l "$JAR" | grep -q "fabric.mod.json" \
             && echo "JAR_FABRIC_MOD_OK"
 
-      - name: Release (pathtrace-v0.4.8, prerelease)
+      - name: Release (pathtrace-v0.4.9, prerelease)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -ex
-          TAG="pathtrace-v0.4.8"
-          TITLE="pathtrace v0.4.8 — v0.4.7 五段梯真机定谳：四条自有 GPU 管线全部洗清、写手在驱动层——孪生零接触终局实验 + ping-pong 替换件（同内容重建不清累积 + 毒帧守卫），画面从此持续收敛"
+          TAG="pathtrace-v0.4.9"
+          TITLE="pathtrace v0.4.9 CLARITY — 画质轮：分辨率 720×窗口比（像素密度×1.84，射线预算守恒）+ atlas NEAREST 像素质感 + 噪点双修（早期加档×4 + firefly 拆分）+ Reinhard 白点——孪生/ping-pong 协议不变"
           NOTES_FILE=release-notes.md
           cat > "$NOTES_FILE" <<'EOF'
-          # pathtrace v0.4.8 — 跑赢死神（outrun the reaper）
+          # pathtrace v0.4.9 — CLARITY（画质轮）
           
-          **v0.4.7 五段二分梯真机回收（M3，2026-10-29 13:15）——判词全出**：
-          - B 段（关 atlas 链）canary 死亡 87% —— atlas 链洗清
-          - C 段（关合成链）83% —— 合成链洗清
-          - D 段（停摄取）85% —— 摄取/BLAS 池写洗清
-          - E 段（停 live 派发——仅剩金丝雀/哨兵/census 在岗）仍在死
-            （build#49/#50/#51 各活 2.1/2.0/2.0s）⇒ **Radiance 全部四条
-            GPU 管线洗清；写手在驱动层（zink/MoltenVK/原版渲染对 AS 私有
-            内存的踩踏）或仅存射线仪器**
-          - 死亡签名全程不变：每次重建后 1.0-2.2s 必死、与查询剂量无关
-            （census 803 射线不加速死亡）⇒ 时间门控而非查询门控
-          - AS 为驱动托管分配（newAccelerationStructureWithSize）——自配
-            缓冲短寸溢出不可能，我方无 AS 内存可写错
+          **背景**：v0.4.8 双机零死亡收敛闭环（M3 孪生 0/6 外部写手 / A20 Pro 孪生存活接触必要性——两代驱动毒化机制分岔，ping-pong 同等压制）。用户首张真机屏摄三问：阴影✓、材质模糊、噪点——本轮对症下刀（VLM 屏摄鉴定 + 代码级诊断双源定谳）。
           
-          **v0.4.8 工程解**：
-          1. **场景纪元**：同内容重建（ping-pong 替换/毒化重锚）不再清空
-             累积——实例序与池按构造不变；旧代码任何重建都清零，但索引
-             漂移顾虑只对内容变化成立
-          2. **ping-pong 替换件**：探针线程每 500ms 强制同内容重建——替换
-             件年龄恒 <0.5s，写手 1.0s 最小得手延迟永远追不上（~5ms/次 ≈
-             1% CPU）
-          3. **毒帧守卫**：上帧 camHit<2% ⇒ 本帧 store 覆写累积——死帧
-             天空色样本不再冲刷画面（ping-pong 在岗时守卫永不出手）
-          4. **孪生零接触终局实验**：t=10s 构建零接触同内容第二 TLAS →
-             t=30s 单次六轴电池定谳接触必要性：孪生 0/6 ⇒ 外部写手铁证；
-             孪生 ≥3/6 ⇒ 射线接触是杀伤必要条件
-          5. **维护环**：观察窗收口后探针线程不再退出（旧版 deadline 后
-             reanchorReq 无人消费 = TLAS 永久死亡直到重进世界）
+          **四刀**：
+          1. **分辨率**：480×270 → 720×窗口比（默认档；-Dpathtrace.rtW 可调）。
+             v0.4.8 的 480×270 拉伸 5.8× 是“整图发软”主因；720 档像素密度
+             ~1.84×，同时 spp/帧 4→2 使每帧射线预算反而略降——模糊立消、
+             帧率不掉。RT 宽高比随窗（v0.4.8 的 16:9 RT 对 19.5:9 窗口横向
+             拉伸 1.35×，方块全变胖）——方形像素 + 顺带省 ~18% 射线。
+          2. **atlas NEAREST**：LINEAR 双线性把 16×16 像素画抹成糊斑
+             （“材质模糊”第二成因）+ atlas 格间 bleed。NEAREST 恢复原版硬
+             像素质感；远处 minification 走样由累积循环内的逐样本射线抖动
+             带限（抖动 × NEAREST 收敛 = 箱式滤波——不是抹平）。
+          3. **噪点双修**：①早期收敛加档——累积重启（移动/场景变化/毒帧）
+             后头 512 spp 自动 ×4 档（spp/帧 2→8），噪点可见期缩短 ~4×；
+             ②firefly 拆分——间接反弹的逃逸射线不再采样太阳盘（盘面
+             radiance 8.0 vs 天空 ~1.0，cosine 采样命中盘面的概率极小但
+             贡献巨大 = 亮斑方差炸弹；太阳直射已由 NEE 项计入，移除后无
+             欠采样偏差）。
+          4. **tonemap 对比度**：Reinhard extended 白点 W=2——v0.4.8 平原
+             Reinhard 峰值 ~0.67 灰（屏摄“灰雾/发闷”判词）；白点后高光可
+             到纯白、暗部不动、中间调抬升。
           
-          **使用协议（90s 观察窗，之后无限运行）**：替换 mods/ 内旧 JAR，
-          同一存档静止同一姿态保持游戏开着——**t=30s 起画面应持续收敛不再
-          脉冲**（15s 与 55s 两张快照的对比即证据）。回报
-          pathtrace_report.txt，重点行：
-          - **[twin] 定谳**（孪生电池命中数——外部写手 vs 接触必要性的
-            最终判词）
-          - **[pingpong] 激活** + 每 10s 一条的 [pingpong] 同内容重建行
-          - [live] 行 camHit 应恒 ~69%（不再 0.1-0.2% 循环）、spp 持续
-            增长、epoch= 栏（内容变化才清累积）
-          - [v0.4.8 收口] 行（90s 判定块）
+          **使用协议（不变：90s 孪定定谳 + ping-pong，之后无限运行）**：
+          替换 mods/ 内旧 JAR，同一存档静止同一姿态保持游戏开着。回报
+          pathtrace_report.txt + 三 PNG，v0.4.9 新增重点行：
+          - **[S8.0]** 实时会话开启行——分辨率 + 宽高比随窗 + 早期加档说明
+          - **[live] session begun** 行的 `early=8 until 512, adaptive`
+          - **[live] 早期收敛窗口完成** 行（重启后每次加档窗收口都打一条）
+          - [compose] 首帧几何行（blit_src 应为 720×~332——与窗口比一致）
+          - 双快照对比（15s vs 55s）+ 屏摄对比（纹理像素块应清晰可辨）
           
-          开关：-Dpathtrace.pingpong=false（对照死亡循环）/
-          -Dpathtrace.twin=false（跳过孪生直接稳定）/
-          -Dpathtrace.bisect=true（复现 v0.4.7 五段梯）
+          开关：-Dpathtrace.rtW=480（回退旧分辨率档）/
+          -Dpathtrace.spp=4（回退旧稳态样本）/
+          -Dpathtrace.pingpong=false（对照）/
+          -Dpathtrace.twin=false（跳过孪生直接稳定）
           EOF
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release upload "$TAG" ./pathtrace-0.4.8.jar --clobber --repo "$GITHUB_REPOSITORY"
+            gh release upload "$TAG" ./pathtrace-0.4.9.jar --clobber --repo "$GITHUB_REPOSITORY"
           else
-            gh release create "$TAG" ./pathtrace-0.4.8.jar \
+            gh release create "$TAG" ./pathtrace-0.4.9.jar \
                  --title "$TITLE" --notes-file "$NOTES_FILE" \
                  --prerelease --repo "$GITHUB_REPOSITORY"
           fi

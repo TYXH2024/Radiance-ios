@@ -14,24 +14,26 @@
 > **v0.4.5 真机回收（六份：A20 Pro×3 + M3×3，归档.zip 2026-10-28 16:30）：三症状同根定谳——相机段被数组序饿死 → v0.4.6 摄取相机距离近先。**用户实测"视角附近四五格的方块不渲染"即 v0.4.4 起"检测不到脚底"同一件事：相机自身区块段从未进入 TLAS（index = relZ·408+relY·17+relX 回绕布局，相机段落数组尾 408 槽；旧摄取数组序 + 5-6 段/s + 35s 窗 ⇒ 永不抵达）。零负 z rebuild 铁证；探针 +Z 命中踩在缺失条带边界 z=1.00（眼前 5.4 格 void）。现场记录：`docs/chapter2-pathtrace-field/`
 > **v0.4.6 真机回收（M3，2026-10-29 09:10）：近景 void 修复验证通过；TLAS 毒化显形为【重建后 ~1s 即死】精确定时器签名 → v0.4.7 五段二分梯。**①`[camera-first] 相机段 (0,64,-16) 已摄取（rebuild #1）`——首轮入库；每次重建后探针 4/6：**-Y 脚下 1.62 格命中**、±Z 1.5 格——用户两症状同根消除。②毒化真面目：复活 t=8.86→死 9.86、19.92→20.92……每次重建存活精确 ~1.0s（v0.4.1 已埋下同签名：camHit 1s=100% → (1s,2s) 归零）；audit 持续双净（实例缓冲+金丝雀）⇒ GPU 私有内存写手；census 445/752→0/752（2.4s 渐进全灭）⇒ 持续型写入；摄取 5-6 段/s 持续到会话尾（BLAS 池写同为候选）。**v0.4.7：五段单调摘除二分梯（A 基线→B 关 atlas→C 关合成→D 停摄取→E 停派发，每段 40s，换段即重锚+census+段判定行）——单次真机运行锁定写手**；死亡行新增 build 年龄=；`-Dpathtrace.bisect=false` 可关。现场记录：`docs/chapter2-pathtrace-field/M3-v0.4.6-report.txt`
 > **v0.4.7 真机回收（M3，2026-10-29 13:15）：五段梯判词全出——四条自有 GPU 管线全部洗清，写手在驱动层/仅存仪器 → v0.4.8 跑赢死神。**B 段（关 atlas）canary 死亡 87%、C 段（关合成）83%、D 段（停摄取）85%、**E 段（停派发——仅剩金丝雀/哨兵/census 在岗）仍死**（build#49/#50/#51 各活 2.1/2.0/2.0s）——毒化与 Radiance 自身四条 GPU 管线无关；死亡年龄全程 1.0-2.2s、与查询剂量无关（census 803 射线不加速死亡）⇒ 时间门控外部写手（驱动层：zink/MoltenVK/原版渲染对 AS 私有内存踩踏）；AS 为驱动托管分配（newAccelerationStructureWithSize）——自配短寸不可能。用户屏上首次见到持续路径追踪画面（活窗 camHit 69.2%、峰值 99.95 Mray/s）——但靠自愈重锚硬撑（20+ 次循环）。**v0.4.8 工程解：①场景纪元（同内容重建不清累积）+ ②ping-pong 替换件（500ms 强制同内容重建——替换件年龄恒 <0.5s，写手 1.0s 最小得手延迟永远追不上）+ ③毒帧守卫（camHit<2% 即 store 覆写）+ ④孪生零接触终局实验（零接触第二 AS，20s 后单次电池定谳接触必要性）+ ⑤维护环（探针线程不再退出——旧版 deadline 后 TLAS 永久死亡 bug 顺带修复）。**现场记录：`docs/chapter2-pathtrace-field/M3-v0.4.7-report.txt`
+> **v0.4.8 双机回收（M3 79s + A20 Pro 完整 90s 窗，2026-10-29）：ping-pong 时代双机零死亡持续收敛——2.2/2.3 工程闭环；孪生判词分岔（M3 孪生 0/6 死=外部写手 / A20 Pro 孪生存活=射线接触是杀伤必要条件）——两代驱动毒化机制不同，ping-pong 同等压制。**M3：spp 16744、峰值 108.92 Mray/s；A20 Pro：spp 22172、峰值 172.98 Mray/s（双破纪录）、wall 93.3 f/s。用户首张真机屏摄三问（阴影✓ / 材质模糊 / 噪点）+ VLM 屏摄鉴定 → v0.4.9 画质轮。现场记录：`docs/chapter2-pathtrace-field/M3-v0.4.8-report.txt` + `A20Pro-v0.4.8-report.txt`
+> **v0.4.9 CLARITY（画质轮）：四刀——①分辨率 480×270 → 720×窗口比（像素密度 ×1.84、射线预算守恒：spp/帧 4→2；宽高比随窗消 16:9→19.5:9 横向拉伸）②atlas LINEAR → NEAREST（原版 MC 像素质感回归 + 消格间 bleed；远处走样由累积抖动带限）③噪点双修（早期收敛加档：重启后头 512 spp ×4 档/帧；firefly 拆分：间接逃逸射线不再采样太阳盘——NEE 已计太阳直射）④tonemap：Reinhard extended 白点 W=2（消屏摄“灰雾/发闷”判词）。孪生/ping-pong 协议不变。**
 
 ## 取成品（两个通道，内容相同）
 
 | 通道 | 位置 | 说明 |
 |---|---|---|
-| **A · 工作流运行页成品文件** | Actions → `chapter2-pathtrace` → 任意绿勾运行 → 页面底部 **Artifacts** 区 → `pathtrace-jar` | 每次绿勾必有；zip 内含 `pathtrace-0.4.8.jar` + dylib + metallib。**运行中途被取消的运行没有 artifact**（也不会发布 Release——可能遗留草稿） |
-| **B · GitHub Release（正式交付）** | https://github.com/TYXH2024/Radiance-ios/releases/tag/pathtrace-v0.4.8 → `pathtrace-0.4.8.jar` | 幂等 `--clobber` 重传；若 Releases 页看不到，先检查页面底部"Drafts"区（被取消的运行可能遗留未发布草稿） |
+| **A · 工作流运行页成品文件** | Actions → `chapter2-pathtrace` → 任意绿勾运行 → 页面底部 **Artifacts** 区 → `pathtrace-jar` | 每次绿勾必有；zip 内含 `pathtrace-0.4.9.jar` + dylib + metallib。**运行中途被取消的运行没有 artifact**（也不会发布 Release——可能遗留草稿） |
+| **B · GitHub Release（正式交付）** | https://github.com/TYXH2024/Radiance-ios/releases/tag/pathtrace-v0.4.9 → `pathtrace-0.4.9.jar` | 幂等 `--clobber` 重传；若 Releases 页看不到，先检查页面底部"Drafts"区（被取消的运行可能遗留未发布草稿） |
 
 > v0.1 首发 workflow 遗漏了 artifact 上传步骤（2.0/2.1 均有）——导致"绿勾了但运行页看不到 jar"。v0.1.1 已补齐：**以后看绿勾运行页最下方的 Artifacts 即可直接下载**。
 
 ## 使用（2.3 实时版）
 
-1. 删除 `mods/` 内旧探针 JAR（scene-ingestion / metal-rt-probe / rt-probe / 旧版 pathtrace），放入 `pathtrace-0.4.8.jar`——同存档、同启动器档位（Vulkan/MoltenVK 档，OSMesa 宿主实测兼容）。**回报文件名按设备命名（如 A20Pro-default.txt）**——v0.4.3/0.4.4 的"M3-"前缀实为 A20 Pro 运行（设备以报告 S8.1 行 renderer 为准），教训立此存照。
-2. 进入世界后：摄取约 19s → 离屏首帧（2.2 链路原样跑一遍，落 `pathtrace_frame.png`）→ **实时会话自动开启（S8）——游戏画面自此被路径追踪帧整帧替换**（480×270 线性放大至窗口分辨率）。
+1. 删除 `mods/` 内旧探针 JAR（scene-ingestion / metal-rt-probe / rt-probe / 旧版 pathtrace），放入 `pathtrace-0.4.9.jar`——同存档、同启动器档位（Vulkan/MoltenVK 档，OSMesa 宿主实测兼容）。**回报文件名按设备命名（如 A20Pro-default.txt）**——v0.4.3/0.4.4 的"M3-"前缀实为 A20 Pro 运行（设备以报告 S8.1 行 renderer 为准），教训立此存照。
+2. 进入世界后：摄取约 19s → 离屏首帧（2.2 链路原样跑一遍，落 `pathtrace_frame.png`）→ **实时会话自动开启（S8）——游戏画面自此被路径追踪帧整帧替换**（v0.4.9 起 720×窗口比渲染——像素密度 ×1.84 且方块不再横向变胖）。
 3. **v0.4.8 起为【孪生定谳 + ping-pong 稳定协议】（取代 v0.4.7 五段梯）：静止同一姿态，保持游戏开着——t=10s 孪生装填（零接触第二 TLAS），t=30s 孪生定谳 + ping-pong 激活——此后画面应持续收敛不再脉冲。**前 30s 仍是基线死亡循环（周期性噪点→冲刷，属预期——对照用）；**t=30s 起是 ping-pong 时代：替换件年龄恒 <0.5s，写手追不上，camHit 应恒 ~69%**。会话无限运行（探针线程维护环活到游戏退出），随时退出均可。
 4. 停留 **≥90s**（观察窗收口判定块写入），想看收敛质量可多留（spp 持续增长）。
-5. 回报 game 目录下四个文件：**`pathtrace_report.txt`**（v0.4.8 重点行：**[twin] 定谳**（孪生电池命中数——0/6 ⇒ 外部写手铁证；≥3/6 ⇒ 射线接触是杀伤必要条件）、**[pingpong] 激活** + 每 10s 一条同内容重建行、**[v0.4.8 收口]**、[live] 行 camHit 恒 ~69% / spp 持续增长 / **epoch=** 栏（内容变化才清累积）、[tlas-health] 基线期死亡行 age= 对照）+ **`pathtrace_frame.png`** + **`pathtrace_live.png`**（15s 基线期）+ **`pathtrace_live_final.png`**（55s ping-pong 时代——**两张快照的对比即本版交付证据**）。**若闪退**：iOS Documents 根目录的 `hs_err_pid*.log` + `fatal_trace.txt` + `ame273_crash_report.txt` 一并回报。
-6. **开关**：`-Dpathtrace.pingpong=false`（关替换件——死亡循环行为保留，对照用）；`-Dpathtrace.twin=false`（跳过孪生窗口，ping-pong 提前至 t=10s 激活）；`-Dpathtrace.bisect=true`（复现 v0.4.7 五段梯实验）；旧 `-Dpathtrace.atlas=false` / `-Dpathtrace.compose=false` 仍有效。
+5. 回报 game 目录下四个文件：**`pathtrace_report.txt`**（v0.4.9 新增重点行：**[S8.0]** 分辨率/宽高比随窗行、**[live] session begun** 的 `early=8 until 512, adaptive`、**[live] 早期收敛窗口完成**（每次重启后加档窗收口）、[compose] 首帧几何行 blit_src 应为 720×~332；既有重点行照旧：**[twin] 定谳**、**[pingpong] 激活**、**[v0.4.8 收口]**、[live] camHit 恒定 / spp 持续增长 / epoch= 栏、[tlas-health] 基线期死亡行 age= 对照）+ **`pathtrace_frame.png`** + **`pathtrace_live.png`**（15s）+ **`pathtrace_live_final.png`**（55s——**两张快照对比 + 屏摄对比（纹理像素块应清晰可辨、灰雾应消）即本版交付证据**）。**若闪退**：iOS Documents 根目录的 `hs_err_pid*.log` + `fatal_trace.txt` + `ame273_crash_report.txt` 一并回报。
+6. **开关**：`-Dpathtrace.rtW=480`（回退旧分辨率档）/ `-Dpathtrace.spp=4`（回退旧稳态样本）/ `-Dpathtrace.pingpong=false`（关替换件——死亡循环行为保留，对照用）；`-Dpathtrace.twin=false`（跳过孪生窗口，ping-pong 提前至 t=10s 激活）；`-Dpathtrace.bisect=true`（复现 v0.4.7 五段梯实验）；旧 `-Dpathtrace.atlas=false` / `-Dpathtrace.compose=false` 仍有效。
 
 > 若合成疑似干扰排查：加 `-Dpathtrace.compose=false` 启动——累积/快照照常，仅不上屏（判定 `LIVE_OK_NO_COMPOSE`，语义即自证 A/B）。
 

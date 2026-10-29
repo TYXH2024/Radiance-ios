@@ -196,7 +196,7 @@ static id<MTLComputePipelineState> g_ptPipeline = nil;    // pathtrace_kernel
 static id<MTLComputePipelineState> g_presentPipeline = nil; // 2.3: present_kernel
 static id<MTLTexture> g_atlasTexture = nil;   // 2.3: MC block atlas (or nil)
 static id<MTLTexture> g_whiteTexture = nil;  // 2.3: 1x1 white fallback
-static id<MTLSamplerState> g_sampler = nil;  // 2.3: linear / clamp-to-edge
+static id<MTLSamplerState> g_sampler = nil;  // 2.3: v0.4.9 nearest / clamp-to-edge
 
 // ---- 2.2 shading pools (rebuilt with every TLAS; order == instance order) ----
 static id<MTLBuffer> g_triColorPool = nil;   // 3 x uchar4 per triangle
@@ -218,6 +218,13 @@ static uint64_t g_ptRays = 0;                // last frame's measured ray count
 static NSObject *g_liveLock = nil;
 static BOOL g_liveActive = NO;
 static uint32_t g_liveW = 0, g_liveH = 0, g_liveSpp = 4, g_liveBounces = 2;
+// v0.4.9: 早期收敛加速——累积重启（移动/纪元/毒帧）后最噪的头 kSppEarlyUntil
+// 个样本用加档 spp/帧（min(16, spp*4)），之后回落 g_liveSpp。帧时间短暂
+// 上浮可容忍（静止累积不在乎帧率），噪点可见期缩短 ~4×——回应用户
+// 噪点反馈的主刀之一（另一刀：shader 侧 firefly 拆分）。
+static uint32_t g_liveSppEarly = 0;            // 0 = 未启用（spp*4 <= spp 不会发生）
+static BOOL g_liveEarlyDone = NO;             // 加档段→稳态段一次性打行用
+static uint32_t g_liveLastSpp = 0;            // v0.4.9: 末帧实际派发的 spp（camHit 分母随档位）
 static id<MTLBuffer> g_liveAccum = nil;      // float4 per pixel
 static id<MTLBuffer> g_liveImage = nil;      // uchar4 per pixel (presented)
 static id<MTLBuffer> g_liveStaging = nil;    // uchar4 per pixel (stable snapshot)
@@ -255,6 +262,8 @@ static BOOL g_atlasEnabled = YES;
 static double g_lastTlasBuildMs = -1.0;
 /** v0.4.3: staging 头尾 guard pad（字节）。 */
 static const NSUInteger kGuardPad = 64 * 1024;
+/** v0.4.9: 早期收敛加档窗口（累积 sppTotal 低于此值期间 spp/帧=加档档位）。 */
+static const uint32_t kSppEarlyUntil = 512;
 
 // v0.4: per-instance slot origins of the live TLAS (hit attribution).
 static int32_t (*g_instOrigins)[3] = NULL;
@@ -2342,8 +2351,15 @@ static BOOL ensure_pt_resources(void) {
     }
     if (g_sampler == nil) {
         MTLSamplerDescriptor *sd = [MTLSamplerDescriptor new];
-        sd.minFilter = MTLSamplerMinMagFilterLinear;
-        sd.magFilter = MTLSamplerMinMagFilterLinear;
+        // v0.4.9: LINEAR → NEAREST（两档）。MC 方块纹理是 16×16 像素画：
+        // v0.4.8 的双线性把像素画抹成糊斑（现场判词“材质模糊”），还在
+        // atlas 格间混入邻格颜色（bleed）。NEAREST 恢复原版硬像素质感；
+        // 远处 minification 走样由累积循环内的逐样本射线抖动承担（抖动
+        // ×NEAREST 收敛后的等效滤波=箱式带限——不是双线性抹平）。附带
+        // 工程优点：无 mip 链（mipmapped:NO）时 compute 内 sample() 的
+        // LOD/导数本就不可控，NEAREST 在任意 LOD 下行为确定。
+        sd.minFilter = MTLSamplerMinMagFilterNearest;
+        sd.magFilter = MTLSamplerMinMagFilterNearest;
         sd.sAddressMode = MTLSamplerAddressModeClampToEdge;
         sd.tAddressMode = MTLSamplerAddressModeClampToEdge;
         g_sampler = [g_device newSamplerStateWithDescriptor:sd];
@@ -2611,14 +2627,21 @@ Java_net_prisma_pathtrace_Native_liveBeginNative(
         g_liveAtlasDispatched = 0;
         g_liveW = (uint32_t)width; g_liveH = (uint32_t)height;
         g_liveSpp = (uint32_t)sppPerFrame; g_liveBounces = (uint32_t)bounces;
+        // v0.4.9: 早期收敛加档档位（min(16, spp*4)；spp=2 → early=8）。
+        g_liveSppEarly = (uint32_t)sppPerFrame * 4u > 16u
+            ? 16u : (uint32_t)sppPerFrame * 4u;
+        g_liveEarlyDone = NO;
+        g_liveLastSpp = 0;   // 尚无帧——Java 侧回退 LIVE_SPP 常量
         g_liveFrames = 0; g_liveSppTotal = 0; g_liveResets = 0;
         g_liveTotalQueries = 0; g_liveLastQueries = 0; g_liveLastCamHits = 0;
         g_liveLastMs = 0.0;
         g_liveTlasBuilds = g_stats[3];
         g_liveSceneEpoch = g_sceneEpoch;   // v0.4.8: 纪元基线（会话起步不清累积）
         g_liveActive = YES;
-        rp("[live] session begun: %dx%d spp/frame=%d bounces=%d "
-           "(atlas=%s)", width, height, sppPerFrame, bounces,
+        rp("[live] session begun: %dx%d spp/frame=%d (early=%d until %u, "
+           "adaptive) bounces=%d "
+           "(atlas=%s)", width, height, sppPerFrame, g_liveSppEarly,
+           (unsigned)kSppEarlyUntil, bounces,
            g_atlasTexture != nil ? "ATLAS_RGB" : "white-vertex-color");
         // v0.4.5: 会话缓冲地址图（与 [addr] TLAS 行同格式——统一布局视图）。
         rp("[addr] live bufs: accum(mem)=0x%llX image(mem)=0x%llX "
@@ -2685,6 +2708,7 @@ Java_net_prisma_pathtrace_Native_liveFrameNative(
                 }
                 g_liveFrames = 0;
                 g_liveSppTotal = 0;
+                g_liveEarlyDone = NO;   // v0.4.9: 加档窗随累积重启再装填
                 g_liveResets++;
             }
             g_livePoisoned = YES;
@@ -2701,6 +2725,7 @@ Java_net_prisma_pathtrace_Native_liveFrameNative(
                 g_liveSceneEpoch = g_sceneEpoch;
                 g_liveFrames = 0;
                 g_liveSppTotal = 0;
+                g_liveEarlyDone = NO;   // v0.4.9: 加档窗随累积重启再装填
                 g_liveResets++;
                 rp("[live] reset: 场景内容变化 epoch=%llu (builds=%llu)",
                    (unsigned long long)g_sceneEpoch,
@@ -2744,10 +2769,22 @@ Java_net_prisma_pathtrace_Native_liveFrameNative(
                (unsigned long long)g_stats[3]);
         }
         const uint32_t resetFlag = (g_liveFrames == 0) ? 1u : 0u;
-        const uint32_t sppTotalNext = g_liveSppTotal + g_liveSpp;
+        // v0.4.9: 自适应 spp——累积重启后的加档窗口（sppTotal<kSppEarlyUntil）
+        // 用 g_liveSppEarly，其余回落 g_liveSpp。累积重启会自动再装填加档窗
+        //（相机一动 → 最噪时段 → 自动 ×4 档位）——正是噪点反馈的对症点。
+        const uint32_t sppEff =
+            (g_liveSppTotal < kSppEarlyUntil && g_liveSppEarly > g_liveSpp)
+                ? g_liveSppEarly : g_liveSpp;
+        if (!g_liveEarlyDone && g_liveSppTotal >= kSppEarlyUntil && sppEff == g_liveSpp
+                && g_liveFrames != 0) {
+            g_liveEarlyDone = YES;
+            rp("[live] 早期收敛窗口完成（sppTotal=%u → 稳态 %u spp/帧）",
+               (unsigned)g_liveSppTotal, (unsigned)g_liveSpp);
+        }
+        const uint32_t sppTotalNext = g_liveSppTotal + sppEff;
         pt_fill_uniforms(g_liveUniform.contents, camX, camY, camZ,
                          yawDeg, pitchDeg, (jint)g_liveW, (jint)g_liveH,
-                         (jint)g_liveSpp, (jint)g_liveBounces,
+                         (jint)sppEff, (jint)g_liveBounces,
                          instCount, resetFlag, sppTotalNext);
         // 5. Encode trace + present in one command buffer, commit async.
         id<MTLCommandBuffer> cmd = [g_queue commandBuffer];
@@ -2778,6 +2815,7 @@ Java_net_prisma_pathtrace_Native_liveFrameNative(
         g_liveCmd = cmd;
         g_liveLastMs = clockms() - t0;
         g_liveFrames++;
+        g_liveLastSpp = sppEff;   // v0.4.9: camHit 分母（早期加档期真实档位）
         g_liveSppTotal = sppTotalNext;
         return result;
     }
@@ -2791,6 +2829,7 @@ Java_net_prisma_pathtrace_Native_liveResetNative(JNIEnv *env, jclass cls) {
         if (g_liveFrames != 0) {
             g_liveFrames = 0;
             g_liveSppTotal = 0;
+            g_liveEarlyDone = NO;   // v0.4.9: 加档窗随累积重启再装填
             g_liveResets++;
         }
     }
@@ -2848,9 +2887,10 @@ Java_net_prisma_pathtrace_Native_liveReadbackNative(JNIEnv *env, jclass cls) {
     }
 }
 
-// Live counters for the report. Returns jlong[11]: frames, sppTotal, resets,
+// Live counters for the report. Returns jlong[12]: frames, sppTotal, resets,
 // refreshes, totalQueries, lastQueries, lastCamHits, atlasMode(0/1),
-// tlasBuilds(v0.4.4), tlasAgeMs(v0.4.7), sceneEpoch(v0.4.8).
+// tlasBuilds(v0.4.4), tlasAgeMs(v0.4.7), sceneEpoch(v0.4.8),
+// lastSpp(v0.4.9: 末帧有效 spp——早期加档期 camHit 分母)。
 JNIEXPORT jlongArray JNICALL
 Java_net_prisma_pathtrace_Native_liveStatsNative(JNIEnv *env, jclass cls) {
     (void)cls;
@@ -2859,7 +2899,8 @@ Java_net_prisma_pathtrace_Native_liveStatsNative(JNIEnv *env, jclass cls) {
     // build 年龄的相关性一眼可见）。
     // v0.4.7: [9] = 当前 TLAS 年龄 ms（-1=从未构建）——死亡行 age= 与
     // “重建后 ~1s 即死”签名一行对照。
-    jlong out[11] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
+    // v0.4.9: [11] = 末帧实际派发 spp（加档窗口内=early 档；0=尚无帧）。
+    jlong out[12] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
     @synchronized (g_liveLock) {
         out[0] = (jlong)g_liveFrames;
         out[1] = (jlong)g_liveSppTotal;
@@ -2873,9 +2914,10 @@ Java_net_prisma_pathtrace_Native_liveStatsNative(JNIEnv *env, jclass cls) {
         out[9] = (g_lastTlasBuildMs < 0.0) ? (jlong)-1
                 : (jlong)(clockms() - g_lastTlasBuildMs);
         out[10] = (jlong)g_sceneEpoch;   // v0.4.8: 场景纪元（[live] 行 epoch=）
+        out[11] = (jlong)g_liveLastSpp;  // v0.4.9: 末帧有效 spp（0=无帧，Java 回退）
     }
-    jlongArray result = (*env)->NewLongArray(env, 11);
-    if (result != NULL) { (*env)->SetLongArrayRegion(env, result, 0, 11, out); }
+    jlongArray result = (*env)->NewLongArray(env, 12);
+    if (result != NULL) { (*env)->SetLongArrayRegion(env, result, 0, 12, out); }
     return result;
 }
 
@@ -3096,6 +3138,9 @@ Java_net_prisma_pathtrace_Native_shutdownNative(JNIEnv *env, jclass cls) {
     // v0.4.5: 毒化仪器状态（影子/金丝瑞/首帧标记）。
     g_sharedCanary = nil;
     g_liveAtlasDispatched = 0;
+    g_liveSppEarly = 0;        // v0.4.9
+    g_liveEarlyDone = NO;      // v0.4.9
+    g_liveLastSpp = 0;         // v0.4.9
     g_atlasEnabled = YES;   // v0.4.7: bisect 灭活随会话关闭复位（重开世界=新实验）
     g_lastTlasBuildMs = -1.0;
     if (g_instanceShadow != NULL) {

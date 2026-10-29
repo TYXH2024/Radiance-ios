@@ -48,10 +48,21 @@ public final class PathtraceMod {
     private static final int RENDER_SPP = 24;
     private static final int RENDER_BOUNCES = 2;
     // 2.3 实时会话参数（可系统属性调优）。
-    private static final int LIVE_W = intProp("pathtrace.rtW", 480);
-    private static final int LIVE_H = intProp("pathtrace.rtH", 270);
+    // v0.4.9 画质轮（回应用户实机反馈“材质模糊/噪点”，VLM 屏摄鉴定 + 代码
+    // 级诊断双源定谳）：
+    // - rtW 默认 480→720：v0.4.8 的 480×270 拉伸 5.8× 是“整图发软”主因
+    //   （[compose] 首帧几何行为证）；720 档像素密度 ~1.84×，模糊直接消大半。
+    // - rtH 降为反射链失败时的回退值：正常路径按窗口宽高比实时计算 RT 高
+    //   （v0.4.8 的 16:9 RT 对 19.5:9 窗口横向拉伸 1.35×，方块全变胖；
+    //   随窗比 = 方形像素 + 顺带省 ~18% 射线）。
+    // - spp 默认 4→2：720×~332×2 ≈ 480×270×4 的 ~0.92× 射线/帧——分辨率
+    //   换样本、吞吐守恒、帧率不掉；叠加 native 侧早期加档（累积重启后
+    //   头 512 spp 自动 ×4 档）与 shader 侧 firefly 拆分，噪点收敛显著加速。
+    private static final int LIVE_W = intProp("pathtrace.rtW", 720);
+    /** v0.4.9: 仅作窗口反射链失败时的回退高（正常按窗比实时算）。 */
+    private static final int LIVE_H_FALLBACK = intProp("pathtrace.rtH", 405);
     /** 包内可见（LiveSession 的 camHit 分母——v0.4.1 分母修复）。 */
-    static final int LIVE_SPP = intProp("pathtrace.spp", 4);
+    static final int LIVE_SPP = intProp("pathtrace.spp", 2);
 
     static int intProp(String name, int dflt) {
         try {
@@ -78,7 +89,7 @@ public final class PathtraceMod {
             return;
         }
         ProbeReport r = new ProbeReport("pathtrace_report.txt");
-        r.header("路径追踪探针 (pathtrace 0.4.8)");
+        r.header("路径追踪探针 (pathtrace 0.4.9)");
         r.info("触发方式: " + triggerSource);
 
         if (isDisabled()) {
@@ -425,16 +436,42 @@ public final class PathtraceMod {
         boolean liveStarted = false;
         if (liveEligible) {
             r.stage("S8 实时会话（渐进累积 + GL 合成 + atlas albedo——眼见为实）");
+            // ---- v0.4.9: RT 宽高比随窗（方形像素——消 16:9 RT 对 19.5:9
+            // 窗口的横向拉伸；与 GlComposer.resolveWindowDims 同一反射链，
+            // 软符号缺失 → rtH 回退 16:9，合成器 1:1 blit 回退路径不受影响）。----
+            int liveW = LIVE_W;
+            int liveH = LIVE_H_FALLBACK;
+            String aspectNote = "反射链缺失 → 回退 16:9";
             try {
-                liveStarted = Native.liveBeginNative(LIVE_W, LIVE_H, LIVE_SPP,
+                Object mc = Mappings.call(null, Mappings.C_MC,
+                        Mappings.M_MC_GET_INSTANCE);
+                Object window = Mappings.call(mc, Mappings.C_MC,
+                        Mappings.M_MC_GET_WINDOW);
+                int ww = (Integer) Mappings.call(window, Mappings.C_WINDOW,
+                        Mappings.M_WINDOW_GET_FB_WIDTH);
+                int wh = (Integer) Mappings.call(window, Mappings.C_WINDOW,
+                        Mappings.M_WINDOW_GET_FB_HEIGHT);
+                if (ww > 0 && wh > 0) {
+                    liveH = Math.max(120,
+                            (int) Math.round(liveW * (double) wh / (double) ww));
+                    aspectNote = String.format("窗口 %dx%d（%.3f:1）",
+                            ww, wh, (double) ww / (double) wh);
+                }
+            } catch (Throwable ignored) {
+                // 软符号缺失——LIVE_H_FALLBACK 回退（合成器同步降 1:1 blit）
+            }
+            try {
+                liveStarted = Native.liveBeginNative(liveW, liveH, LIVE_SPP,
                         RENDER_BOUNCES);
             } catch (Throwable t) {
                 r.fail("liveBeginNative 异常: " + t);
             }
             if (liveStarted) {
-                r.pass(String.format("[S8.0] 实时会话开启: %dx%d spp/帧=%d bounces=%d"
+                r.pass(String.format("[S8.0] 实时会话开启: %dx%d spp/帧=%d"
+                        + "（早期加档 ×4 至 512 spp，自适应）bounces=%d"
+                        + " 宽高比随窗: %s"
                         + "（静止收敛 / 移动重置；场景变化 native 自检重置）",
-                        LIVE_W, LIVE_H, LIVE_SPP, RENDER_BOUNCES));
+                        liveW, liveH, LIVE_SPP, RENDER_BOUNCES, aspectNote));
                 if (composeEnabled()) {
                     PathtraceHook.arm(r);
                 } else {

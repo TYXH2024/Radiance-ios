@@ -1,6 +1,11 @@
 //
 //  pathtrace.metal
 //  Radiance iOS Port — Chapter 2 — Stage 2.3 — Live Path Tracing (v0.4)
+//  v0.4.9 "CLARITY": ① indirect escapes no longer sample the sun disk
+//                        (firefly path removed — see skyRadianceIndirect);
+//                     ② present_kernel: Reinhard extended with white point
+//                        W=2 (v0.4.8 plain Reinhard peaked at ~0.67 gray —
+//                        the "washed-out haze" in the field screenshots).
 //
 //  Three kernels in one metallib:
 //
@@ -149,16 +154,30 @@ static inline float3 sunDirection() {
     return normalize(float3(0.45f, 0.75f, 0.25f));
 }
 
-// Sky radiance seen by escaping rays (and by ambient shading).
+// Sky radiance seen by CAMERA rays (b==0 escapes). Keeps the sun disk.
+// v0.4.9: disk access is now camera-only — see skyRadianceIndirect.
 static inline float3 skyRadiance(float3 d) {
     float t = clamp(d.y * 0.5f + 0.5f, 0.0f, 1.0f);
     float3 horizon = float3(0.72f, 0.80f, 0.92f);
     float3 zenith  = float3(0.25f, 0.45f, 0.90f);
     float3 s = mix(horizon, zenith, t);
     if (dot(d, sunDirection()) > 0.9995f) {
-        s += float3(8.0f, 7.2f, 6.0f);   // sun disk
+        s += float3(8.0f, 7.2f, 6.0f);   // sun disk (camera rays only)
     }
     return s;
+}
+
+// v0.4.9: sky radiance for INDIRECT (b>0) escapes — sun disk removed.
+// The sun's direct contribution is already carried by the NEE term
+// (ndl * 2.2 toward the sun); letting cosine-sampled diffuse bounces hit
+// the ~0.05%-solid-angle disk adds a huge-variance, firefly path: one hit
+// deposits throughput * 8.0 into a single pixel — bright speckle that
+// survives tens of thousands of accumulated spp (classic integral split:
+// big contribution goes to NEE; tiny solid angle is never left to BSDF
+// sampling). This was the worst converger in the v0.4.x field images.
+static inline float3 skyRadianceIndirect(float3 d) {
+    float t = clamp(d.y * 0.5f + 0.5f, 0.0f, 1.0f);
+    return mix(float3(0.72f, 0.80f, 0.92f), float3(0.25f, 0.45f, 0.90f), t);
 }
 
 // Hemispheric sky irradiance approximation for surface shading.
@@ -239,7 +258,11 @@ kernel void pathtrace_kernel(
             }
             if (q.get_committed_intersection_type()
                     != raytracing::intersection_type::triangle) {
-                radiance += throughput * skyRadiance(dir);
+                // v0.4.9: camera rays keep the sun disk; indirect escapes
+                // use the disk-less sky (firefly path removed).
+                radiance += throughput
+                          * (b == 0 ? skyRadiance(dir)
+                                    : skyRadianceIndirect(dir));
                 break;
             }
             if (b == 0) {
@@ -332,7 +355,13 @@ kernel void present_kernel(
     const uint32_t idx = (uint32_t)gid.y * u.width + (uint32_t)gid.x;
     const float n = (float)(u.sppTotal < 1u ? 1u : u.sppTotal);
     float3 c = accum[idx].rgb / n;
-    c = c / (1.0f + c);                       // Reinhard
+    // v0.4.9: Reinhard extended, white point W=2: c*(1 + c/4)/(1 + c).
+    // Plain Reinhard never reaches 1.0 — sky/sunlit faces peaked at ~0.67
+    // gray in v0.4.8 field images (the "washed-out haze" the on-device
+    // screenshots show). W=2 maps c=2 to pure white; midtones lift,
+    // blacks are untouched (c<<1 term is identical), highlights gain real
+    // contrast. Overshoot (c>2) clips at the clamp below — intended.
+    c = c * (1.0f + c * 0.25f) / (1.0f + c);
     c = pow(c, float3(1.0f / 2.2f));          // gamma
     c = clamp(c, 0.0f, 1.0f);
     image[idx] = uchar4((uchar)(c.r * 255.0f + 0.5f),

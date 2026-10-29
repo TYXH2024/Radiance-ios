@@ -625,7 +625,11 @@ final class LiveSession implements Runnable {
             loopIters = 0;
             // v0.4.1: camHit% 分母 = 单帧样本数（W×H×spp/帧）。v0.4 误用累计
             // sppTotal——静止收敛后真命中率被抹成 0.0%（v0.4 现场即如此）。
-            double frameSamples = (double) rtW() * rtH() * PathtraceMod.LIVE_SPP;
+            // v0.4.9: 分母随 native 上报的末帧有效 spp（早期加档窗内=early
+            // 档，否则稳态档；st[11]=0（尚无帧）回退 LIVE_SPP 常量）。
+            long sppEffFrame = (st.length >= 12 && st[11] > 0)
+                    ? st[11] : PathtraceMod.LIVE_SPP;
+            double frameSamples = (double) rtW() * rtH() * sppEffFrame;
             double camHit = frameSamples > 0
                     ? st[6] * 100.0 / Math.max(1, (long) frameSamples) : 0;
             // v0.4.2: Mray/s 用墙钟速率（since-reset 帧率在风暴下无意义）。
@@ -1052,7 +1056,9 @@ final class LiveSession implements Runnable {
                         PathtraceMod.pingPongActive ? "在岗（500ms 替换件）" : "关闭",
                         windowDeaths, st[2], st[1]));
             }
-            double frameSamples = (double) rtW() * rtH() * PathtraceMod.LIVE_SPP;
+            long sppEffFinal = (st.length >= 12 && st[11] > 0)
+                    ? st[11] : PathtraceMod.LIVE_SPP;
+            double frameSamples = (double) rtW() * rtH() * sppEffFinal;
             double lastCamHit = frameSamples > 0
                     ? st[6] * 100.0 / Math.max(1, (long) frameSamples) : 0;
             double wallFps = wallFrames * 1000.0 / Math.max(1, elapsed());
