@@ -207,13 +207,15 @@ static inline float3 skyAmbient(float3 n) {
 // ~0.3^6..8 texel run (a grazing ray punching 6-8 consecutive transparent
 // texels): camera-side treats it as pass-through (sky), shadow-side
 // conservatively occludes. Both fallbacks are visually nothing.
-static const float kCutoutAlphaMin     = 0.5f;
-static const int   kCutoutPassesCam    = 8;
-static const int   kCutoutPassesShadow = 6;
-static const float kCutoutEps          = 0.002f;
+// (#define — MSL program-scope variables must reside in constant address
+// space; macros sidestep that entirely.)
+#define CUTOUT_ALPHA_MIN     0.5f
+#define CUTOUT_PASSES_CAM    8
+#define CUTOUT_PASSES_SHADOW 6
+#define CUTOUT_EPS           0.002f
 
 // v0.5.0: alpha-tested nearest-hit trace ("cutout trace"). Issues up to
-// kCutoutPassesCam committed queries; a committed hit whose atlas alpha
+// CUTOUT_PASSES_CAM committed queries; a committed hit whose atlas alpha
 // is below threshold is a hole — the ray advances past it (tMin =
 // dist + eps) and re-queries. Returns false on miss (or pass exhaustion
 // — treated as pass-through). UV-sentinel layers (no UV0 element) and
@@ -238,7 +240,7 @@ static inline bool cutoutTrace(
     thread CutoutHit &outHit)
 {
     float tMin = 0.001f;
-    for (int k = 0; k < kCutoutPassesCam; ++k) {
+    for (int k = 0; k < CUTOUT_PASSES_CAM; ++k) {
         raytracing::intersection_params params;
         raytracing::intersection_query<raytracing::instancing, raytracing::triangle_data> q;
         q.reset(raytracing::ray(origin, dir, tMin, tEnd),
@@ -265,17 +267,17 @@ static inline bool cutoutTrace(
         if (uv.x >= 0.0f) {
             alpha = atlasTex.sample(atlasSampler, uv).a;
         }
-        if (alpha >= kCutoutAlphaMin) {
+        if (alpha >= CUTOUT_ALPHA_MIN) {
             return true;                        // opaque surface — shade it
         }
-        tMin = outHit.dist + kCutoutEps;        // hole — continue past it
+        tMin = outHit.dist + CUTOUT_EPS;        // hole — continue past it
     }
     return false;                               // exhausted — pass-through
 }
 
 // Any-hit occlusion query — the shadow ray. v0.5.0: alpha-tested —
 // transparent texels (leaf holes, glass) no longer occlude, so canopies
-// cast dappled light instead of solid slabs. Up to kCutoutPassesShadow
+// cast dappled light instead of solid slabs. Up to CUTOUT_PASSES_SHADOW
 // re-queries; exhaustion is conservatively occluded. Shadow queries stay
 // uncounted in rayStats (v0.4.x metric continuity — camera/bounce queries
 // only).
@@ -288,7 +290,7 @@ static inline bool occluded(
     float3 origin, float3 dir, float maxDist)
 {
     float tMin = 0.001f;
-    for (int k = 0; k < kCutoutPassesShadow; ++k) {
+    for (int k = 0; k < CUTOUT_PASSES_SHADOW; ++k) {
         raytracing::intersection_params params;
         raytracing::intersection_query<raytracing::instancing, raytracing::triangle_data> q;
         q.reset(raytracing::ray(origin, dir, tMin, maxDist),
@@ -314,10 +316,10 @@ static inline bool occluded(
         if (uv.x >= 0.0f) {
             alpha = atlasTex.sample(atlasSampler, uv).a;
         }
-        if (alpha >= kCutoutAlphaMin) {
+        if (alpha >= CUTOUT_ALPHA_MIN) {
             return true;                        // opaque occluder
         }
-        tMin = dist + kCutoutEps;               // hole — keep looking
+        tMin = dist + CUTOUT_EPS;               // hole — keep looking
     }
     return true;                                // exhausted — conservative
 }
@@ -372,7 +374,7 @@ kernel void pathtrace_kernel(
 
         for (uint32_t b = 0; b <= u.maxBounces; b++) {
             // v0.5.0: cutout trace — transparent texels (leaf holes, glass)
-            // are passed through; up to kCutoutPassesCam committed queries.
+            // are passed through; up to CUTOUT_PASSES_CAM committed queries.
             CutoutHit ch;
             if (!cutoutTrace(scene, instTriBase, triUVs, atlasTex,
                              atlasSampler, rayStats, origin, dir, 1024.0f,
