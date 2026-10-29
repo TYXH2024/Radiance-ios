@@ -199,10 +199,29 @@ final class Native {
     static native void liveResetNative();
 
     /**
-     * 呈现快照（GL 合成线程）：等待最后命令缓冲 → 拷贝入稳定 staging →
-     * 返回直接 ByteBuffer（RGBA8，w*h*4，行主序）。快照不可撕裂。
+     * 呈现快照（GL 合成线程；v0.5.2 PACE 非阻塞化）：上一 RT 帧已完成 →
+     * 刷新 staging 快照并递增序列号；未完成 → 原样返回既有快照（字节与
+     * 序列号均不变——GlComposer 跳过重复上传，只置 blit）。渲染线程
+     * 不再硬等 RT 帧。返回直接 ByteBuffer（RGBA8，w*h*4，行主序）。
+     * 与 liveSerialNative 同线程顺序调用——序列号与字节严格一致。
      */
     static native ByteBuffer livePresentNative();
+
+    /** v0.5.2 PACE：当前快照序列号（与 livePresentNative 同线程顺序调用）。 */
+    static native long liveSerialNative();
+
+    /**
+     * v0.5.2 PACE：spp/帧封顶（RT 工作线程下发；native [pace] 行）。
+     * 0 = 不封顶（v0.4.9 原版语义）；1 = 移动档；LIVE_SPP = 超预算档。
+     */
+    static native void livePaceNative(int sppCap);
+
+    /**
+     * v0.5.2 PACE：动态分辨率梯位切换（RT 工作线程；native [drs] 行）。
+     * 重分配 accum/image/staging、重置累积（resets++ 诚实记账）、旧缓冲
+     * 延迟释放。uniform/stats 尺寸无关不重分配；同尺寸/非法参数 no-op。
+     */
+    static native void liveResizeNative(int width, int height);
 
     /** 呈现图像回读（0xAARRGGBB，PNG 证据写入用；RT 工作线程）。 */
     static native int[] liveReadbackNative();

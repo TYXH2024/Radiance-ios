@@ -145,6 +145,13 @@ final class GlComposer {
     private int shortBufLogged = 0;
     /** v0.4.3: present 计数（心跳行分子——SIGSEGV 前的最后可见状态）。 */
     private int presentCount = 0;
+    // ---- v0.5.2 PACE：动态分辨率跟随 + 序列号跳上传 ----
+    /** 上次已上传的快照序列号（-1 = 强制全量上传——realloc 后重置）。 */
+    private long lastUploadSerial = -1L;
+    /** 序列号未变而跳过的上传次数（RT 慢于 swap 时的大头）。 */
+    private int uploadsSkipped = 0;
+    /** RT 纹理重建次数（DRS 换档跟随）。 */
+    private int reallocCount = 0;
     // ---- v0.4.4 错误归因与黑屏根治 ----
     // v0.4.3 现场：texSubErr=2815/2816 帧全灭 ⇒ RT 纹理永黑（用户"黑块"）。
     // 直接成因：present 缺预排空 + 段级 break——进队早于本帧的错误（游戏侧
@@ -346,6 +353,43 @@ final class GlComposer {
                 rtW, rtH, rtTex, rtFbo));
     }
 
+    /**
+     * v0.5.2 PACE：动态分辨率换档——RT 纹理重建（重定存储 + 重挂 FBO）。
+     * 纹理参数（FILTER/WRAP）在纹理对象上持久，无需重设；FBO 附件重挂
+     * （重定尺寸后个别驱动需要重挂才认新尺寸——防御性）。保存/恢复纪律
+     * 与 init 同（active unit + binding + read FB）。调用点仅在快照字节与
+     * 目标尺寸吻合时（见 present 头注释——过渡帧零闪烁）。
+     */
+    private void reallocRt(int w, int h) throws Exception {
+        int savedActive = callI(mGetInteger, GL_ACTIVE_TEXTURE);
+        int savedBinding = callI(mGetInteger, GL_TEXTURE_BINDING_2D);
+        int savedReadFb = callI(mGetInteger, GL_READ_FRAMEBUFFER_BINDING);
+        try {
+            call(mBindTexture, GL_TEXTURE_2D, rtTex);
+            call(mTexImage2D, GL_TEXTURE_2D, 0, GL_RGBA8, w, h, 0,
+                    GL_RGBA, GL_UNSIGNED_BYTE, (ByteBuffer) null);
+            call(mBindFramebuffer, GL_READ_FRAMEBUFFER, rtFbo);
+            call(mFramebufferTexture2D, GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+                    GL_TEXTURE_2D, rtTex, 0);
+            int status = callI(mCheckFramebufferStatus, GL_READ_FRAMEBUFFER);
+            if (status != GL_FRAMEBUFFER_COMPLETE) {
+                throw new IllegalStateException(String.format(
+                        "RT FBO 重挂后不完整 (status=0x%04X)", status));
+            }
+        } finally {
+            call(mBindFramebuffer, GL_READ_FRAMEBUFFER, savedReadFb);
+            call(mBindTexture, GL_TEXTURE_2D, savedBinding);
+            call(mActiveTexture, savedActive);
+        }
+        rtW = w;
+        rtH = h;
+        reallocCount++;
+        lastUploadSerial = -1L;   // 新尺寸首帧强制全量上传
+        report().pass(String.format(
+                "[compose] RT 纹理重建: %dx%d（tex=%d fbo=%d——DRS 换档跟随）",
+                w, h, rtTex, rtFbo));
+    }
+
     // ------------------------------------------------------------------
     // atlas 采集（渲染线程，hook 首帧；best-effort——失败即顶点色回退）
     // ------------------------------------------------------------------
@@ -496,7 +540,7 @@ final class GlComposer {
     // 每帧合成（渲染线程）
     // ------------------------------------------------------------------
 
-    void present(ByteBuffer rgba) throws Exception {
+    void present(ByteBuffer rgba, long serial) throws Exception {
         // 窗口尺寸（反射链缓存；软符号缺失 → 以 RT 尺寸 1:1 blit 回退）
         if (winW <= 0) {
             resolveWindowDims();
@@ -505,6 +549,21 @@ final class GlComposer {
         final int dstH = winH > 0 ? winH : rtH;
         presentCount++;
         composeFrameCounter++;
+
+        // ---- v0.5.2 PACE：动态分辨率跟随（native [drs] 换档 → RT 纹理重建）。
+        // 仅当快照字节与目标尺寸吻合时才换档：换档后到首个新尺寸帧完成前，
+        // livePresentNative 仍返回旧尺寸快照（旧 staging 两段退休在保）——
+        // 此时按旧尺寸上传 blit，下轮再跟随（过渡帧零闪烁，容量闸门永远 satisfied）。----
+        try {
+            int[] dims = Native.liveDimsNative();
+            if (dims != null && (dims[0] != rtW || dims[1] != rtH)
+                    && rgba != null
+                    && rgba.remaining() == dims[0] * dims[1] * 4) {
+                reallocRt(dims[0], dims[1]);
+            }
+        } catch (Throwable ignored) {
+            // native 会话未开（防御——present 仅在 arm 后被调）
+        }
 
         // ---- v0.4.4: 预排空（进队早于本帧的错误一律不归因本类）----
         // 上见字段区注释——v0.4.3 的每帧 INVALID_ENUM → break 弃帧 = 黑屏。
@@ -621,9 +680,11 @@ final class GlComposer {
             report().info(String.format(
                     "[compose] 心跳 #%d: texSubErr=%d blitErr=%d shortBuf=%d "
                             + "drained=%d retryOk=%d chunkFail=%d mask=0x%X "
+                            + "skipUpload=%d realloc=%d "
                             + "(RT=%dx%d chunks=%d行/段)",
                     presentCount, texSubErrCount, blitErrCount, shortBufCount,
                     drainCount, retryOkCount, chunkFailCount, maskedPnames,
+                    uploadsSkipped, reallocCount,
                     rtW, rtH, UPLOAD_ROWS_PER_CHUNK));
         }
 
@@ -676,6 +737,12 @@ final class GlComposer {
             // 继续后续段（部分帧 >> 零帧——v0.4.3 的 break 是黑屏直接成因）----
             // v0.4.4 首帧归因梯：预排空后每步独立采样（0=净）——下一轮
             // 真机报告直接点名 INVALID_ENUM 的出生地（重置段/bind/段上传）。
+            // v0.5.2 PACE：序列号未变 → 整段跳过（RT 慢于 swap 时，
+            // 58/60 次上传的是同一帧字节——bind+分段上传全免；blit 照常：
+            // 游戏帧每 swap 都要盖）。----
+            if (serial == lastUploadSerial) {
+                uploadsSkipped++;
+            } else {
             final boolean ladder = (presentCount == 1);
             int ladReset = 0, ladBind = 0, ladC0 = 0, ladC0r = 0, ladC1 = 0;
             if (ladder) {
@@ -736,6 +803,8 @@ final class GlComposer {
                         hex(ladReset), hex(ladBind), hex(ladC0),
                         hex(ladC0r), hex(ladC1)));
             }
+            lastUploadSerial = serial;
+            }   // v0.5.2: 序列号上传块结束（else 分支）
 
             // ---- blit 整帧替换（dst y 翻转：GL 左下原点 vs 图像上下行主序）----
             // v0.4.2 自愈：LINEAR blit 首次报错 → 换 NEAREST 重试一次并记住

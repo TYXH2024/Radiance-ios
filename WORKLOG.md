@@ -582,3 +582,33 @@ Work Log:
 Stage Summary:
 - v0.5.1 落地：发现延迟 500ms→≤50ms、摄取窗口死亡→常驻、RT 世界覆盖开局 208 段→全量——探针完成从「产品协议」到「活世界组件」的转正
 - 待办：①CI 过绿 + Release pathtrace-v0.5.1 ②用户真机回报（重点：[ingest] mixin 事件命中/转常驻/心跳行、挖掘验证 ≤2s 反映、[S8soft] method_60908；mixin 未命中回退行也请回报）③A20 Pro v0.5.0/v0.5.1 合并复验 ④Apple bug report 提交（素材已齐）⑤2.4 下一刀：移动相机累积策略
+
+## 2026-10-29（二十九）· pathtrace v0.5.2 PACE：可玩性轮——用户真机判词「玩不了，M3 上 1～2 帧」三因定谳（移动即 8 spp 加档白烧 / v0.5.1 摄取 flood 抢 GPU / 渲染线程硬等 RT 帧）→ 四刀齐落（spp 封顶 + 动态分辨率梯子 + 摄取让路 + 呈现非阻塞）
+
+Task: 用户真机回报 v0.5.1（M3）玩不了、移动 1～2 帧，指示「先看看有没有什么可以优化的地方，例如自动适配分辨率（而非一直 4K）、改渲染器」
+
+Work Log:
+- **定谳（数字账，全部锚在既有实测上，无需新取证）**：
+  1. **移动即加档（主根因）**：相机一动 → liveReset → sppTotal=0 → v0.4.9 早期加档窗自动再装填 → sppEff=8；720×332×8 样本 × 3.5-7 射线/样本（树冠 cutout 重查计入）= 6.7-13.4M 射线/帧 ÷ M3 实测 45-49 Mray/s ≈ **137-290ms/帧 = 3-7 FPS**，且下一帧又清零——4× 预算纯白烧（v0.5.0 现场恰是静止会话 wall ~20 f/s，移动从未被数字锚过——本轮补上这笔账）
+  2. **v0.5.1 摄取 flood（叠加根因）**：进世界即全量 ~6936 段 BLAS 构建 @≤400 段/s（每段 2-5ms GPU）= 持续 15-60s 的 GPU 争用——恰好撞上玩家开始走动的时刻 → 45 Mray/s 再被挤压 → **1-2 帧**
+  3. **渲染线程硬等（体感放大器）**：livePresentNative 每帧 waitUntilCompleted + liveFrameNative 持 g_liveLock 横跨等待——swap 被拖成 RT 节奏，输入都卡
+  4. 澄清用户假设「一直 4K」：live RT 实为 720×窗口比（v0.4.9 定档）——但分辨率确是本版该拿下的杠杆之一（用户方向正确）
+- **「改渲染器」的答复（架构判断）**：后端不可换——zink+MoltenVK 是 iOS 上硬件 RT 的唯一通路（2.2 章定谳 TLAS 毒化在外部驱动层、Radiance 自有管线洗清；换 ANGLE/gl4ES = 丢硬件 RT）；改的是渲染器内部结构：呈现与追踪解耦（本轮刀四）+ 负载自适应（刀一/二/三）；60 FPS + 全高清的长期答案是混合光栅主可见性（v0.6+ 路线，不动)
+- **四刀实现（PACE 步调控制器，native 3 新 JNI + Java 控制器）**：
+  1. **移动降档 spp**：native livePaceNative(sppCap) 设 g_liveSppCap；liveFrameNative 的 sppEff 计算加封顶（cap=0 时与原版逐字节等价）。LiveSession.paceTick：moving → cap=1；帧超预算 → cap=LIVE_SPP（2）；富余 → cap=0（早期加档窗恢复全功率——v0.4.9 噪点对策原样保留，站定收敛速度不回退）。变迁才发 native（[pace] 行）
+  2. **动态分辨率梯子（用户点名）**：LiveSession 以 liveFrameNative 墙钟（含等待上一帧 = GPU 帧时间代理）建 EMA（α=0.25）；五档梯 = rtW 顶档 × {1.0, 0.75, 0.5625, 0.4375, 0.3125}（TreeSet 去重、≥192 才入梯；高随窗比 paceAspect）；超预算（默认 33ms = ≥30 FPS）连续 3 评估降档、富余（<55%）且站定连续 12 评估升档、换档 3s 冷却防质量泵动；换档走新 JNI liveResizeNative(w,h)：排空在飞 cmd → realloc accum/image/staging（uniform/stats 尺寸无关不动）→ resets++（诚实记账）+ [drs] 行；-Dpathtrace.drs=false 固定档回退；-Dpathtrace.rtW 语义升级为梯顶
+  3. **摄取让路**：paceTick 在 EMA > 1.5× 预算时置 PathtraceMod.gpuPaceBusy → SceneProxy.ingestLoop 让路（sleep 100ms 跳批，事件不丢只积压；[ingest] 心跳加「让路 N 轮」）——flood 从「挤死渲染」变「自适应让路」，站定富余自动解除后按批补
+  4. **呈现非阻塞 + 序列号跳上传**：livePresentNative 改 completed 探查——上一 RT 帧未完成则原样返回既有快照（字节与序列号均不变）；完成则 memcpy + g_presentSerial++。GlComposer.present(rgba, serial)：序列号未变 → 整段 bind+分段上传跳过（uploadsSkipped 计数进心跳），blit 照常（游戏帧每 swap 都要盖）；liveFrameNative 的 waitUntilCompleted 移出 g_liveLock（句柄快照 → 锁外等待+stats 读取【写者仅本线程与已完成 kernel】→ 锁内守卫/uniform/编码）——渲染线程不再在锁上排队
+- **安全审查（三处专项论证，全写入代码注释）**：
+  1. **快照稳定性（无锁单 staging 撕裂读不可能）**：staging 唯一写者 = livePresentNative（渲染线程单线程）；memcpy 仅在 cmd.completed 时发生于 g_liveLock 内——此时无 kernel 在写 image（下一个 cmd 需拿锁才能 commit）
+  2. **旧缓冲悬垂读（v0.4.2 SIGSEGV 家族预防）**：DRS 换档时渲染线程可能仍持有 aliasing 旧 staging 的 direct ByteBuffer——两段式退休：段一 resize 挂起（g_stagingRetired），段二在下一次快照刷新点（渲染线程自身，上一 direct buffer 必已消费——同线程顺序）才入 g_retired 延迟释放；accum/image 在排空在飞 cmd 后直接退休（GPU 引用已终结）
+  3. **锁序不变**：liveFrameNative 窄化后第二临界段仍嵌 g_sceneLock（L→S 原序）；liveResizeNative 同序；单 RT worker 线程保证两段间无第二派发者
+- **过渡帧零闪烁设计**：GlComposer 每帧 liveDimsNative 对账，仅当快照字节与新尺寸【吻合】才 reallocRt（重定存储+重挂 FBO+强制全量上传）；换档后到首个新尺寸帧完成前按旧尺寸照常上传 blit——容量闸门永 satisfied、无游戏帧穿透窗口
+- **报告锚点（真机验收判据）**：[pace] spp/帧封顶变迁序列 / [drs] 梯位变迁（Java 行含 EMA 与理由，native 行含 resets 计数）/ [pace] 摄取让路 开启-解除 / [ingest] 心跳 …让路 N 轮 / [compose] 心跳 skipUpload=N realloc=N / [S8.0] PACE 参数回显（预算/DRS 开关/梯顶）
+- **预期（M3 锚 45-49 Mray/s）**：移动 1 spp ≈ 0.84-1.67M 射线/帧 ≈ 18-37ms → **27-45 FPS**（对照根因 3-7 FPS）；重场景自动落 315-405 档保 30；站定 2 spp 稳态累积。A20 Pro（172 Mray/s）一切顶档足够——DRS 基本不动，无回退。移动画面 1 spp 噪点增多属【帧率换样本】的显式取舍（用户既定「性能优先」）
+- **路线重排**：v0.5.3 = 移动相机累积（原 v0.5.2 顺延——一动全清→降档保留，与本轮 DRS 天然互补）；v0.5.4 事件摄取精修；v0.6.x 光照质量线不变
+- smoke（Linux 沙箱，43 项全绿）：ecj 15 源零错误（真 fabric-loader/lifecycle/api-base/sponge-mixin jars）；括号平衡 8 文件全平（metal_pathtrace.m 501:501、pathtrace.metal 43:43、LiveSession 184:184、GlComposer 121:121 等）；PACE 三 JNI 入口三处存在（.m 实现/Java 声明/workflow nm 列表）；关键实现锚点 15 项（sppEff 封顶/completed 探查/序列号递增/两段退休两段/锁窄化 prevCmd/resets 记账/liveBegin 重置/present(serial)/reallocRt/跳上传/心跳字段/gpuPaceBusy/让路）；版本三元组 0.5.2 一致 + build.sh/fabric.mod.json 无操作 0.5.1 残留；workflow YAML 解析过；mixins.json 未动（双 mixin 条目）
+
+Stage Summary:
+- v0.5.2 PACE 落地：三因根因链四刀齐断——移动射线预算砍 4-8×、分辨率随负载五档自适应、摄取 flood 自适应让路、渲染线程与 RT 节奏解耦；M3 预期从「1～2 帧」回到 27-45 FPS 可玩档
+- 待办：①CI 过绿 + Release pathtrace-v0.5.2 ②用户 M3 实测验收（重点：移动帧率体感 + [pace]/[drs]/让路/skipUpload 报告行 + 移动画面屏摄一帧）③A20 Pro 复验（DRS 应基本不动——顶档锚）④v0.5.3 移动相机累积（一动全清→降档保留）⑤Apple bug report（素材已齐，排期不动）

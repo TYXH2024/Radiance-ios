@@ -160,7 +160,10 @@ public final class PathtraceHook {
                 }
                 ByteBuffer px = Native.livePresentNative();
                 if (px != null) {
-                    composer.present(px);
+                    // v0.5.2 PACE：快照序列号（与 livePresentNative 同线程
+                    // 顺序调用——序列号与字节严格一致）。RT 帧未完成时 px 为
+                    // 旧快照且序列号不变 → GlComposer 跳过重复上传，只置 blit。
+                    composer.present(px, Native.liveSerialNative());
                     blitCount++;
                 }
             }

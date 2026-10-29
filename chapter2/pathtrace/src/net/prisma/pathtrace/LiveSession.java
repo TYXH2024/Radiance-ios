@@ -192,8 +192,59 @@ final class LiveSession implements Runnable {
     /** 孪生定谳回显（finishWindow 收口行引用）。 */
     private String twinEcho = "未运行";
 
+    // ---- v0.5.2 PACE：步调控制器（移动降档 / 动态分辨率 / 摄取让路）----
+    /** 帧时间 EMA（α=0.25，ms）——含 liveFrameNative 内部等待上一帧 ≈ GPU 帧时间代理。 */
+    private double paceFrameMs = 0.0;
+    /** 已下发的 spp 封顶（-1 = 未下发——首帧即同步一次）。 */
+    private int paceSppCapSent = -1;
+    /** 摄取让路状态（变迁打行 + 写 PathtraceMod.gpuPaceBusy）。 */
+    private boolean paceBusy = false;
+    /** DRS 梯位（0 = 顶档 rtW）。 */
+    private int paceRung = 0;
+    /** 梯位宽度表（降序；顶档 = pathtrace.rtW，以下 ×0.75/0.5625/0.4375/0.3125，<192 弃置）。 */
+    private final int[] paceRungW;
+    /** 会话宽高比（梯位高 = 宽 × 此比；liveDimsNative 起步取）。 */
+    private float paceAspect = 405f / 720f;
+    /** 评估节流（每 8 帧评估一次梯子）。 */
+    private int paceEvalCount = 0;
+    /** 降档滞留计数（连续 3 次评估超预算才降——防喋喋）。 */
+    private int paceDownStrikes = 0;
+    /** 升档滞留计数（连续 12 次评估富余且站定才升）。 */
+    private int paceUpStrikes = 0;
+    /** 上次梯位变更时刻（ms）——变更后 3s 冷却（防升降振荡的质量泵动）。 */
+    private long paceLastRungMs = -10_000L;
+
+    private static final int PACE_EVAL_EVERY = 8;
+    private static final int PACE_DOWN_STRIKES = 3;
+    private static final int PACE_UP_STRIKES = 12;
+    private static final double PACE_EMA_ALPHA = 0.25;
+    /** 梯位变更冷却（ms）。 */
+    private static final long PACE_RUNG_COOLDOWN_MS = 3_000L;
+
     LiveSession(ProbeReport r) {
         this.r = r;
+        // v0.5.2 PACE：分辨率梯子（顶档 = rtW 属性；TreeSet 去重防小 rtW 折叠）
+        int top = PathtraceMod.LIVE_W;
+        java.util.TreeSet<Integer> rungs = new java.util.TreeSet<>();
+        for (double f : new double[]{1.0, 0.75, 0.5625, 0.4375, 0.3125}) {
+            int w = (int) Math.round(top * f);
+            if (w >= 192) {
+                rungs.add(w);
+            }
+        }
+        Integer[] desc = rungs.descendingSet().toArray(new Integer[0]);
+        this.paceRungW = new int[desc.length];
+        for (int i = 0; i < desc.length; i++) {
+            this.paceRungW[i] = desc[i];
+        }
+        try {
+            int[] dims = Native.liveDimsNative();
+            if (dims != null && dims[0] > 0 && dims[1] > 0) {
+                this.paceAspect = (float) ((double) dims[1] / (double) dims[0]);
+            }
+        } catch (Throwable ignored) {
+            // liveBegin 先于构造（正常序）；防御性容错
+        }
     }
 
     @Override
@@ -243,7 +294,8 @@ final class LiveSession implements Runnable {
             }
             worldPauseEchoed = false;
 
-            if (poseValid && moved(pose)) {
+            final boolean moving = poseValid && moved(pose);
+            if (moving) {
                 Native.liveResetNative();
             }
             lastX = pose[0];
@@ -255,7 +307,11 @@ final class LiveSession implements Runnable {
 
             // ---- 累积一帧（v0.4.7: E 段派发停——累积冻结，仅监视仪器在岗）----
             if (!PathtraceMod.bisectLiveOff) {
+                // v0.5.2 PACE：帧时间实测（含等待上一帧 = GPU 帧时间代理）
+                // → 步调控制器（spp 封顶 / 分辨率梯子 / 摄取让路）
+                long paceT0 = System.nanoTime();
                 Native.liveFrameNative(pose[0], pose[1], pose[2], pose[3], pose[4]);
+                paceTick(moving, (System.nanoTime() - paceT0) / 1_000_000L);
             }
             wallFrames++;
 
@@ -606,6 +662,102 @@ final class LiveSession implements Runnable {
                 || Math.abs(pose[2] - lastZ) > POS_EPS
                 || Math.abs(pose[3] - lastYaw) > ROT_EPS
                 || Math.abs(pose[4] - lastPitch) > ROT_EPS;
+    }
+
+    /**
+     * v0.5.2 PACE 步调控制器（RT 工作线程，每帧）：
+     * 1) spp 封顶——移动 → 1（累积反正每帧都在清，早期加档的 4× 预算
+     *    纯白烧——M3「1～2 帧」根因①）；帧超预算 → 稳态档；富余 → 解除
+     *    （早期加档窗恢复全功率收敛）。变迁才发 native（[pace] 行）。
+     * 2) 摄取让路——EMA 超 1.5× 预算 → PathtraceMod.gpuPaceBusy（v0.5.1
+     *    摄取 flood 抢 GPU 是根因②；事件不丢只积压，站定富余自动解除）。
+     * 3) 动态分辨率梯子——每 8 帧评估：EMA 超预算连续 3 次 → 降档；
+     *    富余（<55%）连续 12 次且站定 → 升档（移动中不升——防抖动）；
+     *    换档后 3s 冷却（防升降振荡的质量泵动）。换档 = native realloc
+     *    + resets++（诚实记账）+ [drs] 行。
+     */
+    private void paceTick(boolean moving, long frameMs) {
+        paceFrameMs = paceFrameMs <= 0.0
+                ? (double) frameMs
+                : paceFrameMs * (1.0 - PACE_EMA_ALPHA)
+                        + (double) frameMs * PACE_EMA_ALPHA;
+
+        // 1) spp 封顶
+        final int cap = moving ? 1
+                : (frameMs > PathtraceMod.PACE_BUDGET_MS ? PathtraceMod.LIVE_SPP : 0);
+        if (cap != paceSppCapSent) {
+            Native.livePaceNative(cap);
+            r.pass(String.format(
+                    "[pace] spp/帧封顶 %s → %d（%s；帧 %dms / EMA %.0fms / 预算 %dms）",
+                    paceSppCapSent < 0 ? "未设" : String.valueOf(paceSppCapSent),
+                    cap,
+                    moving ? "移动——累积每帧在清，加档白烧"
+                            : frameMs > PathtraceMod.PACE_BUDGET_MS
+                                    ? "帧超预算——稳态档"
+                                    : "富余——解除封顶",
+                    frameMs, paceFrameMs, PathtraceMod.PACE_BUDGET_MS));
+            paceSppCapSent = cap;
+        }
+
+        // 2) 摄取让路（v0.5.1 争用的对症刀）
+        final double busyThreshold = PathtraceMod.PACE_BUDGET_MS * 1.5;
+        final boolean busy = paceFrameMs > busyThreshold;
+        if (busy != paceBusy) {
+            paceBusy = busy;
+            PathtraceMod.setGpuPaceBusy(busy);
+            r.info(String.format(
+                    "[pace] 摄取让路 %s（EMA %.0fms %s 阈值 %.0fms）",
+                    busy ? "开启：BLAS 构建暂停（事件积压不丢，解除后补）"
+                            : "解除：摄取恢复",
+                    paceFrameMs, busy ? "超" : "回落至", busyThreshold));
+        }
+
+        // 3) 动态分辨率梯子
+        if (!PathtraceMod.PACE_DRS) {
+            return;
+        }
+        if (++paceEvalCount < PACE_EVAL_EVERY) {
+            return;
+        }
+        paceEvalCount = 0;
+        if (elapsed() - paceLastRungMs < PACE_RUNG_COOLDOWN_MS) {
+            return;   // 冷却期——刚换过档，让 EMA 重新稳定
+        }
+        if (paceRung < paceRungW.length - 1
+                && paceFrameMs > PathtraceMod.PACE_BUDGET_MS) {
+            if (++paceDownStrikes >= PACE_DOWN_STRIKES) {
+                paceDownStrikes = 0;
+                paceUpStrikes = 0;
+                applyPaceRung(paceRung + 1, String.format(
+                        "EMA %.0fms 超预算 %dms", paceFrameMs,
+                        PathtraceMod.PACE_BUDGET_MS));
+            }
+        } else {
+            paceDownStrikes = 0;
+        }
+        if (paceRung > 0 && !moving
+                && paceFrameMs < PathtraceMod.PACE_BUDGET_MS * 0.55) {
+            if (++paceUpStrikes >= PACE_UP_STRIKES) {
+                paceUpStrikes = 0;
+                paceDownStrikes = 0;
+                applyPaceRung(paceRung - 1, String.format(
+                        "EMA %.0fms 持续富余且站定", paceFrameMs));
+            }
+        } else {
+            paceUpStrikes = 0;
+        }
+    }
+
+    /** v0.5.2 PACE：切换分辨率梯位（native realloc + [drs] 行）。 */
+    private void applyPaceRung(int rung, String why) {
+        paceRung = rung;
+        paceLastRungMs = elapsed();
+        final int w = paceRungW[rung];
+        final int h = Math.max(120, Math.round(w * paceAspect));
+        Native.liveResizeNative(w, h);
+        r.pass(String.format(
+                "[drs] RT 分辨率 → %d×%d（梯位 %d/%d，顶档 %d；%s；EMA %.0fms）",
+                w, h, rung + 1, paceRungW.length, paceRungW[0], why, paceFrameMs));
     }
 
     private void reportProgress(long elapsedMs) {

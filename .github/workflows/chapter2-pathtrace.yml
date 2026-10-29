@@ -13,12 +13,17 @@ permissions:
 
 jobs:
   # ------------------------------------------------------------------
-  # 第二章 2.4 阶段交付：pathtrace mod JAR（2.2/2.3 闭环 + v0.5.1 事件驱动摄取）。
-#   v0.5.1 EVENT-DRIVEN：PathtraceBuiltChunkMixin（class_851#method_60908 setData
+  # 第二章 2.4 阶段交付：pathtrace mod JAR（2.2/2.3 闭环 + v0.5.1 事件
+  # 驱动摄取 + v0.5.2 PACE 可玩性轮）。
+  #   v0.5.2 PACE：M3 真机判词「玩不了，1～2 帧」——三因叠加定谳
+  #   （移动即早期加档 8 spp / v0.5.1 摄取 flood 抢 GPU / 渲染线程硬等
+  #   RT 帧）四刀齐落：spp 封顶 + 动态分辨率梯子 + 摄取让路 + 呈现
+  #   非阻塞（快照序列号跳重复上传）。
+#   v0.5.1 EVENT-DRIVEN（本产线仍验证其 mixin 类与 JAR 内容）：PathtraceBuiltChunkMixin（class_851#method_60908 setData
 #   HEAD，intermediary 字面名 + remap=false 零 refmap）→ 事件泵 → 常驻
 #   Pathtrace-Ingest 线程；哨兵全量扫描兜底（mixin 未命中回退 500ms）。
   #   1. 交叉编译 libradiance_pathtrace.dylib (iphoneos arm64, JNI 场景
-  #      管理 + 离屏 pathtrace + live 会话族)
+  #      管理 + 离屏 pathtrace + live 会话族 + PACE 三新入口)
   #   2. 编译 pathtrace.metallib (MSL metal3: scene_trace_kernel 2.1 原样
   #      + pathtrace_kernel 累积模式 + present_kernel 2.3 新增)
   #   3. ad-hoc 签名（ldid / codesign 兜底）
@@ -45,16 +50,16 @@ jobs:
           set -ex
           chmod +x chapter2/pathtrace/build.sh
           bash chapter2/pathtrace/build.sh
-          JAR="chapter2/pathtrace/pathtrace-0.5.1.jar"
+          JAR="chapter2/pathtrace/pathtrace-0.5.2.jar"
           test -f "$JAR"
-          cp "$JAR" ./pathtrace-0.5.1.jar
+          cp "$JAR" ./pathtrace-0.5.2.jar
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: pathtrace-jar
           path: |
-            pathtrace-0.5.1.jar
+            pathtrace-0.5.2.jar
             chapter2/pathtrace/build/native/libradiance_pathtrace.dylib
             chapter2/pathtrace/build/native/pathtrace.metallib
           if-no-files-found: error
@@ -111,6 +116,11 @@ jobs:
             nm -gU "$DYLIB" | grep -q "Java_net_prisma_pathtrace_Native_${SYM}" \
               && echo "JNI_EXPORT_OK(${SYM})"
           done
+          # v0.5.2 PACE 三新入口：spp 封顶 / 分辨率梯位切换 / 快照序列号
+          for SYM in livePaceNative liveResizeNative liveSerialNative; do
+            nm -gU "$DYLIB" | grep -q "Java_net_prisma_pathtrace_Native_${SYM}" \
+              && echo "JNI_EXPORT_OK(${SYM})"
+          done
           nm -gU "$DYLIB" | grep -q "Java_net_prisma_pathtrace_Native_shutdownNative" \
             && echo "JNI_EXPORT_OK(shutdownNative)"
           # 2.1 已删的 v0.4 诊断矩阵入口不得在 dylib 中出现
@@ -123,7 +133,7 @@ jobs:
           file "$METALLIB"
           test -s "$METALLIB"
           # JAR 内容验证：mixin 类 + mixins.json 必须在包内
-          JAR="chapter2/pathtrace/pathtrace-0.5.1.jar"
+          JAR="chapter2/pathtrace/pathtrace-0.5.2.jar"
           unzip -l "$JAR" | grep -q "net/prisma/pathtrace/mixin/PathtraceWindowMixin.class" \
             && echo "JAR_MIXIN_CLASS_OK"
           # v0.5.1: 事件驱动摄取 mixin（BuiltChunk.setData HEAD）
@@ -134,67 +144,73 @@ jobs:
           unzip -l "$JAR" | grep -q "fabric.mod.json" \
             && echo "JAR_FABRIC_MOD_OK"
 
-      - name: Release (pathtrace-v0.5.1, prerelease)
+      - name: Release (pathtrace-v0.5.2, prerelease)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -ex
-          TAG="pathtrace-v0.5.1"
-          TITLE="pathtrace v0.5.1 EVENT-DRIVEN — 事件驱动摄取（mixin 钩 BuiltChunk.setData：网格发布点直连，发现延迟 500ms→50ms）+ 摄取线程常驻（窗口结束后世界变化持续入库——RT 世界覆盖从开局 208 段扩至全量）+ 2s 哨兵兜底（mixin 未命中自动回退 500ms 全量轮询，永不退化）——探针转正（2.4 第一刀）"
+          TAG="pathtrace-v0.5.2"
+          TITLE="pathtrace v0.5.2 PACE — 可玩性轮（移动 spp 封顶 1：早期加档窗每帧重装填的 4-8× 白烧预算切除）+ 动态分辨率梯子（帧时间 EMA 引导 720→225 五档自适应，非固定档）+ 摄取让路（RT 帧超预算时 BLAS 构建暂停——v0.5.1 进世界 flood 挤压 GPU 的对症刀）+ 呈现非阻塞（快照序列号跳重复上传，渲染线程不再硬等 RT 帧）——M3「1～2 帧」根因链三刀齐断"
           NOTES_FILE=release-notes.md
           cat > "$NOTES_FILE" <<'EOF'
-          # pathtrace v0.5.1 — EVENT-DRIVEN（事件驱动摄取：探针转正）
+          # pathtrace v0.5.2 — PACE（可玩性轮：M3 1～2 帧 → 目标 30 FPS）
 
-          **背景**：v0.5.0 CANOPY 真机回收（M3 完整 90s 窗 + 会话续跑）：
-          用户判词「没看出啥毛病」——两刀全部落地（树冠见孔、树影斑驳、
-          开局闪屏消亡 resets=0 全程实锚），画质三问收口，2.2/2.3 章节
-          关闭。唯一遗留的是**摄取的有界窗口**：S4/S5 窗口（~40s）结束
-          后摄取线程死亡——真机实测 208/6936 段入库、积压 6572：开局
-          之外的区块变化（挖掘/放置/加载新地形）永远进不了 RT 世界，
-          远处 ±X/+Y 射线 miss 即此边界。
+          **背景**：v0.5.1 真机实测（M3）：**玩不了，移动 1～2 帧**。
+          数字账（M3 实测锚 45-49 Mray/s）：
+          - 相机一动 → 累积清零 → 早期加档窗自动再装填 → **每帧按
+            8 spp 派发**：720×332×8 样本 × 3.5-7 射线/样本（树冠
+            cutout 重查）= 6.7-13.4M 射线/帧 ≈ **137-290ms/帧 = 3-7 FPS**，
+            且下一帧又清零——4× 预算纯白烧；
+          - v0.5.1 的摄取 flood（进世界即全量 ~6936 段 BLAS 构建）
+            恰好撞上玩家开始走动——GPU 进一步被挤压 → **1-2 帧**；
+          - 渲染线程每帧 waitUntilCompleted 硬等 RT 帧 + worker 持锁
+            横跨等待——swap 被拖成 RT 节奏，输入都卡。
+          （澄清：live RT 并非 4K——720×窗口比；但分辨率确实是本版
+          拿下的杠杆之一。）
 
-          **本版一刀（2.4 第一刀：探针转正）——事件驱动摄取**：
-          1. **mixin 事件泵**：新增 PathtraceBuiltChunkMixin，钩
-             ChunkBuilder$BuiltChunk.setData（class_851#method_60908，
-             HEAD——vanilla 发布新 mesh 的唯一写点，即旧轮询 dirty
-             判定观察的同一信号源）。发布即入无锁队列（渲染线程 O(1)，
-             OFF 态一次 volatile 读）。发现延迟 500ms → ≤50ms。
-          2. **摄取线程常驻**：窗口结束后不再 return——Pathtrace-Ingest
-             daemon 线程无限运行（事件批 ≤8/轮 + 20ms 节流 ≈ 400 段/s
-             上限防 flood；TLAS tick 1s 聚合；世界退出挂起、重进后
-             哨兵全量重扫）。世界变化持续入库：rebuild → epoch 递增 →
-             live 累积按需重收敛（物理正确——场景变了就该重收敛）。
-          3. **2s 哨兵兜底**：全量 dirty 扫描（重定位/失效/未摄取远段
-             ——事件通道不覆盖的三类信号）。mixin 未命中时自动升回
-             500ms 全量轮询 = v0.5.0 等价回退，**永不退化**。
-          4. **零 native 改动**：rebuildSingleNative/invalidate/
-             frameTickNative 任意时刻可调（S8.4 重锚与 ping-pong 已实证
-             live 期间并行安全）；S7 离屏诊断帧与 scene_trace_kernel
-             逐字不动（字节级可比锚点保持）。
+          **本版四刀（PACE 步调控制器——native+Java 双侧）**：
+          1. **移动降档 spp**：相机在动 → spp/帧封顶 **1**（native
+             livePaceNative；站定自动解除——早期加档窗恢复全功率收敛，
+             噪点对策原样保留）。移动射线预算直接砍 4-8×。
+          2. **动态分辨率梯子**（用户点名）：帧时间 EMA（α=0.25）
+             引导五档：rtW=720 顶档 → ×0.75 → ×0.5625 → ×0.4375 →
+             ×0.3125 底档（随窗比定高）。超预算（默认 33ms = ≥30 FPS）
+             连续 3 评估降档；富余且站定连续 12 评估升档；换档 3s 冷却
+             防质量泵动。换档 = native realloc + resets++（诚实记账）+
+             旧缓冲延迟释放；-Dpathtrace.drs=false 恢复固定档；
+             -Dpathtrace.rtW 语义升级为【梯顶】。
+          3. **摄取让路**：RT 帧超预算（EMA > 1.5× 预算）→ 摄取线程
+             暂停 BLAS 构建（事件不丢只积压，解除后按批补）——进世界
+             flood 从「挤死渲染」变成「自适应让路」。
+          4. **呈现非阻塞**：livePresentNative 改 completed 探查 +
+             快照序列号（RT 慢于 swap 时跳过重复上传，只置 blit）；
+             liveFrameNative 等待移出 g_liveLock——渲染线程与 RT 节奏
+             彻底解耦，输入不再卡。
 
-          **效果**：RT 世界覆盖从开局 ~208 段 → 全量（挖掘即见、
-          走出去即加载）；发现延迟 10× 收窄；CPU 轮询空转消除。
+          **预期（M3，45-49 Mray/s 锚定）**：移动 1 spp ≈ 0.84-1.67M
+          射线/帧 ≈ 18-37ms → **27-45 FPS**；重场景自动落 315-405 档
+          保 30；站定 2 spp 稳态累积，DRS 自动择档。A20 Pro（172
+          Mray/s）一切顶档足够——DRS 基本不动，无回退。
 
-          **使用协议**：替换 mods/ 内旧 JAR，进世界后正常游玩（本版
-          重点恰是【动起来】：挖掘/放置/走远）。回报
-          pathtrace_report.txt + 三 PNG，v0.5.1 新增重点行：
-          - **[ingest] mixin 事件命中**——事件通道激活的直接证据
-            （未出现 ⇒ mixin 未命中，哨兵回退 500ms 轮询——功能零损失
-            但请回报）
-          - **[ingest] 摄取线程转常驻**——窗口结束后摄取持续
-          - **[ingest] 心跳**——事件 +N / 哨兵重建 +N / 队列深度 /
-            模式（EVENT+SENTRY 或 SENTRY(回退)）
-          - **挖掘验证**：挖/放几个方块，画面应在 ≤2s 内反映变化
-            （重收敛会有短暂噪点——物理正确）
-          - **[S8soft] method_60908** 行——钩点符号运行时存在性取证
+          **使用协议**：替换 mods/ 内旧 JAR，进世界【动起来走两步】——
+          本版验收点就是移动帧率。回报 pathtrace_report.txt，新增重点行：
+          - **[pace] spp/帧封顶**——移动 1 / 超预算 稳态档 / 0 的变迁序列
+          - **[drs] RT 分辨率**——梯位变迁（含 EMA 与理由）+ native
+            resize 行（resets 计数诚实递增）
+          - **[pace] 摄取让路 开启/解除**——flood 让路的自平衡证据
+          - **[ingest] 心跳 …让路 N 轮**——让路期间跳过的批周期数
+          - **[compose] 心跳 skipUpload=N realloc=N**——序列号跳上传
+            与 RT 纹理重建计数
+          - **[S8.0]** 行新增 PACE 参数回显（预算/DRS 开关/梯顶）
 
-          开关：-Dpathtrace.twin=true（复现 90s 取证协议）/
-          -Dpathtrace.pingpong=false（对照）
+          开关：-Dpathtrace.drs=false（固定档回退）/
+          -Dpathtrace.paceBudgetMs=50（放宽到 20 FPS 目标——重设备）/
+          -Dpathtrace.rtW=540（压低梯顶）。其余既有开关不变。
           EOF
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release upload "$TAG" ./pathtrace-0.5.1.jar --clobber --repo "$GITHUB_REPOSITORY"
+            gh release upload "$TAG" ./pathtrace-0.5.2.jar --clobber --repo "$GITHUB_REPOSITORY"
           else
-            gh release create "$TAG" ./pathtrace-0.5.1.jar \
+            gh release create "$TAG" ./pathtrace-0.5.2.jar \
                  --title "$TITLE" --notes-file "$NOTES_FILE" \
                  --prerelease --repo "$GITHUB_REPOSITORY"
           fi

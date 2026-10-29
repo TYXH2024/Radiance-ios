@@ -58,11 +58,40 @@ public final class PathtraceMod {
     // - spp 默认 4→2：720×~332×2 ≈ 480×270×4 的 ~0.92× 射线/帧——分辨率
     //   换样本、吞吐守恒、帧率不掉；叠加 native 侧早期加档（累积重启后
     //   头 512 spp 自动 ×4 档）与 shader 侧 firefly 拆分，噪点收敛显著加速。
-    private static final int LIVE_W = intProp("pathtrace.rtW", 720);
+    /** 包内可见（v0.5.2 PACE：LiveSession 分辨率梯子的顶档）。 */
+    static final int LIVE_W = intProp("pathtrace.rtW", 720);
     /** v0.4.9: 仅作窗口反射链失败时的回退高（正常按窗比实时算）。 */
     private static final int LIVE_H_FALLBACK = intProp("pathtrace.rtH", 405);
     /** 包内可见（LiveSession 的 camHit 分母——v0.4.1 分母修复）。 */
     static final int LIVE_SPP = intProp("pathtrace.spp", 2);
+
+    // ---- v0.5.2 PACE：可玩性轮（M3 真机判词「玩不了，1～2 帧」）----
+    // 根因链（三因叠加，全部有数字锥）：
+    //   ①移动即加档：相机一动 → liveReset → 早期加档窗再装填 → 每帧
+    //     spp=8（720×332×8×3.5-7 射线 = 6.7-13.4M/帧 ÷ M3 实测 45-49
+    //     Mray/s ≈ 137-290ms/帧 = 3-7 FPS，且下一帧又清零——4× 预算白烧）；
+    //   ②v0.5.1 摄取 flood：进世界即全量 BLAS 构建（6936 段 @≤400/s）
+    //     ——恰好是玩家开始走动的时刻，GPU 被进一步挤压 → 1-2 帧；
+    //   ③渲染线程硬等：livePresentNative waitUntilCompleted + worker
+    //     持锁横跨等待——swap 被拖成 RT 节奏，输入都卡。
+    // 四刀（native 侧 metal_pathtrace.m 同步）：spp 封顶（livePaceNative）/
+    // 动态分辨率梯子（liveResizeNative）/ 呈现非阻塞+序列号跳上传
+    // （liveSerialNative）/ 摄取让路（本类 busy 标志 → SceneProxy）。
+    // rtW 语义升级：动态分辨率梯子的【顶档】（非固定值——默认行为变为
+    // 自适应，-Dpathtrace.drs=false 恢复固定档）。
+    static final boolean PACE_DRS = flagProp("pathtrace.drs", true);
+    /** 帧时间预算（ms）——梯子升降与让路阈值的基准。默认 33（≥30 FPS）。 */
+    static final int PACE_BUDGET_MS = intProp("pathtrace.paceBudgetMs", 33);
+    /** RT 帧超预算时为真——SceneProxy 摄取线程据此让路（BLAS 暂停）。 */
+    static volatile boolean gpuPaceBusy;
+
+    static void setGpuPaceBusy(boolean busy) {
+        gpuPaceBusy = busy;
+    }
+
+    static boolean isGpuPaceBusy() {
+        return gpuPaceBusy;
+    }
 
     static int intProp(String name, int dflt) {
         try {
@@ -89,7 +118,7 @@ public final class PathtraceMod {
             return;
         }
         ProbeReport r = new ProbeReport("pathtrace_report.txt");
-        r.header("路径追踪探针 (pathtrace 0.5.1)");
+        r.header("路径追踪探针 (pathtrace 0.5.2)");
         r.info("触发方式: " + triggerSource);
 
         if (isDisabled()) {
@@ -471,8 +500,13 @@ public final class PathtraceMod {
                 r.pass(String.format("[S8.0] 实时会话开启: %dx%d spp/帧=%d"
                         + "（早期加档 ×4 至 512 spp，自适应）bounces=%d"
                         + " 宽高比随窗: %s"
-                        + "（静止收敛 / 移动重置；场景变化 native 自检重置）",
-                        liveW, liveH, LIVE_SPP, RENDER_BOUNCES, aspectNote));
+                        + "（静止收敛 / 移动重置；场景变化 native 自检重置）"
+                        + " PACE: 移动 spp 封顶 1 / 帧预算 %dms"
+                        + " / 动态分辨率 %s（梯顶 %d）",
+                        liveW, liveH, LIVE_SPP, RENDER_BOUNCES, aspectNote,
+                        PACE_BUDGET_MS,
+                        PACE_DRS ? "开" : "关（pathtrace.drs=false 固定档）",
+                        LIVE_W));
                 if (composeEnabled()) {
                     PathtraceHook.arm(r);
                 } else {

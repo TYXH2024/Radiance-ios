@@ -68,6 +68,29 @@
 //                          the GL upload can never tear against an in-flight
 //                          present dispatch.
 //
+//    [v0.5.2 additions] PACE (playability round — the M3 field verdict was
+//                        1-2 FPS while moving): three JNI entries +
+//                        one structural change, all in the live family:
+//                        - livePaceNative(sppCap): Java pace controller
+//                          clamps spp/frame (moving=1, over-budget=steady
+//                          tier, 0=uncapped). The v0.4.9 early-boost window
+//                          re-armed on EVERY camera move (accumulation
+//                          reset ⇒ sppTotal<512 ⇒ sppEff=8) — while moving
+//                          each frame cost 4x rays for zero benefit (the
+//                          next move resets it again).
+//                        - liveResizeNative(w,h): dynamic resolution rung
+//                          switch — realloc accum/image/staging, honest
+//                          resets++, old buffers retired (deferred release
+//                          protects the render thread's aliasing direct
+//                          ByteBuffer).
+//                        - liveSerialNative(): snapshot serial for the
+//                          compositor's skip-duplicate-upload.
+//                        - livePresentNative is now NON-BLOCKING (completed
+//                          probe + serial instead of waitUntilCompleted) and
+//                          liveFrameNative waits OUTSIDE g_liveLock — the
+//                          render thread no longer queues behind a worker
+//                          holding the lock across a 137-290ms GPU wait.
+//
 //    [removed vs 2.1]   The v0.4 diagnostic matrix (sceneInfoNative raw-AABB
 //                        audit, setPlacementModeNative dual-hypothesis mode) —
 //                        its questions were answered and sealed by the 2.1
@@ -225,6 +248,15 @@ static uint32_t g_liveW = 0, g_liveH = 0, g_liveSpp = 4, g_liveBounces = 2;
 static uint32_t g_liveSppEarly = 0;            // 0 = 未启用（spp*4 <= spp 不会发生）
 static BOOL g_liveEarlyDone = NO;             // 加档段→稳态段一次性打行用
 static uint32_t g_liveLastSpp = 0;            // v0.4.9: 末帧实际派发的 spp（camHit 分母随档位）
+// v0.5.2 PACE：Java 侧步调控制器下发的 spp/帧封顶（0 = 不封顶）。
+// 移动 → 1（射线预算砍 4-8×，累积反正每帧都在清）；帧超预算 → 稳态
+// 档；富余 → 解除（早期加档窗恢复全功率收敛）。变迁才打 [pace] 行。
+static uint32_t g_liveSppCap = 0;
+// v0.5.2 PACE：呈现快照序列号。livePresentNative 非阻塞化后，序列号
+// 是“快照内容已刷新”的唯一凭证——GlComposer 据此跳过重复上传
+// （RT 慢于 swap 时 58/60 次上传是同一帧字节）。
+static uint64_t g_presentSerial = 0;
+static BOOL g_presentErrLogged = NO;         // 上帧失败行防风暴（仅首例打行）
 static id<MTLBuffer> g_liveAccum = nil;      // float4 per pixel
 static id<MTLBuffer> g_liveImage = nil;      // uchar4 per pixel (presented)
 static id<MTLBuffer> g_liveStaging = nil;    // uchar4 per pixel (stable snapshot)
@@ -237,6 +269,14 @@ static id<MTLBuffer> g_liveStaging = nil;    // uchar4 per pixel (stable snapsho
 // 进程死亡不可容忍。Java 侧同步四重防御（分段上传/容量闸门/完整
 // 五元组重置/污染取证行）见 GlComposer.present。
 static uint8_t *g_liveStagingData = NULL;
+// v0.5.2 PACE：两段式退休的旧 staging（DRS 换档时渲染线程可能仍持有
+// aliasing 它的 direct ByteBuffer——直推 g_retired = 悬垂读窗口，v0.4.2
+// SIGSEGV 家族）。段一：换档时挂起（不释放）；段二：下一次快照刷新
+//（渲染线程自身，此时上一 direct buffer 的上传必已完成——同线程顺序
+// 调用）才入 g_retired 延迟释放。多重 resize 首撞：旧的直接入 g_retired
+//（梯位冷却 ≥3s + g_retired flush ≥500ms 双重宽限——且换档前提是 live
+// 帧在完成 = 渲染线程活跃）。
+static id<MTLBuffer> g_stagingRetired = nil;
 static id<MTLBuffer> g_liveUniform = nil;    // PtUniforms (shared)
 static id<MTLBuffer> g_liveStats = nil;      // 2 x uint32 atomics (per frame)
 static id<MTLCommandBuffer> g_liveCmd = nil; // last committed frame (accum+present)
@@ -2581,6 +2621,7 @@ Java_net_prisma_pathtrace_Native_liveBeginNative(
         }
         // Fresh session (idempotent: a second begin reallocates).
         g_liveAccum = nil; g_liveImage = nil; g_liveStaging = nil;
+        g_stagingRetired = nil;
         g_liveStagingData = NULL;
         g_liveUniform = nil; g_liveStats = nil; g_liveCmd = nil;
         const uint64_t pixels = (uint64_t)width * (uint64_t)height;
@@ -2632,6 +2673,9 @@ Java_net_prisma_pathtrace_Native_liveBeginNative(
             ? 16u : (uint32_t)sppPerFrame * 4u;
         g_liveEarlyDone = NO;
         g_liveLastSpp = 0;   // 尚无帧——Java 侧回退 LIVE_SPP 常量
+        g_liveSppCap = 0;    // v0.5.2: 会话重开封顶归零（LiveSession 新实例同节奏）
+        g_presentSerial = 0; // v0.5.2: 快照序列号归零
+        g_presentErrLogged = NO;
         g_liveFrames = 0; g_liveSppTotal = 0; g_liveResets = 0;
         g_liveTotalQueries = 0; g_liveLastQueries = 0; g_liveLastCamHits = 0;
         g_liveLastMs = 0.0;
@@ -2669,29 +2713,42 @@ Java_net_prisma_pathtrace_Native_liveFrameNative(
     (void)cls;
     jint out[2] = { 0, 0 };
     jintArray result = (*env)->NewIntArray(env, 2);
+    // v0.5.2 PACE：等待上一帧移出 g_liveLock。旧版 worker 持锁横跨
+    // waitUntilCompleted（GPU 帧 137-290ms），渲染线程的 present/stats/
+    // resize 全在锁上排队——帧率被 RT 节奏拖死、输入都卡。窄化后：
+    // 句柄快照（锁内）→ 等待+stats 读取（锁外；写者仅本线程与已完成
+    // 的 kernel）→ 守卫/uniform/编码（锁内）。锁序不变（后段仍嵌
+    // g_sceneLock，L→S）。单 worker 线程保证两段间无第二派发者。
+    id<MTLCommandBuffer> prevCmd = nil;
     @synchronized (g_liveLock) {
         if (result != NULL) { (*env)->SetIntArrayRegion(env, result, 0, 2, out); }
         if (!g_liveActive || g_device == nil || g_ptPipeline == nil) {
             return result;
         }
-        // 1. Wait for the previous frame (uniform/stats/accum buffers idle —
-        //    the previous kernel must not read the uniforms we are about to
-        //    rewrite or the stats we are about to memset).
-        if (g_liveCmd != nil) {
-            [g_liveCmd waitUntilCompleted];
-            if (g_liveCmd.error != nil) {
-                rp("[live] FATAL: frame dispatch failed: %s",
-                   g_liveCmd.error.localizedDescription.UTF8String);
-                g_liveActive = NO;
-                return result;
-            }
-            const uint32_t *stats = (const uint32_t *)g_liveStats.contents;
-            g_liveLastQueries = stats[0];
-            g_liveLastCamHits = stats[1];
-            g_liveTotalQueries += stats[0];
-            out[0] = (jint)g_liveLastQueries;
-            out[1] = (jint)g_liveLastCamHits;
-            if (result != NULL) { (*env)->SetIntArrayRegion(env, result, 0, 2, out); }
+        prevCmd = g_liveCmd;
+    }
+    // 1. Wait for the previous frame (uniform/stats/accum buffers idle —
+    //    the previous kernel must not read the uniforms we are about to
+    //    rewrite or the stats we are about to memset).
+    if (prevCmd != nil) {
+        [prevCmd waitUntilCompleted];
+        if (prevCmd.error != nil) {
+            rp("[live] FATAL: frame dispatch failed: %s",
+               prevCmd.error.localizedDescription.UTF8String);
+            @synchronized (g_liveLock) { g_liveActive = NO; }
+            return result;
+        }
+        const uint32_t *stats = (const uint32_t *)g_liveStats.contents;
+        g_liveLastQueries = stats[0];
+        g_liveLastCamHits = stats[1];
+        g_liveTotalQueries += stats[0];
+        out[0] = (jint)g_liveLastQueries;
+        out[1] = (jint)g_liveLastCamHits;
+        if (result != NULL) { (*env)->SetIntArrayRegion(env, result, 0, 2, out); }
+    }
+    @synchronized (g_liveLock) {
+        if (!g_liveActive || g_device == nil || g_ptPipeline == nil) {
+            return result;
         }
         // 1.5 v0.4.8 毒帧守卫：上一完成帧 camHit<2%（与 CAMHIT_DEAD_PCT 同阈值）
         //     ⇒ 其天空色样本已入累积——本帧转 store 模式覆写（等效旧“重建即
@@ -2772,9 +2829,13 @@ Java_net_prisma_pathtrace_Native_liveFrameNative(
         // v0.4.9: 自适应 spp——累积重启后的加档窗口（sppTotal<kSppEarlyUntil）
         // 用 g_liveSppEarly，其余回落 g_liveSpp。累积重启会自动再装填加档窗
         //（相机一动 → 最噪时段 → 自动 ×4 档位）——正是噪点反馈的对症点。
-        const uint32_t sppEff =
+        const uint32_t sppEffRaw =
             (g_liveSppTotal < kSppEarlyUntil && g_liveSppEarly > g_liveSpp)
                 ? g_liveSppEarly : g_liveSpp;
+        // v0.5.2 PACE：Java 步调控制器封顶（移动=1 / 超预算=稳态档 /
+        // 0=不封顶——早期加档窗全功率）。原版行为在 cap=0 时逐字节等价。
+        const uint32_t sppEff =
+            (g_liveSppCap > 0 && sppEffRaw > g_liveSppCap) ? g_liveSppCap : sppEffRaw;
         if (!g_liveEarlyDone && g_liveSppTotal >= kSppEarlyUntil && sppEff == g_liveSpp
                 && g_liveFrames != 0) {
             g_liveEarlyDone = YES;
@@ -2835,10 +2896,16 @@ Java_net_prisma_pathtrace_Native_liveResetNative(JNIEnv *env, jclass cls) {
     }
 }
 
-// Render thread (GL compositor): wait for the last committed frame, snapshot
-// the tonemapped image into the staging buffer and return a direct ByteBuffer
-// aliasing it. The snapshot is stable — a subsequently committed frame can
-// never tear the bytes the GL upload is reading.
+// Render thread (GL compositor): NON-BLOCKING snapshot of the tonemapped
+// image (v0.5.2 PACE)。旧版：waitUntilCompleted —— 渲染线程每次 swap 都
+// 硬等一个完整 RT 帧（M3 移动时 137-290ms），帧率被拖成 RT 节奏、输入
+// 都卡。新版：上一帧已完成 → 刷新 staging 快照并递增序列号；未完成 →
+// 原样返回既有快照（字节与序列号均不变——GlComposer 跳过重复上传，
+// 只置 blit）。快照稳定性论证（单 staging，无需双缓冲）：staging 的唯
+// 一写者是本函数（渲染线程单线程）；memcpy 仅在 cmd.completed 时发生
+// 于 g_liveLock 内——此时无 kernel 在写 g_liveImage（下一个命令缓冲需
+// 拿锁才能 commit）。撕裂读接结构不可能。旧缓冲的悬垂 direct ByteBuffer
+// 由 liveResizeNative 的延迟释放机制兑保。
 JNIEXPORT jobject JNICALL
 Java_net_prisma_pathtrace_Native_livePresentNative(JNIEnv *env, jclass cls) {
     (void)cls;
@@ -2847,16 +2914,117 @@ Java_net_prisma_pathtrace_Native_livePresentNative(JNIEnv *env, jclass cls) {
                 || g_liveStagingData == NULL) {
             return NULL;
         }
-        [g_liveCmd waitUntilCompleted];
-        if (g_liveCmd.error != nil) {
-            rp("[live] present: last frame failed: %s",
-               g_liveCmd.error.localizedDescription.UTF8String);
-            return NULL;
+        if (g_liveCmd.completed) {
+            if (g_liveCmd.error != nil) {
+                // 上帧失败：保留旧快照（冻结温和于游戏帧穿透闪烁），序列
+                // 号不动 → 上传自然跳过。仅首例打行防风暴。
+                if (!g_presentErrLogged) {
+                    g_presentErrLogged = YES;
+                    rp("[live] present: 上帧派发失败（快照冻结至下一干净帧）: %s",
+                       g_liveCmd.error.localizedDescription.UTF8String);
+                }
+            } else {
+                g_presentErrLogged = NO;
+                memcpy(g_liveStagingData, g_liveImage.contents,
+                       (size_t)g_liveW * g_liveH * 4);
+                g_presentSerial++;
+                // v0.5.2：两段退休的段二——此刻是释放旧 staging 的安全点
+                //（本函数与上传同线程顺序执行，上一 direct buffer 必已消费）。
+                if (g_stagingRetired != nil) {
+                    @synchronized (g_sceneLock) {
+                        [g_retired addObject:g_stagingRetired];
+                    }
+                    g_stagingRetired = nil;
+                }
+            }
         }
-        memcpy(g_liveStagingData, g_liveImage.contents,
-               (size_t)g_liveW * g_liveH * 4);
         return (*env)->NewDirectByteBuffer(env, g_liveStagingData,
                                            (jlong)((size_t)g_liveW * g_liveH * 4));
+    }
+}
+
+// v0.5.2 PACE：当前快照序列号。调用方（渲染线程）与 livePresentNative
+// 同线程顺序调用——两次调用之间不可能发生第二次刷新，序列号与返回
+// 字节内容严格一致（无除单线程序以外的竞争窗口）。
+JNIEXPORT jlong JNICALL
+Java_net_prisma_pathtrace_Native_liveSerialNative(JNIEnv *env, jclass cls) {
+    (void)env; (void)cls;
+    @synchronized (g_liveLock) {
+        return (jlong)g_presentSerial;
+    }
+}
+
+// v0.5.2 PACE：RT worker 线程（LiveSession 步调控制器）下发 spp/帧封顶。
+// 0 = 不封顶（v0.4.9 原版语义）。变迁才打行（防风暴）。
+JNIEXPORT void JNICALL
+Java_net_prisma_pathtrace_Native_livePaceNative(JNIEnv *env, jclass cls, jint sppCap) {
+    (void)env;
+    @synchronized (g_liveLock) {
+        const uint32_t cap = sppCap < 0 ? 0u : (uint32_t)sppCap;
+        if (cap == g_liveSppCap) { return; }
+        const uint32_t old = g_liveSppCap;
+        g_liveSppCap = cap;
+        rp("[pace] spp/帧封顶 %u → %u%s", (unsigned)old, (unsigned)cap,
+           cap == 0 ? "（不封顶——早期加档窗全功率收敛）" : "");
+    }
+}
+
+// v0.5.2 PACE：RT worker 线程——动态分辨率梯位切换。重分配
+// accum/image/staging（uniform/stats 尺寸无关，不重分配）；重置累积
+// （resets++ 诚实记账——换了采样格就该重收敛，物理正确）。旧缓冲推入
+// g_retired 延迟释放：渲染线程可能仍持有 aliasing 旧 staging 的 direct
+// ByteBuffer，立即释放 = 悬垂指针读（v0.4.2 同类 SIGSEGV 家族）；
+// TLAS 重建 flush 点统一释放（ping-pong 节拍 ≤500ms——有界延迟）。
+// 在飞命令缓冲先排空（本函数与派发同线程——无死锁；encoder 对旧缓冲
+// 的引用在此之前已终结）。锁序 L→S 与 liveFrameNative 一致。
+JNIEXPORT void JNICALL
+Java_net_prisma_pathtrace_Native_liveResizeNative(JNIEnv *env, jclass cls,
+        jint width, jint height) {
+    (void)env;
+    @synchronized (g_liveLock) {
+        if (!g_liveActive || g_device == nil) { return; }
+        if (width <= 0 || height <= 0 || width > 4096 || height > 4096
+                || ((uint32_t)width == g_liveW && (uint32_t)height == g_liveH)) {
+            return;   // 非法/同尺寸 no-op
+        }
+        if (g_liveCmd != nil) { [g_liveCmd waitUntilCompleted]; }
+        const uint64_t pixels = (uint64_t)width * (uint64_t)height;
+        id<MTLBuffer> accum =
+            [g_device newBufferWithLength:(NSUInteger)(pixels * 16)
+                                 options:MTLResourceStorageModeShared];
+        id<MTLBuffer> image =
+            [g_device newBufferWithLength:(NSUInteger)(pixels * 4)
+                                 options:MTLResourceStorageModeShared];
+        id<MTLBuffer> staging =
+            [g_device newBufferWithLength:(NSUInteger)(2 * kGuardPad + pixels * 4)
+                                 options:MTLResourceStorageModeShared];
+        if (accum == nil || image == nil || staging == nil) {
+            rp("[drs] resize 拒绝: 缓冲分配失败 %dx%d（保持 %ux%u）",
+               width, height, (unsigned)g_liveW, (unsigned)g_liveH);
+            return;   // 局部 arc 释放，全局指针不动——会话无损
+        }
+        @synchronized (g_sceneLock) {
+            if (g_liveAccum != nil) { [g_retired addObject:g_liveAccum]; }
+            if (g_liveImage != nil) { [g_retired addObject:g_liveImage]; }
+            // staging 走两段退休（见 g_stagingRetired 声明注释）——直推
+            // g_retired 会开悬垂读窗口；首撞时旧的已过安全点，直接入。
+            if (g_stagingRetired != nil) { [g_retired addObject:g_stagingRetired]; }
+            g_stagingRetired = g_liveStaging;
+        }
+        g_liveAccum = accum;
+        g_liveImage = image;
+        g_liveStaging = staging;
+        g_liveStagingData = (uint8_t *)staging.contents + kGuardPad;
+        g_liveW = (uint32_t)width;
+        g_liveH = (uint32_t)height;
+        g_liveFrames = 0;
+        g_liveSppTotal = 0;
+        g_liveEarlyDone = NO;
+        g_liveLastSpp = 0;
+        g_liveResets++;
+        rp("[drs] resize %ux%u（resets=%llu，累积重收敛；旧缓冲延迟释放）",
+           (unsigned)g_liveW, (unsigned)g_liveH,
+           (unsigned long long)g_liveResets);
     }
 }
 

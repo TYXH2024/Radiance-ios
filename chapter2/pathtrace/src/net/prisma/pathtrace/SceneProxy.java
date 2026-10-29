@@ -129,6 +129,8 @@ final class SceneProxy {
     private long lastIngestHeartbeatMs = 0;
     /** 心跳窗口内事件计数（打完归零）。 */
     private long heartbeatEvents = 0;
+    /** v0.5.2 PACE：让路轮数（RT 帧超预算期间跳过的批周期数——心跳行回显）。 */
+    private long paceYields = 0;
     /** 心跳窗口内哨兵重建计数（打完归零）。 */
     private int heartbeatSweepRebuilds = 0;
 
@@ -520,6 +522,16 @@ final class SceneProxy {
                     sleepQuiet(500L);
                     continue;
                 }
+                // ---- v0.5.2 PACE 让路：RT 帧超预算时暂停 BLAS 构建。v0.5.1
+                // 的摄取 flood（进世界即全量 ~6936 段 @≤400/s）恰好撞上玩家
+                // 开始走动——M3 实测 GPU 被挤到 1-2 帧。让路语义：事件不丢
+                // 只积压（队列与哨兵 dirty 全保留），EMA 回落自动解除后按批
+                // 补齐；站定收敛时摄取全速（此时 RT 有富余）。----
+                if (PathtraceMod.isGpuPaceBusy()) {
+                    paceYields++;
+                    sleepQuiet(100L);
+                    continue;
+                }
                 // 相机缓存（哨兵距离排序用；失败容忍）
                 try {
                     lastCameraPos = readCameraPos();
@@ -567,11 +579,13 @@ final class SceneProxy {
                     if (hbEvents > 0 || hbSweep > 0 || eventsProcessed > 0) {
                         r.info(String.format(
                                 "[ingest] 心跳 t=%.0fs: 事件 +%d（累计 %d，批 %d）/ 哨兵重建 +%d"
-                                + "（扫描 %d 轮）/ 总 rebuild %d / 队列 %d / 模式 %s",
+                                + "（扫描 %d 轮）/ 总 rebuild %d / 队列 %d / 模式 %s"
+                                + " / 让路 %d 轮",
                                 now / 1000.0, hbEvents, eventsProcessed, eventBatches,
                                 hbSweep, sweepCount, rebuilds,
                                 PathtraceHook.meshQueueDepth(),
-                                PathtraceHook.meshEventArmed ? "EVENT+SENTRY" : "SENTRY(回退)"));
+                                PathtraceHook.meshEventArmed ? "EVENT+SENTRY" : "SENTRY(回退)",
+                                paceYields));
                     }
                 }
                 heartbeatEvents += batch;
