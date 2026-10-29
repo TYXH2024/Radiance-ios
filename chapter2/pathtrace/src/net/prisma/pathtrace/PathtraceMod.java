@@ -78,7 +78,7 @@ public final class PathtraceMod {
             return;
         }
         ProbeReport r = new ProbeReport("pathtrace_report.txt");
-        r.header("路径追踪探针 (pathtrace 0.4.7)");
+        r.header("路径追踪探针 (pathtrace 0.4.8)");
         r.info("触发方式: " + triggerSource);
 
         if (isDisabled()) {
@@ -455,7 +455,7 @@ public final class PathtraceMod {
                 // 同步加长，保证重锚/交叉复测消费器活到梯子收口。
                 long watchDeadlineMs = PathtraceMod.bisectEnabled()
                         ? PathtraceMod.bisectWindowMs() + 30_000L
-                        : 100_000L;
+                        : 120_000L;   // v0.4.8: 90s 观察窗 + 30s 余量（随后进入 ping-pong 维护环）
                 long deadline = System.nanoTime() + watchDeadlineMs * 1_000_000L;
                 boolean anchored = false;
                 int healExecuted = 0; // v0.4.4: 自愈重锚执行计数（[S8.7] 行序号）
@@ -509,10 +509,51 @@ public final class PathtraceMod {
                             r.fail("[S8.7] 自愈重锚异常: " + tx);
                         }
                     }
+                    // v0.4.8: ping-pong 替换件节拍（本循环 500ms 一拍——节拍即循环体；
+                    // 同内容重建不清累积 + 毒帧守卫在岗）
+                    if (pingPongActive && pingPongEnabled()) {
+                        try {
+                            Native.pingpongNative();
+                        } catch (Throwable ignored) {
+                        }
+                    }
                 }
                 if (!live.windowDone) {
                     r.info("[S8.6] 观察窗 " + (watchDeadlineMs / 1000)
                             + "s 未收口（异常）——实时判定块可能延迟，会话仍在运行");
+                }
+                // v0.4.8: ping-pong 维护环——观察窗收口后探针线程不再退出
+                //（v0.4.7 及以前：deadline 后 reanchorReq 无人消费，TLAS 永久
+                // 死亡直到重进世界）。本环活到游戏退出（daemon 线程）：ping-pong
+                // 节拍 + 自愈重锚兜底 + 交叉复测消费。
+                while (true) {
+                    try {
+                        Thread.sleep(500L);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        break;
+                    }
+                    if (pingPongActive && pingPongEnabled()) {
+                        try {
+                            Native.pingpongNative();
+                        } catch (Throwable ignored) {
+                        }
+                    }
+                    if (probeBatteryReq) {
+                        probeBatteryReq = false;
+                        probeCrossCount++;
+                        try {
+                            probeBattery(r, "窗口后交叉复测#" + probeCrossCount);
+                        } catch (Throwable ignored) {
+                        }
+                    }
+                    if (reanchorReq) {
+                        reanchorReq = false;
+                        try {
+                            Native.refreshTlasNative();
+                        } catch (Throwable ignored) {
+                        }
+                    }
                 }
             } else {
                 r.fail("[S8.0] liveBeginNative 拒绝（见 [live] 行）——实时会话"
@@ -761,9 +802,10 @@ public final class PathtraceMod {
     /** Phase E: live 派发停（累积冻结——仅金丝瑞/哨兵/census 触碰 TLAS）。 */
     static volatile boolean bisectLiveOff = false;
 
-    /** 二分梯总开关（默认开——本次运行即实验；-Dpathtrace.bisect=false 恢复 v0.4.6 行为）。 */
+    /** 二分梯总开关（v0.4.8：梯子已在 v0.4.7 真机收口——默认关，改走孪生+
+     * ping-pong 协议；-Dpathtrace.bisect=true 可复现五段梯实验）。 */
     static boolean bisectEnabled() {
-        return flagProp("pathtrace.bisect", true);
+        return flagProp("pathtrace.bisect", false);
     }
 
     /** 每段时长（ms，默认 40s）。 */
@@ -774,6 +816,22 @@ public final class PathtraceMod {
     /** 二分梯观察窗（五段 + 10s 尾量；LiveSession 判定块与探针线程 deadline 用）。 */
     static long bisectWindowMs() {
         return 5 * bisectPhaseMs() + 10_000L;
+    }
+
+    // ---- v0.4.8: ping-pong 替换件 + 孪生零接触（毒化写手工程解）----
+    /** ping-pong 激活（LiveSession t=30s 定谳后置位；twin=false 时 t=10s）。
+     *  探针线程 500ms 强制同内容重建——替换件年龄恒 <0.5s，写手 1.0s 最小
+     *  得手延迟永远追不上；同内容重建不清累积（场景纪元豁免）+ 毒帧守卫。 */
+    static volatile boolean pingPongActive = false;
+
+    /** -Dpathtrace.pingpong=false：禁用替换件（保留死亡循环行为——对照用）。 */
+    static boolean pingPongEnabled() {
+        return flagProp("pathtrace.pingpong", true);
+    }
+
+    /** -Dpathtrace.twin=false：跳过孪生窗口（ping-pong 提前至 t=10s 激活）。 */
+    static boolean twinEnabled() {
+        return flagProp("pathtrace.twin", true);
     }
 
     // ---- v0.4.2 探针线程交叉复测通道（worker→probe 的单向请求）----

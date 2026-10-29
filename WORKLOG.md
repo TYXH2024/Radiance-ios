@@ -428,3 +428,26 @@ Stage Summary:
 - v0.4.6 判读定谳：近景 void/脚底检测闭环 ✓；毒化签名升级为"重建后 ~1s 即死"（定时器级）+ GPU 私有内存写手 + 持续型写入
 - v0.4.7 交付：pathtrace-v0.4.7——五段二分梯（单次真机运行 210s 定谳写手）；预期报告自带 [bisect] 五段判定行 + 收口行
 - 待办：①CI 过绿 + Release pathtrace-v0.4.7 ②用户单次 210s 真机回报（静止同姿态，重点 [bisect] 段判定行/收口行/age= 栏）③按凶手段位定 v0.4.8 定点修复（B=atlas 链→修采集/纹理通道；C=合成链→修 present/GL；D=摄取链→查池写/BLAS；E=pathtrace 内核 OOB→审计内核绑定与缓冲尺寸；全高=驱动层→分配隔离绕行）
+
+## 2026-10-29（二十二）· pathtrace v0.4.7 真机回收判读：五段梯判词全出——四条自有 GPU 管线全部洗清、写手在驱动层 → v0.4.8 跑赢死神（ping-pong 替换件 + 场景纪元 + 毒帧守卫 + 孪生终局实验）
+
+Task: 回收 v0.4.7 真机产物（用户上传：同一报告文件含 v0.4.6 会话 09:10 + v0.4.7 会话 13:15 双段 + 三 PNG，"好像成了"）→ 判读 → v0.4.8 工程解
+
+Work Log:
+- **CI/Release 闭环**：runs 18/19 因 v0.4.7 workflow heredoc 缩进缺陷零任务死亡 → 026724a 修复（10 空格缩进恢复）→ run 40821052114 success；pathtrace-v0.4.7.jar 已发布，用户 13 分钟内装上跑完（13:15:21 会话）
+- **用户"成了"的判读（成了 60%）**：屏上首次出现持续路径追踪画面（pathtrace_live.png 15s 噪点版 + pathtrace_live_final.png 55s 收敛版——两张都是 LiveSession 自动的程序化快照，活窗 camHit 69.2%、峰值 99.95 Mray/s）——但报告显示 TLAS 仍在死：resets=21、每次重建后 1.0-2.2s 必死、自愈重锚硬撑 20+ 循环；快照恰落在重锚后的活窗内。渲染器本体 + 摄取链 + 合成链全部健康，唯一病灶仍是 TLAS 毒化
+- **五段梯判词（全部收口）**：A 基线 77% 死亡采样 → B 关 atlas 链 87% → C 关合成链 83% → D 停摄取 85% → **E 停 live 派发（仅剩金丝雀/哨兵/census 在岗）仍死**（build#49/#50/#51 各活 2.11/2.07/1.99s；报告截于 179s，E 段判定@200s 与收口行未及写出——用户提前退出，判词已可从死亡行直读）⇒ **Radiance 四条自有 GPU 管线（atlas/合成/摄取/派发）全部洗清，写手在驱动层或仅存射线仪器**
+- **写手画像终版**：死亡年龄全程 1.0-2.2s 与查询剂量无关（census 803 射线 @0.16s 不加速死亡——build#27 活到 0.90s 与无 census 的 build 同寿命带）⇒ 时间门控非查询门控；AS 走 newAccelerationStructureWithSize 驱动托管分配（自配缓冲短寸溢出理论正式排除——我方无 AS 内存可写错）；嫌疑收敛：zink/MoltenVK/原版渲染对 AS 私有内存的周期性踩踏（~1-2s 分配器节奏），或仅存仪器
+- **v0.4.8 工程解（跑赢死神 outrun the reaper）**：写手无从摘除 ⇒ 换策略——让它永远来不及得手：
+  ①**场景纪元**：g_sceneEpoch（内容版本+n+origin memcmp 三重判定）——同内容重建（ping-pong/毒化重锚）实例序与池按构造不变 ⇒ liveFrameNative 纪元门控豁免清累积（旧代码任何重建都清——索引漂移顾虑只对内容变化成立）；
+  ②**ping-pong 替换件**：探针线程 500ms kRbForce|kRbQuiet 强制同内容重建（同内容跳过 15MB×2 池重分配；[addr]/[retired] 静默、[pingpong] 每 20 条一记）——替换件年龄恒 <0.5s，写手 1.0s 最小得手延迟永远追不上（~5ms/次 ≈1% CPU）；
+  ③**毒帧守卫**：上帧 camHit<2%（与 CAMHIT_DEAD_PCT 同阈值）⇒ 本帧 store 覆写累积——死帧天空色样本不再冲刷画面（防"保留累积"被毒帧污染；ping-pong 在岗时守卫永不出手）；
+  ④**孪生零接触终局实验**：t=10s twinArmNative（零接触同内容第二 TLAS，服役件同步刷新至同生同刻）→ t=30s twinProbeNative 六轴电池一生唯一一查——孪生 0/6 ⇒ 外部写手铁证（驱动层归档结案）；≥3/6 ⇒ 射线接触是杀伤必要条件（仪器/查询链归责）；
+  ⑤**维护环**：观察窗收口后探针线程进入无限 500ms 环（ping-pong 节拍 + reanchorReq/probeBatteryReq 消费）——修复 v0.4.7 隐性 bug：deadline 后 reanchorReq 无人消费 = TLAS 永久死亡直到重进世界
+- **协议重排（90s 窗）**：0-10s 基线（死亡循环在案）→ 10-30s 孪生窗（服役件照常死、孪生零接触——对照即定谳）→ 30s [twin] 定谳 + [pingpong] 激活 → 30s+ 持续收敛；SNAP1@15s（基线期）与 SNAP2@55s（ping-pong 时代）的 PNG 对比即交付证据；bisect 默认改 false（梯子已收口，-Dpathtrace.bisect=true 可复现）
+- 冒烟：ecj 13 类零错误（FabricEntry/FabricClientEntry 用 fabric-api 桩接口补齐后全绿）/ 括号平衡 {}472:472 []677:677 ()1421:1421 / JNI 34:34 双侧对齐（pingpongNative/twinArmNative/twinProbeNative 新增 + workflow nm 验证三符号）/ YAML 解析过 / 全部 21 项关键改动存在性检查过；版本链 bump 0.4.8（fabric.mod.json/build.sh/报告头/workflow TAG+jar 名+notes/README 协议重写）；现场归档 M3-v0.4.7-report.txt（双会话文件——v0.4.6 09:10 + v0.4.7 13:15）
+
+Stage Summary:
+- v0.4.7 判读定谳：四条自有 GPU 管线全部洗清（B 87%/C 83%/D 85%/E 仍死）；死亡 1.0-2.2s 时间门控与剂量无关；AS 驱动托管分配——写手在驱动层（zink/MoltenVK/原版渲染）或仅存仪器
+- v0.4.8 交付：pathtrace-v0.4.8——跑赢死神（ping-pong + 纪元 + 毒帧守卫 + 维护环）+ 孪生终局实验；预期真机：t=30s 起 camHit 恒 ~69%、spp 持续增长不再脉冲、resets 趋零、[twin] 定谳行给出写手身份最后一块拼图
+- 待办：①CI 过绿 + Release pathtrace-v0.4.8 ②用户 ≥90s 真机回报（重点 [twin] 定谳 / [pingpong] 激活 / [live] camHit 恒定 / 双快照对比）③若孪生判"外部写手"：整理 MoltenVK/Apple  bug report 素材（死亡签名+audit 双净+AS 托管分配证据链）④2.4 议程：事件驱动摄取 + 反射/GI 质量 + 阴影 ray 复用

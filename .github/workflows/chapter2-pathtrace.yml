@@ -42,16 +42,16 @@ jobs:
           set -ex
           chmod +x chapter2/pathtrace/build.sh
           bash chapter2/pathtrace/build.sh
-          JAR="chapter2/pathtrace/pathtrace-0.4.7.jar"
+          JAR="chapter2/pathtrace/pathtrace-0.4.8.jar"
           test -f "$JAR"
-          cp "$JAR" ./pathtrace-0.4.7.jar
+          cp "$JAR" ./pathtrace-0.4.8.jar
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: pathtrace-jar
           path: |
-            pathtrace-0.4.7.jar
+            pathtrace-0.4.8.jar
             chapter2/pathtrace/build/native/libradiance_pathtrace.dylib
             chapter2/pathtrace/build/native/pathtrace.metallib
           if-no-files-found: error
@@ -91,6 +91,15 @@ jobs:
             && echo "JNI_EXPORT_OK(renderPathtraceNative)"
           nm -gU "$DYLIB" | grep -q "Java_net_prisma_pathtrace_Native_refreshTlasNative" \
             && echo "JNI_EXPORT_OK(refreshTlasNative)"
+          # v0.4.8: ping-pong 替换件 + 孪生零接触定谳（毒化写手工程解）
+          nm -gU "$DYLIB" | grep -q "Java_net_prisma_pathtrace_Native_pingpongNative" \
+            && echo "JNI_EXPORT_OK(pingpongNative)"
+          nm -gU "$DYLIB" | grep -q "Java_net_prisma_pathtrace_Native_twinArmNative" \
+            && echo "JNI_EXPORT_OK(twinArmNative)"
+          nm -gU "$DYLIB" | grep -q "Java_net_prisma_pathtrace_Native_twinProbeNative" \
+            && echo "JNI_EXPORT_OK(twinProbeNative)"
+          nm -gU "$DYLIB" | grep -q "Java_net_prisma_pathtrace_Native_setAtlasEnabledNative" \
+            && echo "JNI_EXPORT_OK(setAtlasEnabledNative)"
           # 2.3 live 会话族（11 个新入口）
           for SYM in liveBeginNative liveFrameNative liveResetNative \
                      livePresentNative liveReadbackNative liveStatsNative \
@@ -111,7 +120,7 @@ jobs:
           file "$METALLIB"
           test -s "$METALLIB"
           # JAR 内容验证：mixin 类 + mixins.json 必须在包内
-          JAR="chapter2/pathtrace/pathtrace-0.4.7.jar"
+          JAR="chapter2/pathtrace/pathtrace-0.4.8.jar"
           unzip -l "$JAR" | grep -q "net/prisma/pathtrace/mixin/PathtraceWindowMixin.class" \
             && echo "JAR_MIXIN_CLASS_OK"
           unzip -l "$JAR" | grep -q "pathtrace.mixins.json" \
@@ -119,60 +128,64 @@ jobs:
           unzip -l "$JAR" | grep -q "fabric.mod.json" \
             && echo "JAR_FABRIC_MOD_OK"
 
-      - name: Release (pathtrace-v0.4.7, prerelease)
+      - name: Release (pathtrace-v0.4.8, prerelease)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -ex
-          TAG="pathtrace-v0.4.7"
-          TITLE="pathtrace v0.4.7 — v0.4.6 真机复测：近景 void 已修（相机段 rebuild#1 首轮摄取、-Y 脚下 1.62 格命中）；TLAS 毒化显形为【重建后 ~1s 即死】精确定时器签名——五段单调摘除二分梯，单次真机运行锁定 GPU 私有内存写手"
+          TAG="pathtrace-v0.4.8"
+          TITLE="pathtrace v0.4.8 — v0.4.7 五段梯真机定谳：四条自有 GPU 管线全部洗清、写手在驱动层——孪生零接触终局实验 + ping-pong 替换件（同内容重建不清累积 + 毒帧守卫），画面从此持续收敛"
           NOTES_FILE=release-notes.md
           cat > "$NOTES_FILE" <<'EOF'
-          # pathtrace v0.4.7 — TLAS 毒化写手五段二分梯（单次真机运行定谳）
+          # pathtrace v0.4.8 — 跑赢死神（outrun the reaper）
           
-          **v0.4.6 真机复测（M3，同一存档同姿态）**：
-          - **近景 void 根因修复验证通过**：`[camera-first] 相机段 (0,64,-16)
-            已摄取（rebuild #1）`——相机段从“数组尾 408 槽饿死”变为首轮入库；
-            每次 TLAS 重建后探针电池 4/6 命中：**-Y 脚下 1.62 格命中**、±Z 1.5
-            格、-X 21.5 格。用户实测的“眼前四五格不渲染”与“检测不到脚底”
-            同根消除。
-          - **TLAS 毒化真面目显形**：不再是模糊的“几十秒后死”，而是**每次重建
-            后存活精确 ~1.0s 即死**（复活 t=8.86→死 9.86；19.92→20.92；
-            29.96→…）——精确定时器级签名。audit 行持续“实例缓冲=干净 金丝雀=
-            干净”⇒ 写手在 GPU 私有内存；census 普查 445/752→0/752 渐进衰减
-            （2.4s 内全灭）⇒ 持续型写入而非一次性损坏。
-          - 摄取吞吐 5-6 段/s × 6936 槽 ⇒ BLAS 构建在会话中持续进行——
-            每秒 ~5 次池写入同样是持续型写手候选。
+          **v0.4.7 五段二分梯真机回收（M3，2026-10-29 13:15）——判词全出**：
+          - B 段（关 atlas 链）canary 死亡 87% —— atlas 链洗清
+          - C 段（关合成链）83% —— 合成链洗清
+          - D 段（停摄取）85% —— 摄取/BLAS 池写洗清
+          - E 段（停 live 派发——仅剩金丝雀/哨兵/census 在岗）仍在死
+            （build#49/#50/#51 各活 2.1/2.0/2.0s）⇒ **Radiance 全部四条
+            GPU 管线洗清；写手在驱动层（zink/MoltenVK/原版渲染对 AS 私有
+            内存的踩踏）或仅存射线仪器**
+          - 死亡签名全程不变：每次重建后 1.0-2.2s 必死、与查询剂量无关
+            （census 803 射线不加速死亡）⇒ 时间门控而非查询门控
+          - AS 为驱动托管分配（newAccelerationStructureWithSize）——自配
+            缓冲短寸溢出不可能，我方无 AS 内存可写错
           
-          **本版实验设计（毒化写手二分梯——每段 40s，单调摘除，换段即重锚）**：
+          **v0.4.8 工程解**：
+          1. **场景纪元**：同内容重建（ping-pong 替换/毒化重锚）不再清空
+             累积——实例序与池按构造不变；旧代码任何重建都清零，但索引
+             漂移顾虑只对内容变化成立
+          2. **ping-pong 替换件**：探针线程每 500ms 强制同内容重建——替换
+             件年龄恒 <0.5s，写手 1.0s 最小得手延迟永远追不上（~5ms/次 ≈
+             1% CPU）
+          3. **毒帧守卫**：上帧 camHit<2% ⇒ 本帧 store 覆写累积——死帧
+             天空色样本不再冲刷画面（ping-pong 在岗时守卫永不出手）
+          4. **孪生零接触终局实验**：t=10s 构建零接触同内容第二 TLAS →
+             t=30s 单次六轴电池定谳接触必要性：孪生 0/6 ⇒ 外部写手铁证；
+             孪生 ≥3/6 ⇒ 射线接触是杀伤必要条件
+          5. **维护环**：观察窗收口后探针线程不再退出（旧版 deadline 后
+             reanchorReq 无人消费 = TLAS 永久死亡直到重进世界）
           
-          | 段 | 时间 | 摘除的写手 | 死亡停止 ⇒ 凶手 |
-          |---|---|---|---|
-          | A | 0-40s | 无（基线，复现毒化=仪器有效） | — |
-          | B | 40-80s | atlas 链（MTLTexture+暂存退休、上传拒绝、顶点色回退） | atlas 上传/驻留链 |
-          | C | 80-120s | 合成链（present 内核/GPU 回读/glTexSubImage2D/blit 全停，画面回落原版帧） | GL 合成链 |
-          | D | 120-160s | 摄取（BLAS 构建/池写入全停，TLAS 冻结） | 摄取链 |
-          | E | 160-200s | live 派发（累积冻结，仅金丝雀/哨兵/census 触碰 TLAS） | pathtrace 内核 OOB |
+          **使用协议（90s 观察窗，之后无限运行）**：替换 mods/ 内旧 JAR，
+          同一存档静止同一姿态保持游戏开着——**t=30s 起画面应持续收敛不再
+          脉冲**（15s 与 55s 两张快照的对比即证据）。回报
+          pathtrace_report.txt，重点行：
+          - **[twin] 定谳**（孪生电池命中数——外部写手 vs 接触必要性的
+            最终判词）
+          - **[pingpong] 激活** + 每 10s 一条的 [pingpong] 同内容重建行
+          - [live] 行 camHit 应恒 ~69%（不再 0.1-0.2% 循环）、spp 持续
+            增长、epoch= 栏（内容变化才清累积）
+          - [v0.4.8 收口] 行（90s 判定块）
           
-          - 换段动作：①上一段判定行（canary 死亡采样为主判 + camHit 归零采样
-            为副证）；②摘除写手；③census 普查（幸存分布随段对照）；④TLAS
-            重锚（新段从已知存活态起步）。
-          - 收口行 `[bisect] 五段梯收口` 汇总 A~E 各段 canary 死亡比：**死亡比
-            首次归零的段 = 凶手被摘除的那一段**；全部高 ⇒ 凶手在仅存仪器
-            （射线派发/TLAS 构建编码器）——驱动层嫌疑。
-          - 新增硬指标：`[tlas-health]` 死亡行带 `build 年龄=X.XXs`（“重建后
-            ~1s 即死”签名直接量化）；`[live]` 行 tlas 栏带 age=。
-          - 段长可调：`-Dpathtrace.bisect.phaseMs=40000`；整个梯子可关：
-            `-Dpathtrace.bisect=false`（恢复 v0.4.6 行为）。
-          
-          **使用**：替换 mods/ 内旧 JAR，同一存档同一姿态（别动相机）保持游戏
-          开着 ~210s，回报 pathtrace_report.txt。重点看：`[bisect]` 各段判定行、
-          五段梯收口行、`[tlas-health]` 的 age= 栏、各段 census 行。
+          开关：-Dpathtrace.pingpong=false（对照死亡循环）/
+          -Dpathtrace.twin=false（跳过孪生直接稳定）/
+          -Dpathtrace.bisect=true（复现 v0.4.7 五段梯）
           EOF
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release upload "$TAG" ./pathtrace-0.4.7.jar --clobber --repo "$GITHUB_REPOSITORY"
+            gh release upload "$TAG" ./pathtrace-0.4.8.jar --clobber --repo "$GITHUB_REPOSITORY"
           else
-            gh release create "$TAG" ./pathtrace-0.4.7.jar \
+            gh release create "$TAG" ./pathtrace-0.4.8.jar \
                  --title "$TITLE" --notes-file "$NOTES_FILE" \
                  --prerelease --repo "$GITHUB_REPOSITORY"
           fi

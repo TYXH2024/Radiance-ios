@@ -170,6 +170,26 @@ static BOOL g_tlasDirty = NO;
 //   双 N/6 ⇒ TLAS 健康，all-miss 出在渲染通路（相机基/uniforms）。
 static id<MTLAccelerationStructure> g_verifiedTlas = nil;
 static uint64_t g_verifiedTlasBuild = 0;
+// ---- v0.4.8: 场景纪元 + ping-pong 替换件 + 孪生零接触 ----
+// 毒化定谳（v0.4.7 五段梯真机）：atlas/合成/摄取/派发四条自有 GPU 管线全部
+// 洗清（E 段仅剩仪器在岗仍死）；死亡年龄恒 1.0-2.2s 与查询剂量无关 ⇒ 时间
+// 门控的外部写手（驱动层：zink/MoltenVK/原版渲染）。AS 为驱动托管分配
+//（newAccelerationStructureWithSize——本文件无自配 AS 缓冲，“短寸溢出”
+// 不可能），写手无从摘除 ⇒ v0.4.8 工程解：
+//  ①场景纪元：同内容重建（ping-pong/毒化重锚）不再清空累积——旧代码
+//    任何重建都清零（实例序漂移顾虑只对内容变化成立，同内容时序与池
+//    按构造不变）；配毒帧守卫（camHit<2% 即 store 覆写）防死帧冲刷。
+//  ②ping-pong：探针线程 500ms 强制同内容重建，替换件年龄恒 <0.5s——
+//    写手 1.0s 最小得手延迟永远追不上（outrun the reaper）。
+//  ③孪生：零接触同内容第二 AS，窗口期后单次电池定谳“接触必要性”——
+//    零接触死亡 ⇒ 外部写手铁证；零接触存活 ⇒ 射线接触是杀伤必要条件。
+static uint64_t g_sceneContentVersion = 0;   // 槽位内容每次变异（BLAS 换装/失效）+1
+static uint64_t g_lastBuildContentVersion = 0; // 上次 TLAS 构建时的内容版本
+static uint64_t g_sceneEpoch = 0;            // 内容真实变化的重建数（累积有效性判据）
+static id<MTLAccelerationStructure> g_twinTlas = nil;  // v0.4.8 孪生（零接触）
+static id<MTLBuffer> g_twinInstanceBuffer = nil;      // 孪生构建用实例缓冲（随孪生退休）
+static double g_twinBuildMs = -1.0;
+static uint32_t g_pingpongBuilds = 0;        // 同内容静默重建计数（日志节流）
 static id<MTLLibrary> g_library = nil;
 static id<MTLComputePipelineState> g_pipeline = nil;      // scene_trace_kernel
 static id<MTLComputePipelineState> g_ptPipeline = nil;    // pathtrace_kernel
@@ -216,6 +236,8 @@ static id<MTLCommandBuffer> g_liveCmd = nil; // last committed frame (accum+pres
 static uint32_t g_liveFrames = 0;            // frames accumulated
 static uint32_t g_liveSppTotal = 0;          // samples per pixel accumulated
 static uint32_t g_liveResets = 0;            // camera/scene resets
+static uint64_t g_liveSceneEpoch = 0;        // v0.4.8: 会话所见纪元（同内容重建豁免）
+static BOOL g_livePoisoned = NO;             // v0.4.8: 毒帧守卫状态（变迁才打行）
 static uint32_t g_liveRefreshes = 0;         // worker-thread TLAS re-anchors
 static uint64_t g_liveTlasBuilds = 0;        // TLAS build count at last frame
 static uint64_t g_liveTotalQueries = 0;
@@ -274,10 +296,12 @@ static uint64_t g_stats[9];
 // threaded by construction) degrade to the old unlocked behavior.
 static NSObject *g_sceneLock = nil;
 
-static void flush_retired(void) {
+static void flush_retired(BOOL quiet) {
     if (g_retired != nil && g_retired.count > 0) {
-        rp("[retired] releasing %llu deferred objects",
-           (unsigned long long)g_retired.count);
+        if (!quiet) {
+            rp("[retired] releasing %llu deferred objects",
+               (unsigned long long)g_retired.count);
+        }
         [g_retired removeAllObjects];
         g_stats[8] = 0;
     }
@@ -332,6 +356,7 @@ static BOOL build_blas(SceneSlot *slot) {
 
     if (slot.blas != nil) { [g_retired addObject:slot.blas]; g_stats[8]++; }
     slot.blas = blas;
+    g_sceneContentVersion++;   // v0.4.8: 槽位内容变异（场景纪元判据）
     g_stats[4]++;
     return YES;
 }
@@ -362,8 +387,13 @@ static inline simd_float3 vsub(simd_float3 a, simd_float3 b) {
 // on other threads (worker liveFrameNative / castRayNative) snapshot the
 // TLAS + shading pools under the same mutex, closing the swap-retire-read
 // use-after-free window (see g_sceneLock comment above).
-static void rebuild_tlas_locked(void) {
-    if (!g_tlasDirty) { return; }
+enum {
+    kRbForce = 1u,   // v0.4.8: 无视 dirty 强制重建（ping-pong 替换件 / 孪生前刷新）
+    kRbQuiet = 2u,   // v0.4.8: 静默模式（同内容时跳过池重建 + 节流日志）
+};
+
+static void rebuild_tlas_locked(uint32_t flags) {
+    if (!g_tlasDirty && !(flags & kRbForce)) { return; }
 
     // Collect ready slots (instance order = slot scan order; the kernel's
     // committed instance id maps back to this order, recorded per instance).
@@ -404,6 +434,16 @@ static void rebuild_tlas_locked(void) {
         newOrigins[i][0] = s.ox; newOrigins[i][1] = s.oy; newOrigins[i][2] = s.oz;
         [blasRefs addObject:s.blas];
     }
+
+    // v0.4.8: 内容变化判定——内容版本 / 实例数 / origin 逐字节 memcmp（防御
+    // 版本遗漏路径）。同内容 ⇒ 实例序与池字节按构造不变 ⇒ 池重建可跳过、
+    // 累积保持有效（liveFrameNative 的纪元门控据此豁免清零）。
+    const BOOL contentChanged =
+        (g_sceneContentVersion != g_lastBuildContentVersion)
+        || (n != g_instOriginCount)
+        || (g_instOrigins == NULL)
+        || (memcmp(newOrigins, g_instOrigins,
+                   (size_t)n * sizeof(int32_t[3])) != 0);
 
     id<MTLBuffer> instanceBuffer =
         [g_device newBufferWithBytes:instances length:instBytes
@@ -471,19 +511,23 @@ static void rebuild_tlas_locked(void) {
     g_stats[7] = sizes.accelerationStructureSize;
     g_tlasDirty = NO;
     // v0.4.4: 换装即记 verified 快照（与 g_tlas 同锁同刻）——worker 哨兵的
-    // 双句柄 A/B 基准点。
+    // 双句柄 A/B 基准点。（v0.4.8：同内容重建同样刷新——保持 verified==
+    // current 不变式。）
     g_verifiedTlas = tlas;
     g_verifiedTlasBuild = g_stats[3];
     // v0.4.5: 地址图（毒化若为邻居越界写，受害/幸存分配的相对布局即证据；
-    // as/instBuf 列与 v0.4.4 的 ptr=0x7F7D… 系列可比对）。
-    rp("[addr] TLAS build#%llu: as=%lluB obj=0x%llX instBuf(mem)=0x%llX "
-       "instBytes=%llu shadow(mem)=0x%llX",
-       (unsigned long long)g_stats[3],
-       (unsigned long long)sizes.accelerationStructureSize,
-       (unsigned long long)(uintptr_t)tlas,
-       (unsigned long long)(uintptr_t)instanceBuffer.contents,
-       (unsigned long long)instBytes,
-       (unsigned long long)(uintptr_t)g_instanceShadow);
+    // as/instBuf 列与 v0.4.4 的 ptr=0x7F7D… 系列可比对）。v0.4.8：静默
+    // ping-pong 不打（500ms 节拍下纯噪声），重锚/内容重建照打。
+    if (!(flags & kRbQuiet)) {
+        rp("[addr] TLAS build#%llu: as=%lluB obj=0x%llX instBuf(mem)=0x%llX "
+           "instBytes=%llu shadow(mem)=0x%llX",
+           (unsigned long long)g_stats[3],
+           (unsigned long long)sizes.accelerationStructureSize,
+           (unsigned long long)(uintptr_t)tlas,
+           (unsigned long long)(uintptr_t)instanceBuffer.contents,
+           (unsigned long long)instBytes,
+           (unsigned long long)(uintptr_t)g_instanceShadow);
+    }
 
     // ---- 2.2 shading pools (same slot order as the instances above) ----
     // triColors: 3 x uchar4 per triangle (via the quad-expanded index buffer,
@@ -491,7 +535,9 @@ static void rebuild_tlas_locked(void) {
     // by construction); triNormals: one packed_float3 per triangle computed
     // from the very vertex buffer the BLAS was built from; instTriBase:
     // first triangle index per instance.
-    {
+    // v0.4.8: 仅内容变化时重建——同内容 ⇒ 池字节不变（跳过 15MB×2 重分配
+    // 与 memcpy），实例序不变正是“同内容重建不清累积”的构造性保证。
+    if (contentChanged) {
         uint64_t totalTris = 0;
         for (SceneSlot *s in ready) { totalTris += s.indexCount / 3; }
         uint8_t *colors = (uint8_t *)malloc((size_t)totalTris * 3 * 4);
@@ -596,14 +642,35 @@ static void rebuild_tlas_locked(void) {
     }
 
     // Ready only after the new TLAS completed — safe to drop retired objects.
-    flush_retired();
+    // v0.4.8: 静默 ping-pong 的退休释放不打日志（500ms 节拍下纯噪声）。
+    flush_retired((flags & kRbQuiet) && !contentChanged);
     g_lastTlasBuildMs = clockms(); // v0.4.7: build-age 基准（[tlas-health] 死亡行 age=）
-    rp("[tlas] rebuilt in %.2f ms (instances=%u, as=%llu B, tris=%u, "
-       "colorSlots=%u, pools=%llu+%llu B, total=%llu builds)",
-       ms, n, (unsigned long long)sizes.accelerationStructureSize,
-       g_poolTris, colorSlots,
-       (unsigned long long)g_poolColorBytes, (unsigned long long)g_poolNormalBytes,
-       (unsigned long long)g_stats[3]);
+    if (contentChanged) {
+        g_sceneEpoch++;
+        g_lastBuildContentVersion = g_sceneContentVersion;
+        rp("[tlas] rebuilt in %.2f ms (instances=%u, as=%llu B, tris=%u, "
+           "colorSlots=%u, pools=%llu+%llu B, total=%llu builds, epoch=%llu)",
+           ms, n, (unsigned long long)sizes.accelerationStructureSize,
+           g_poolTris, colorSlots,
+           (unsigned long long)g_poolColorBytes,
+           (unsigned long long)g_poolNormalBytes,
+           (unsigned long long)g_stats[3],
+           (unsigned long long)g_sceneEpoch);
+    } else if (flags & kRbQuiet) {
+        g_pingpongBuilds++;
+        if ((g_pingpongBuilds % 20) == 0) {
+            rp("[pingpong] #%u 同内容重建 (build#%llu, %.2f ms, epoch=%llu "
+               "不变——累积保留)",
+               g_pingpongBuilds, (unsigned long long)g_stats[3], ms,
+               (unsigned long long)g_sceneEpoch);
+        }
+    } else {
+        g_pingpongBuilds++;
+        rp("[tlas] rebuilt in %.2f ms (same-content, instances=%u, "
+           "total=%llu builds, epoch=%llu 不变——累积保留)",
+           ms, n, (unsigned long long)g_stats[3],
+           (unsigned long long)g_sceneEpoch);
+    }
 }
 
 // v0.4.2 public entry: build + swap under the scene mutex. Early-out on the
@@ -612,7 +679,7 @@ static void rebuild_tlas_locked(void) {
 static void rebuild_tlas(void) {
     if (!g_tlasDirty) { return; }
     @synchronized (g_sceneLock) {
-        rebuild_tlas_locked();
+        rebuild_tlas_locked(0);
     }
 }
 
@@ -970,6 +1037,7 @@ Java_net_prisma_pathtrace_Native_invalidateSingle(
         slot.blas = nil;
         slot.ready = NO;
         g_tlasDirty = YES;
+        g_sceneContentVersion++;   // v0.4.8: 槽位内容变异（场景纪元判据）
         rp("[invalidate] index=%lld generation=%lld", (long long)index, (long long)generation);
     }
     slot.generation = generation;
@@ -1937,6 +2005,181 @@ Java_net_prisma_pathtrace_Native_refreshTlasNative(JNIEnv *env, jclass cls) {
     }
 }
 
+// -------------------------------------------------------------------
+// v0.4.8: ping-pong 替换件 + 孪生零接触定谳
+// -------------------------------------------------------------------
+
+// 探针线程 500ms 节拍：强制同内容重建（kRbForce|kRbQuiet）。替换件年龄恒
+// <0.5s——v0.4.7 真机死亡签名最小年龄 1.0s，外部写手永远来不及得手。
+// 返回 jlong[4] {builds, epoch, ageMs, rebuilt(0/1)}。
+JNIEXPORT jlongArray JNICALL
+Java_net_prisma_pathtrace_Native_pingpongNative(JNIEnv *env, jclass cls) {
+    (void)env; (void)cls;
+    jlong out[4] = { 0, 0, -1, 0 };
+    jlongArray result = (*env)->NewLongArray(env, 4);
+    if (g_slots == nil || g_device == nil || g_queue == nil) {
+        if (result != NULL) { (*env)->SetLongArrayRegion(env, result, 0, 4, out); }
+        return result;
+    }
+    const uint64_t before = g_stats[3];
+    @synchronized (g_sceneLock) {
+        rebuild_tlas_locked(kRbForce | kRbQuiet);
+        out[0] = (jlong)g_stats[3];
+        out[1] = (jlong)g_sceneEpoch;
+        out[2] = (g_lastTlasBuildMs < 0.0) ? (jlong)-1
+                : (jlong)(clockms() - g_lastTlasBuildMs);
+    }
+    out[3] = (g_stats[3] > before) ? 1 : 0;
+    if (result != NULL) { (*env)->SetLongArrayRegion(env, result, 0, 4, out); }
+    return result;
+}
+
+// 孪生装填：以当前 ready 槽位构建第二个同内容 TLAS（独立实例缓冲，构建后
+// 随孪生一同退休）。不触碰 g_tlas/池/verified——服役件照常生活（窗口期内
+// 预计照旧 1-2s 死亡），孪生零接触 parked。先做一次强制同内容重建让服役件
+// 与孪生同生同刻（年龄对照才有意义）。
+JNIEXPORT jboolean JNICALL
+Java_net_prisma_pathtrace_Native_twinArmNative(JNIEnv *env, jclass cls) {
+    (void)env; (void)cls;
+    if (g_slots == nil || g_device == nil || g_queue == nil) {
+        rp("[twin] arm 拒绝：场景未就绪");
+        return JNI_FALSE;
+    }
+    @synchronized (g_sceneLock) {
+        rebuild_tlas_locked(kRbForce | kRbQuiet);   // 服役件刷新（同生同刻）
+
+        NSMutableArray<SceneSlot *> *ready = [NSMutableArray array];
+        for (SceneSlot *s in g_slots) {
+            if (s.ready && s.blas != nil) { [ready addObject:s]; }
+        }
+        const uint32_t n = (uint32_t)ready.count;
+        if (n == 0) {
+            rp("[twin] arm 拒绝：零 ready 槽");
+            return JNI_FALSE;
+        }
+        const size_t instBytes =
+            (size_t)n * sizeof(MTLAccelerationStructureInstanceDescriptor);
+        MTLAccelerationStructureInstanceDescriptor *instances =
+            (MTLAccelerationStructureInstanceDescriptor *)calloc(1, instBytes);
+        if (instances == NULL) { return JNI_FALSE; }
+        NSMutableArray<id<MTLAccelerationStructure>> *blasRefs =
+            [NSMutableArray arrayWithCapacity:n];
+        for (uint32_t i = 0; i < n; i++) {
+            SceneSlot *s = ready[i];
+            encode_instance_matrix(&instances[i].transformationMatrix,
+                                    (float)s.ox, (float)s.oy, (float)s.oz);
+            instances[i].options = MTLAccelerationStructureInstanceOptionNone;
+            instances[i].mask = 0xFFFFFFFFu;
+            instances[i].intersectionFunctionTableOffset = 0;
+            instances[i].accelerationStructureIndex = i;
+            [blasRefs addObject:s.blas];
+        }
+        id<MTLBuffer> instanceBuffer =
+            [g_device newBufferWithBytes:instances length:instBytes
+                                  options:MTLResourceStorageModeShared];
+        free(instances);
+        if (instanceBuffer == nil) { return JNI_FALSE; }
+        MTLInstanceAccelerationStructureDescriptor *desc =
+            [MTLInstanceAccelerationStructureDescriptor descriptor];
+        desc.instanceCount = n;
+        desc.instanceDescriptorBuffer = instanceBuffer;
+        desc.instanceDescriptorBufferOffset = 0;
+        desc.instanceDescriptorStride =
+            sizeof(MTLAccelerationStructureInstanceDescriptor);
+        desc.instancedAccelerationStructures = blasRefs;
+        MTLAccelerationStructureSizes sizes =
+            [g_device accelerationStructureSizesWithDescriptor:desc];
+        id<MTLAccelerationStructure> twin =
+            [g_device newAccelerationStructureWithSize:sizes.accelerationStructureSize];
+        id<MTLBuffer> scratch =
+            [g_device newBufferWithLength:sizes.buildScratchBufferSize
+                                  options:MTLResourceStorageModeShared];
+        if (twin == nil || scratch == nil) {
+            rp("[twin] arm FATAL：孪生分配失败");
+            return JNI_FALSE;
+        }
+        id<MTLCommandBuffer> cmd = [g_queue commandBuffer];
+        id<MTLAccelerationStructureCommandEncoder> enc =
+            [cmd accelerationStructureCommandEncoder];
+        [enc buildAccelerationStructure:twin
+                              descriptor:desc
+                           scratchBuffer:scratch
+                       scratchBufferOffset:0];
+        [enc endEncoding];
+        [cmd commit];
+        [cmd waitUntilCompleted];
+        if (cmd.error != nil) {
+            rp("[twin] arm FATAL：孪生构建失败: %s",
+               cmd.error.localizedDescription.UTF8String);
+            return JNI_FALSE;
+        }
+        // 重复装填场景：退役旧孪生（含其实例缓冲），下次重建 flush。
+        if (g_twinTlas != nil) { [g_retired addObject:g_twinTlas]; g_stats[8]++; }
+        if (g_twinInstanceBuffer != nil) {
+            [g_retired addObject:g_twinInstanceBuffer]; g_stats[8]++;
+        }
+        g_twinTlas = twin;
+        g_twinInstanceBuffer = instanceBuffer;
+        g_twinBuildMs = clockms();
+        rp("[twin] armed：零接触孪生 TLAS obj=0x%llX as=%lluB inst=%u "
+           "（服役件已同步刷新——两者同生同刻；窗口期内孪生无任何查询）",
+           (unsigned long long)(uintptr_t)twin,
+           (unsigned long long)sizes.accelerationStructureSize, n);
+    }
+    return JNI_TRUE;
+}
+
+// 孪定期谳：标准六轴电池（±X/±Y/±Z，512 格）打孪生一次——这是孪生一生
+// 唯一的查询。返回 jint[3] {hits, ageMs, dispatched}（dispatched=0 表示
+// 孪生未装填/派发失败）。孪生随即退休（下次重建 flush——ping-pong 激活后
+// 0.5s 内）。
+JNIEXPORT jintArray JNICALL
+Java_net_prisma_pathtrace_Native_twinProbeNative(JNIEnv *env, jclass cls,
+        jfloat camX, jfloat camY, jfloat camZ) {
+    (void)cls;
+    jint out[3] = { -1, -1, 0 };
+    jintArray result = (*env)->NewIntArray(env, 3);
+    if (result == NULL) { return NULL; }
+    id<MTLAccelerationStructure> twin = nil;
+    @synchronized (g_sceneLock) {
+        twin = g_twinTlas;
+    }
+    if (twin == nil || g_device == nil || g_pipeline == nil) {
+        (*env)->SetIntArrayRegion(env, result, 0, 3, out);
+        return result;
+    }
+    {
+        static const simd_float3 kDirs[6] = {
+            { 1, 0, 0}, {-1, 0, 0}, { 0, 1, 0},
+            { 0,-1, 0}, { 0, 0, 1}, { 0, 0,-1},
+        };
+        jint hits = 0;
+        BOOL dispatched = NO;
+        for (int i = 0; i < 6; i++) {
+            uint32_t hitFlag = 0; float dist = -1.0f; uint32_t instIdx = 0;
+            if (trace_ray(twin, simd_make_float3(camX, camY, camZ), kDirs[i],
+                          512.0f, &hitFlag, &dist, &instIdx)) {
+                dispatched = YES;
+                if (hitFlag) { hits++; }
+            }
+        }
+        out[0] = hits;
+        out[2] = dispatched ? 1 : 0;
+    }
+    @synchronized (g_sceneLock) {
+        out[1] = (g_twinBuildMs < 0.0) ? -1
+                : (jint)(clockms() - g_twinBuildMs);
+        if (g_twinTlas != nil) { [g_retired addObject:g_twinTlas]; g_stats[8]++; }
+        if (g_twinInstanceBuffer != nil) {
+            [g_retired addObject:g_twinInstanceBuffer]; g_stats[8]++;
+        }
+        g_twinTlas = nil;
+        g_twinInstanceBuffer = nil;
+    }
+    (*env)->SetIntArrayRegion(env, result, 0, 3, out);
+    return result;
+}
+
 // S6.4: origin of the slot behind a TLAS instance index (hit attribution).
 JNIEXPORT jintArray JNICALL
 Java_net_prisma_pathtrace_Native_instanceOriginNative(JNIEnv *env, jclass cls, jint instanceIndex) {
@@ -2372,6 +2615,7 @@ Java_net_prisma_pathtrace_Native_liveBeginNative(
         g_liveTotalQueries = 0; g_liveLastQueries = 0; g_liveLastCamHits = 0;
         g_liveLastMs = 0.0;
         g_liveTlasBuilds = g_stats[3];
+        g_liveSceneEpoch = g_sceneEpoch;   // v0.4.8: 纪元基线（会话起步不清累积）
         g_liveActive = YES;
         rp("[live] session begun: %dx%d spp/frame=%d bounces=%d "
            "(atlas=%s)", width, height, sppPerFrame, bounces,
@@ -2426,16 +2670,42 @@ Java_net_prisma_pathtrace_Native_liveFrameNative(
             out[1] = (jint)g_liveLastCamHits;
             if (result != NULL) { (*env)->SetIntArrayRegion(env, result, 0, 2, out); }
         }
-        // 2. Scene-change auto-reset: any TLAS rebuild since the last frame
-        //    invalidates the accumulated image (instance/triangle indices
-        //    shift under the pools).
+        // 1.5 v0.4.8 毒帧守卫：上一完成帧 camHit<2%（与 CAMHIT_DEAD_PCT 同阈值）
+        //     ⇒ 其天空色样本已入累积——本帧转 store 模式覆写（等效旧“重建即
+        //     清零”的防毒语义，但只打毒帧、不误伤健康样本；ping-pong 在岗时
+        //     camHit 恒 ~69%，守卫永不出手）。变迁才打行防风暴。
+        if (g_liveLastQueries > 0
+                && (double)g_liveLastCamHits * 100.0
+                       / (double)g_liveLastQueries < 2.0) {
+            if (g_liveFrames != 0) {
+                if (!g_livePoisoned) {
+                    rp("[live] 毒帧守卫：上帧 camHit=%.2f%% —— store 模式覆写累积",
+                       (double)g_liveLastCamHits * 100.0
+                           / (double)g_liveLastQueries);
+                }
+                g_liveFrames = 0;
+                g_liveSppTotal = 0;
+                g_liveResets++;
+            }
+            g_livePoisoned = YES;
+        } else {
+            g_livePoisoned = NO;
+        }
+        // 2. Scene-change auto-reset（v0.4.8 纪元门控）：仅【内容】变化
+        //    （epoch 推进）才清累积——实例/三角形索引漂移只对内容变化成立。
+        //    同内容重建（ping-pong 替换件 / 毒化自愈重锚）实例序与池不变，
+        //    累积保持有效——这是“跑赢死神”策略的可用性前提。
         if (g_stats[3] != g_liveTlasBuilds) {
-            g_liveFrames = 0;
-            g_liveSppTotal = 0;
-            g_liveResets++;
             g_liveTlasBuilds = g_stats[3];
-            rp("[live] reset: TLAS rebuilt (builds=%llu)",
-               (unsigned long long)g_stats[3]);
+            if (g_sceneEpoch != g_liveSceneEpoch) {
+                g_liveSceneEpoch = g_sceneEpoch;
+                g_liveFrames = 0;
+                g_liveSppTotal = 0;
+                g_liveResets++;
+                rp("[live] reset: 场景内容变化 epoch=%llu (builds=%llu)",
+                   (unsigned long long)g_sceneEpoch,
+                   (unsigned long long)g_stats[3]);
+            }
         }
         // 3. Per-frame stats reset (safe: no kernel in flight).
         memset(g_liveStats.contents, 0, 2 * sizeof(uint32_t));
@@ -2578,9 +2848,9 @@ Java_net_prisma_pathtrace_Native_liveReadbackNative(JNIEnv *env, jclass cls) {
     }
 }
 
-// Live counters for the report. Returns jlong[10]: frames, sppTotal, resets,
+// Live counters for the report. Returns jlong[11]: frames, sppTotal, resets,
 // refreshes, totalQueries, lastQueries, lastCamHits, atlasMode(0/1),
-// tlasBuilds(v0.4.4), tlasAgeMs(v0.4.7).
+// tlasBuilds(v0.4.4), tlasAgeMs(v0.4.7), sceneEpoch(v0.4.8).
 JNIEXPORT jlongArray JNICALL
 Java_net_prisma_pathtrace_Native_liveStatsNative(JNIEnv *env, jclass cls) {
     (void)cls;
@@ -2589,7 +2859,7 @@ Java_net_prisma_pathtrace_Native_liveStatsNative(JNIEnv *env, jclass cls) {
     // build 年龄的相关性一眼可见）。
     // v0.4.7: [9] = 当前 TLAS 年龄 ms（-1=从未构建）——死亡行 age= 与
     // “重建后 ~1s 即死”签名一行对照。
-    jlong out[10] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
+    jlong out[11] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
     @synchronized (g_liveLock) {
         out[0] = (jlong)g_liveFrames;
         out[1] = (jlong)g_liveSppTotal;
@@ -2602,9 +2872,10 @@ Java_net_prisma_pathtrace_Native_liveStatsNative(JNIEnv *env, jclass cls) {
         out[8] = (jlong)g_stats[3];
         out[9] = (g_lastTlasBuildMs < 0.0) ? (jlong)-1
                 : (jlong)(clockms() - g_lastTlasBuildMs);
+        out[10] = (jlong)g_sceneEpoch;   // v0.4.8: 场景纪元（[live] 行 epoch=）
     }
-    jlongArray result = (*env)->NewLongArray(env, 10);
-    if (result != NULL) { (*env)->SetLongArrayRegion(env, result, 0, 10, out); }
+    jlongArray result = (*env)->NewLongArray(env, 11);
+    if (result != NULL) { (*env)->SetLongArrayRegion(env, result, 0, 11, out); }
     return result;
 }
 
@@ -2801,6 +3072,13 @@ Java_net_prisma_pathtrace_Native_shutdownNative(JNIEnv *env, jclass cls) {
     g_instanceBuffer = nil;
     g_verifiedTlas = nil;
     g_verifiedTlasBuild = 0;
+    g_twinTlas = nil;          // v0.4.8
+    g_twinInstanceBuffer = nil;
+    g_twinBuildMs = -1.0;
+    g_sceneEpoch = 0;
+    g_lastBuildContentVersion = 0;
+    g_sceneContentVersion = 0;
+    g_pingpongBuilds = 0;
     g_pipeline = nil;
     g_ptPipeline = nil;
     g_presentPipeline = nil;

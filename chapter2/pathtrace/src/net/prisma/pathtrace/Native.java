@@ -68,6 +68,19 @@ final class Native {
      */
     static native void refreshTlasNative();
 
+    /** v0.4.8 ping-pong：探针线程 500ms 强制同内容重建（替换件年龄恒
+     * &lt;0.5s——v0.4.7 真机死亡签名最小年龄 1.0s，外部写手永远来不及得手）。
+     * 返回 long[4] {builds, epoch, ageMs, rebuilt(0/1)}。 */
+    static native long[] pingpongNative();
+
+    /** v0.4.8 孪生装填：以当前 ready 槽位构建零接触同内容第二 TLAS（不触碰
+     * 服役件/池/verified）；服役件同步刷新至同生同刻（年龄对照才有意义）。 */
+    static native boolean twinArmNative();
+
+    /** v0.4.8 孪定期谳：六轴电池（±X/±Y/±Z，512 格）打孪生一生唯一一查。
+     * 返回 int[3] {hits, ageMs, dispatched}；孪生随即退休（下次构建 flush）。 */
+    static native int[] twinProbeNative(float camX, float camY, float camZ);
+
     /** 槽位是否持有就绪 BLAS。 */
     static native boolean isChunkReady(long index);
 

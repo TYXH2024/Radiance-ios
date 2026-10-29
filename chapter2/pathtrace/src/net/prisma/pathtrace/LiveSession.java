@@ -67,9 +67,15 @@ import java.nio.file.Paths;
  */
 final class LiveSession implements Runnable {
 
-    /** 观察窗时长（ms）——报告判定块在此窗口末写入。 */
-    private static final long LIVE_WINDOW_MS = 60_000L;
-    /** 快照时刻（ms，窗内）：早期收敛证据 + 高 spp 收敛证据。 */
+    /** 观察窗时长（ms）——报告判定块在此窗口末写入。v0.4.8: 90s =
+     *  基线（0-10s）+ 孪生零接触窗口（10-30s）+ ping-pong 时代（30s+）。 */
+    private static final long LIVE_WINDOW_MS = 90_000L;
+    /** v0.4.8: 孪生零接触窗口——t=10s 装填，t=30s 定谳 + ping-pong 激活。 */
+    private static final long TWIN_ARM_MS = 10_000L;
+    private static final long TWIN_CHECK_MS = 30_000L;
+    /** 快照时刻（ms，窗内）：早期收敛证据 + 高 spp 收敛证据。v0.4.8: 15s
+     *  落在孪生窗（死亡循环期），55s 落在 ping-pong 时代——两张 PNG 的
+     *  对比即 v0.4.8 交付证据。 */
     private static final long SNAP1_MS = 15_000L;
     private static final long SNAP2_MS = 55_000L;
     /** 工作线程帧间隔（ms）——Metal 侧自身串行化，此为节流。 */
@@ -175,6 +181,14 @@ final class LiveSession implements Runnable {
     /** 最近一次自愈重锚请求时刻（冷却用）。 */
     private long lastHealReqMs = -1;
 
+    // ---- v0.4.8: 孪生零接触窗口 + ping-pong 激活 ----
+    private boolean twinArmed = false;
+    private boolean twinChecked = false;
+    /** 会话内 canary 死亡次数（孪生定谳行的对照数据）。 */
+    private int windowDeaths = 0;
+    /** 孪生定谳回显（finishWindow 收口行引用）。 */
+    private String twinEcho = "未运行";
+
     LiveSession(ProbeReport r) {
         this.r = r;
     }
@@ -267,6 +281,12 @@ final class LiveSession implements Runnable {
                 bisectTick(elapsedMs);
             }
 
+            // ---- v0.4.8: 孪生零接触窗口（t=10s 装填 → t=30s 定谳 + ping-pong
+            // 激活；bisect=true 复现模式不跑——两协议互斥）----
+            if (!bisectOn) {
+                twinTick(elapsedMs);
+            }
+
             // ---- v0.4.5: 实例普查编排（基线→稳态→新鲜→再衰减→晚窗）----
             if (!censusBaselineDone && elapsedMs >= 150L) {
                 censusBaselineDone = true;
@@ -279,11 +299,15 @@ final class LiveSession implements Runnable {
             }
             if (!censusFreshDone && elapsedMs >= 30_600L) {
                 censusFreshDone = true;
-                census("S8.4 重锚后新鲜", elapsedMs);
+                census(PathtraceMod.pingPongActive
+                        ? "pingpong 起步（30s 替换件在岗——预期全命中）"
+                        : "S8.4 重锚后新鲜", elapsedMs);
             }
             if (!censusDecayDone && elapsedMs >= 33_000L) {
                 censusDecayDone = true;
-                census("再衰减后", elapsedMs);
+                census(PathtraceMod.pingPongActive
+                        ? "pingpong 稳态（33s 预期零新亡）"
+                        : "再衰减后", elapsedMs);
             }
             if (!censusLateDone && elapsedMs >= 58_000L) {
                 censusLateDone = true;
@@ -338,6 +362,109 @@ final class LiveSession implements Runnable {
                 finishWindow();
             }
         }
+    }
+
+    // ------------------------------------------------------------------
+    // v0.4.8: 孪生零接触窗口 + ping-pong 激活（毒化写手工程解）
+    // ------------------------------------------------------------------
+
+    /**
+     * 孪生窗口编排：t=10s twinArmNative（服役件同步刷新至同生同刻，孪生
+     * 零接触 parked）→ t=30s twinProbeNative 一锤定谳 + ping-pong 激活。
+     * 读法：孪生 0/6 命中 ⇒ 零接触死亡 ⇒ 外部写手（驱动层）铁证；
+     * 孪生 ≥3/6 ⇒ 射线接触是杀伤必要条件（查询链归责）。twin=false 时
+     * ping-pong 提前至 t=10s 直接激活（跳过科学环节）。
+     */
+    private void twinTick(long elapsedMs) {
+        if (!PathtraceMod.twinEnabled()) {
+            if (!twinChecked && elapsedMs >= TWIN_ARM_MS) {
+                twinChecked = true;
+                activatePingPong(elapsedMs, "twin=false（-Dpathtrace.twin=false）");
+            }
+            return;
+        }
+        if (!twinArmed && elapsedMs >= TWIN_ARM_MS) {
+            twinArmed = true;
+            try {
+                boolean ok = Native.twinArmNative();
+                r.pass(ok
+                        ? String.format("[twin] 窗口开启 @%.0fs：孪生已装填（服役件"
+                                + "同步刷新——同生同刻；未来 20s 孪生零接触，"
+                                + "服役件照常生活——预计照旧 1-2s 死亡，对照即定谳）",
+                                elapsedMs / 1000.0)
+                        : String.format("[twin] 装填失败 @%.0fs（场景未就绪）——"
+                                + "ping-pong 将于 t=30s 直接激活", elapsedMs / 1000.0));
+            } catch (Throwable t) {
+                r.fail("[twin] 装填异常: " + t);
+            }
+            return;
+        }
+        if (twinArmed && !twinChecked && elapsedMs >= TWIN_CHECK_MS) {
+            twinChecked = true;
+            twinVerdict(elapsedMs);
+        } else if (!twinArmed && !twinChecked && elapsedMs >= TWIN_CHECK_MS) {
+            // 装填未成功（异常/拒绝）——不再等，直接激活
+            twinChecked = true;
+            activatePingPong(elapsedMs, "孪生未装填");
+        }
+    }
+
+    /** 孪生定谳行 + ping-pong 激活。 */
+    private void twinVerdict(long elapsedMs) {
+        int hits = -1;
+        int ageMs = -1;
+        int dispatched = 0;
+        try {
+            int[] res = Native.twinProbeNative(lastX, lastY, lastZ);
+            if (res != null && res.length >= 3) {
+                hits = res[0];
+                ageMs = res[1];
+                dispatched = res[2];
+            }
+        } catch (Throwable t) {
+            r.fail("[twin] 定谳电池异常: " + t);
+        }
+        String verdict;
+        if (dispatched == 0) {
+            verdict = "电池未派发（异常）——对照 [tlas-health] 行";
+            twinEcho = "电池异常";
+        } else if (hits == 0) {
+            verdict = "孪生零接触死亡 ⇒ 外部写手定谳（驱动层：zink/MoltenVK/"
+                    + "原版渲染/AS 私有内存管理——Radiance 四条自有 GPU 管线已"
+                    + "在 v0.4.7 五段梯全部洗清）；ping-pong 替换件是唯一工程解";
+            twinEcho = "零接触死亡（外部写手定谳）";
+        } else if (hits >= 3) {
+            verdict = "孪生零接触存活 ⇒ 射线接触是杀伤必要条件（与既有“查询"
+                    + "剂量无关”签名并存——接触本身即触发，仪器/查询链归责）";
+            twinEcho = "零接触存活（接触必要性成立）";
+        } else {
+            verdict = "孪生部分命中（边界态）——对照 [tlas-health] 与 "
+                    + "[live-sentinel] 行";
+            twinEcho = "部分命中（边界态）";
+        }
+        r.pass(String.format(
+                "[twin] 定谳 @%.0fs：六轴电池 %d/6 命中（孪生年龄 %.1fs，"
+                        + "服役件同期死亡 %d 次）——%s",
+                elapsedMs / 1000.0, hits, ageMs / 1000.0, windowDeaths, verdict));
+        activatePingPong(elapsedMs, "孪生定谳完成");
+    }
+
+    /** ping-pong 激活行（twin=false / 孪生定谳后共用）。 */
+    private void activatePingPong(long elapsedMs, String why) {
+        if (!PathtraceMod.pingPongEnabled()) {
+            r.info(String.format(
+                    "[pingpong] 保持关闭（-Dpathtrace.pingpong=false）——%s；"
+                            + "死亡循环行为保留（对照用），毒帧守卫与自愈重锚"
+                            + "仍在岗", why));
+            return;
+        }
+        PathtraceMod.pingPongActive = true;
+        r.pass(String.format(
+                "[pingpong] 激活 @%.0fs（%s）：探针线程 500ms 强制同内容重建——"
+                        + "替换件年龄恒 <0.5s（v0.4.7 真机死亡签名最小 1.0s，"
+                        + "写手永远来不及得手）；同内容重建不清累积（场景纪元"
+                        + "豁免）+ 毒帧守卫防死帧冲刷——画面从此持续收敛",
+                elapsedMs / 1000.0, why));
     }
 
     // ------------------------------------------------------------------
@@ -510,6 +637,9 @@ final class LiveSession implements Runnable {
             String tlasTag = st.length >= 9 ? String.format(" tlas=build#%d", st[8]) : "";
             if (st.length >= 10 && st[9] >= 0) {
                 tlasTag += String.format(" age=%.1fs", st[9] / 1000.0);
+            }
+            if (st.length >= 11) {
+                tlasTag += String.format(" epoch=%d", st[10]);
             }
             // v0.4.7: 二分梯段内 camHit 归零采样（段判定行副证；E 段无派发不计）。
             if (bisectOn && !bisectDone && !PathtraceMod.bisectLiveOff) {
@@ -700,6 +830,9 @@ final class LiveSession implements Runnable {
             if (alive != healthAlive || !healthEchoed) {
                 healthAlive = alive;
                 healthEchoed = true;
+                if (!alive) {
+                    windowDeaths++;   // v0.4.8: 孪生定谳行对照（会话内死亡次数）
+                }
                 String ev = deathContext(elapsedMs);
                 if (alive) {
                     r.pass(String.format(
@@ -908,6 +1041,16 @@ final class LiveSession implements Runnable {
                 r.info("[bisect] 二分梯模式：本判定块基于整窗常规统计（E 段无派发"
                         + "时 camHit/blit 栏为冻结值）——毒化定谳以上方 [bisect]"
                         + " 各段判定行与收口行为准");
+            }
+            if (!bisectOn) {
+                // v0.4.8 收口行：孪生定谳 + ping-pong 状态 + 基线期死亡对照
+                r.pass(String.format(
+                        "[v0.4.8 收口] 孪生：%s | ping-pong：%s | 基线期 canary "
+                                + "死亡 %d 次 | resets=%d（场景纪元/相机移动/"
+                                + "毒帧守卫——ping-pong 时代应趋零） | spp=%d",
+                        twinEcho,
+                        PathtraceMod.pingPongActive ? "在岗（500ms 替换件）" : "关闭",
+                        windowDeaths, st[2], st[1]));
             }
             double frameSamples = (double) rtW() * rtH() * PathtraceMod.LIVE_SPP;
             double lastCamHit = frameSamples > 0
