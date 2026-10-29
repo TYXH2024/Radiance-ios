@@ -2902,7 +2902,7 @@ Java_net_prisma_pathtrace_Native_liveResetNative(JNIEnv *env, jclass cls) {
 // 都卡。新版：上一帧已完成 → 刷新 staging 快照并递增序列号；未完成 →
 // 原样返回既有快照（字节与序列号均不变——GlComposer 跳过重复上传，
 // 只置 blit）。快照稳定性论证（单 staging，无需双缓冲）：staging 的唯
-// 一写者是本函数（渲染线程单线程）；memcpy 仅在 cmd.completed 时发生
+// 一写者是本函数（渲染线程单线程）；memcpy 仅在 cmd 处于 Completed 态时发生
 // 于 g_liveLock 内——此时无 kernel 在写 g_liveImage（下一个命令缓冲需
 // 拿锁才能 commit）。撕裂读接结构不可能。旧缓冲的悬垂 direct ByteBuffer
 // 由 liveResizeNative 的延迟释放机制兑保。
@@ -2914,28 +2914,31 @@ Java_net_prisma_pathtrace_Native_livePresentNative(JNIEnv *env, jclass cls) {
                 || g_liveStagingData == NULL) {
             return NULL;
         }
-        if (g_liveCmd.completed) {
-            if (g_liveCmd.error != nil) {
-                // 上帧失败：保留旧快照（冻结温和于游戏帧穿透闪烁），序列
-                // 号不动 → 上传自然跳过。仅首例打行防风暴。
-                if (!g_presentErrLogged) {
-                    g_presentErrLogged = YES;
-                    rp("[live] present: 上帧派发失败（快照冻结至下一干净帧）: %s",
-                       g_liveCmd.error.localizedDescription.UTF8String);
+        // v0.5.2 PACE：非阻塞——上一 RT 帧未完成则复用既有快照（blit 照常、
+        // 上传由序列号跳过）；完成则刷新快照并递增序列号。判据用 status 枚举
+        // （macos-26 交叉编译环境 MTLCommandBuffer 无 completed 布尔属性——
+        // status 自 iOS 8 起核心 API，语义同且更富：Error 态冻结快照）。
+        const MTLCommandBufferStatus st = g_liveCmd.status;
+        if (st == MTLCommandBufferStatusCompleted) {
+            g_presentErrLogged = NO;
+            memcpy(g_liveStagingData, g_liveImage.contents,
+                   (size_t)g_liveW * g_liveH * 4);
+            g_presentSerial++;
+            // v0.5.2：两段退休的段二——此刻是释放旧 staging 的安全点
+            //（本函数与上传同线程顺序执行，上一 direct buffer 必已消费）。
+            if (g_stagingRetired != nil) {
+                @synchronized (g_sceneLock) {
+                    [g_retired addObject:g_stagingRetired];
                 }
-            } else {
-                g_presentErrLogged = NO;
-                memcpy(g_liveStagingData, g_liveImage.contents,
-                       (size_t)g_liveW * g_liveH * 4);
-                g_presentSerial++;
-                // v0.5.2：两段退休的段二——此刻是释放旧 staging 的安全点
-                //（本函数与上传同线程顺序执行，上一 direct buffer 必已消费）。
-                if (g_stagingRetired != nil) {
-                    @synchronized (g_sceneLock) {
-                        [g_retired addObject:g_stagingRetired];
-                    }
-                    g_stagingRetired = nil;
-                }
+                g_stagingRetired = nil;
+            }
+        } else if (st == MTLCommandBufferStatusError) {
+            // 上帧失败：保留旧快照（冻结温和于游戏帧穿透闪烁），序列
+            // 号不动 → 上传自然跳过。仅首例打行防风暴。
+            if (!g_presentErrLogged) {
+                g_presentErrLogged = YES;
+                rp("[live] present: 上帧派发失败（快照冻结至下一干净帧）: %s",
+                   g_liveCmd.error.localizedDescription.UTF8String);
             }
         }
         return (*env)->NewDirectByteBuffer(env, g_liveStagingData,
