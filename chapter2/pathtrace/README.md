@@ -16,24 +16,26 @@
 > **v0.4.7 真机回收（M3，2026-10-29 13:15）：五段梯判词全出——四条自有 GPU 管线全部洗清，写手在驱动层/仅存仪器 → v0.4.8 跑赢死神。**B 段（关 atlas）canary 死亡 87%、C 段（关合成）83%、D 段（停摄取）85%、**E 段（停派发——仅剩金丝雀/哨兵/census 在岗）仍死**（build#49/#50/#51 各活 2.1/2.0/2.0s）——毒化与 Radiance 自身四条 GPU 管线无关；死亡年龄全程 1.0-2.2s、与查询剂量无关（census 803 射线不加速死亡）⇒ 时间门控外部写手（驱动层：zink/MoltenVK/原版渲染对 AS 私有内存踩踏）；AS 为驱动托管分配（newAccelerationStructureWithSize）——自配短寸不可能。用户屏上首次见到持续路径追踪画面（活窗 camHit 69.2%、峰值 99.95 Mray/s）——但靠自愈重锚硬撑（20+ 次循环）。**v0.4.8 工程解：①场景纪元（同内容重建不清累积）+ ②ping-pong 替换件（500ms 强制同内容重建——替换件年龄恒 <0.5s，写手 1.0s 最小得手延迟永远追不上）+ ③毒帧守卫（camHit<2% 即 store 覆写）+ ④孪生零接触终局实验（零接触第二 AS，20s 后单次电池定谳接触必要性）+ ⑤维护环（探针线程不再退出——旧版 deadline 后 TLAS 永久死亡 bug 顺带修复）。**现场记录：`docs/chapter2-pathtrace-field/M3-v0.4.7-report.txt`
 > **v0.4.8 双机回收（M3 79s + A20 Pro 完整 90s 窗，2026-10-29）：ping-pong 时代双机零死亡持续收敛——2.2/2.3 工程闭环；孪生判词分岔（M3 孪生 0/6 死=外部写手 / A20 Pro 孪生存活=射线接触是杀伤必要条件）——两代驱动毒化机制不同，ping-pong 同等压制。**M3：spp 16744、峰值 108.92 Mray/s；A20 Pro：spp 22172、峰值 172.98 Mray/s（双破纪录）、wall 93.3 f/s。用户首张真机屏摄三问（阴影✓ / 材质模糊 / 噪点）+ VLM 屏摄鉴定 → v0.4.9 画质轮。现场记录：`docs/chapter2-pathtrace-field/M3-v0.4.8-report.txt` + `A20Pro-v0.4.8-report.txt`
 > **v0.4.9 CLARITY（画质轮）：四刀——①分辨率 480×270 → 720×窗口比（像素密度 ×1.84、射线预算守恒：spp/帧 4→2；宽高比随窗消 16:9→19.5:9 横向拉伸）②atlas LINEAR → NEAREST（原版 MC 像素质感回归 + 消格间 bleed；远处走样由累积抖动带限）③噪点双修（早期收敛加档：重启后头 512 spp ×4 档/帧；firefly 拆分：间接逃逸射线不再采样太阳盘——NEE 已计太阳直射）④tonemap：Reinhard extended 白点 W=2（消屏摄“灰雾/发闷”判词）。孪生/ping-pong 协议不变。**
+> **v0.4.9 真机回收（A20 Pro 完整 90s 窗，2026-10-29 18:11）：LIVE_OK——画质四刀全部生效，用户判词「画质可以了（原来的感觉像抗锯齿）」、阴影 ✓。**ping-pong 时代（30-104s）零死亡、camHit 恒 99.7-100%、spp 6404 仍单调收敛、稳态吞吐 ~107-110 Mray/s（加档窗峰值 194.6）、resets 30s 后冻结 2430、compose 心跳全零错。基线期（0-30s）5 次死亡（年龄 1.32/1.25/1.26/1.78/1.48s——定时器签名第 8 轮）、死亡屏幕 episode 1.6/3.9/6.3/9.0/~4s = 用户反馈「开场闪几次、每次 5-10s、灰蒙/天空色」的实锚；孪生 0/6（与 M3 同型——本轮接触无关型，与 v0.4.8 A20 接触必要性型并列归档）。剩余两问（树叶不透明 / 开场闪屏）→ v0.5.0 CANOPY。现场记录：`docs/chapter2-pathtrace-field/A20Pro-v0.4.9-report.txt` + 三 PNG
+> **v0.5.0 CANOPY：两刀——①树叶/玻璃/草丛 alpha 镂空（cutoutTrace：命中后采样 atlas alpha，<0.5 纹素视为孔洞，射线推进 tMin 重查 ≤8 轮；阴影射线同样处理 ≤6 轮——树影斑驳、树冠见孔；UV 哨兵层/白纹理回退天然不透明；scene_trace_kernel 仪器逐字不动）②ping-pong 自 t=0（孪生默认关——双机定谳已归档；-Dpathtrace.twin=true 恢复 90s 取证协议）——开场闪屏（基线期死亡循环）自本版起不存在。噪点按用户指示不动（性能优先）。**
 
 ## 取成品（两个通道，内容相同）
 
 | 通道 | 位置 | 说明 |
 |---|---|---|
-| **A · 工作流运行页成品文件** | Actions → `chapter2-pathtrace` → 任意绿勾运行 → 页面底部 **Artifacts** 区 → `pathtrace-jar` | 每次绿勾必有；zip 内含 `pathtrace-0.4.9.jar` + dylib + metallib。**运行中途被取消的运行没有 artifact**（也不会发布 Release——可能遗留草稿） |
-| **B · GitHub Release（正式交付）** | https://github.com/TYXH2024/Radiance-ios/releases/tag/pathtrace-v0.4.9 → `pathtrace-0.4.9.jar` | 幂等 `--clobber` 重传；若 Releases 页看不到，先检查页面底部"Drafts"区（被取消的运行可能遗留未发布草稿） |
+| **A · 工作流运行页成品文件** | Actions → `chapter2-pathtrace` → 任意绿勾运行 → 页面底部 **Artifacts** 区 → `pathtrace-jar` | 每次绿勾必有；zip 内含 `pathtrace-0.5.0.jar` + dylib + metallib。**运行中途被取消的运行没有 artifact**（也不会发布 Release——可能遗留草稿） |
+| **B · GitHub Release（正式交付）** | https://github.com/TYXH2024/Radiance-ios/releases/tag/pathtrace-v0.5.0 → `pathtrace-0.5.0.jar` | 幂等 `--clobber` 重传；若 Releases 页看不到，先检查页面底部"Drafts"区（被取消的运行可能遗留未发布草稿） |
 
 > v0.1 首发 workflow 遗漏了 artifact 上传步骤（2.0/2.1 均有）——导致"绿勾了但运行页看不到 jar"。v0.1.1 已补齐：**以后看绿勾运行页最下方的 Artifacts 即可直接下载**。
 
 ## 使用（2.3 实时版）
 
-1. 删除 `mods/` 内旧探针 JAR（scene-ingestion / metal-rt-probe / rt-probe / 旧版 pathtrace），放入 `pathtrace-0.4.9.jar`——同存档、同启动器档位（Vulkan/MoltenVK 档，OSMesa 宿主实测兼容）。**回报文件名按设备命名（如 A20Pro-default.txt）**——v0.4.3/0.4.4 的"M3-"前缀实为 A20 Pro 运行（设备以报告 S8.1 行 renderer 为准），教训立此存照。
-2. 进入世界后：摄取约 19s → 离屏首帧（2.2 链路原样跑一遍，落 `pathtrace_frame.png`）→ **实时会话自动开启（S8）——游戏画面自此被路径追踪帧整帧替换**（v0.4.9 起 720×窗口比渲染——像素密度 ×1.84 且方块不再横向变胖）。
-3. **v0.4.8 起为【孪生定谳 + ping-pong 稳定协议】（取代 v0.4.7 五段梯）：静止同一姿态，保持游戏开着——t=10s 孪生装填（零接触第二 TLAS），t=30s 孪生定谳 + ping-pong 激活——此后画面应持续收敛不再脉冲。**前 30s 仍是基线死亡循环（周期性噪点→冲刷，属预期——对照用）；**t=30s 起是 ping-pong 时代：替换件年龄恒 <0.5s，写手追不上，camHit 应恒 ~69%**。会话无限运行（探针线程维护环活到游戏退出），随时退出均可。
+1. 删除 `mods/` 内旧探针 JAR（scene-ingestion / metal-rt-probe / rt-probe / 旧版 pathtrace），放入 `pathtrace-0.5.0.jar`——同存档、同启动器档位（Vulkan/MoltenVK 档，OSMesa 宿主实测兼容）。**回报文件名按设备命名（如 A20Pro-default.txt）**——v0.4.3/0.4.4 的"M3-"前缀实为 A20 Pro 运行（设备以报告 S8.1 行 renderer 为准），教训立此存照。
+2. 进入世界后：摄取约 19s → 离屏首帧（2.2 链路原样跑一遍，落 `pathtrace_frame.png`）→ **实时会话自动开启（S8）——游戏画面自此被路径追踪帧整帧替换**（720×窗口比渲染；树叶/玻璃/草丛 alpha 镂空——树冠见孔、树影斑驳）。
+3. **v0.5.0 起为【进世界即稳定协议】：ping-pong 自 t=0 在岗（孪生默认关）——开场不再有基线期死亡闪屏（v0.4.x 前 30s 周期性全 miss 天空色帧属旧协议预期，本版起不应出现）；若仍出现即回归，回报。**静止同一姿态，保持游戏开着——画面应从噪点单调收敛（camHit 应恒定 ~99-100%）。会话无限运行（探针线程维护环活到游戏退出），随时退出均可。
 4. 停留 **≥90s**（观察窗收口判定块写入），想看收敛质量可多留（spp 持续增长）。
-5. 回报 game 目录下四个文件：**`pathtrace_report.txt`**（v0.4.9 新增重点行：**[S8.0]** 分辨率/宽高比随窗行、**[live] session begun** 的 `early=8 until 512, adaptive`、**[live] 早期收敛窗口完成**（每次重启后加档窗收口）、[compose] 首帧几何行 blit_src 应为 720×~332；既有重点行照旧：**[twin] 定谳**、**[pingpong] 激活**、**[v0.4.8 收口]**、[live] camHit 恒定 / spp 持续增长 / epoch= 栏、[tlas-health] 基线期死亡行 age= 对照）+ **`pathtrace_frame.png`** + **`pathtrace_live.png`**（15s）+ **`pathtrace_live_final.png`**（55s——**两张快照对比 + 屏摄对比（纹理像素块应清晰可辨、灰雾应消）即本版交付证据**）。**若闪退**：iOS Documents 根目录的 `hs_err_pid*.log` + `fatal_trace.txt` + `ame273_crash_report.txt` 一并回报。
-6. **开关**：`-Dpathtrace.rtW=480`（回退旧分辨率档）/ `-Dpathtrace.spp=4`（回退旧稳态样本）/ `-Dpathtrace.pingpong=false`（关替换件——死亡循环行为保留，对照用）；`-Dpathtrace.twin=false`（跳过孪生窗口，ping-pong 提前至 t=10s 激活）；`-Dpathtrace.bisect=true`（复现 v0.4.7 五段梯实验）；旧 `-Dpathtrace.atlas=false` / `-Dpathtrace.compose=false` 仍有效。
+5. 回报 game 目录下四个文件：**`pathtrace_report.txt`**（v0.5.0 新增/更名重点行：**[pingpong] 激活 @0s**——开场闪屏消亡直接证据、**[pingpong 收口]**（旧称 [v0.4.8 收口]）——窗内 canary 死亡应为 0；既有重点行照旧：[live] camHit 恒定 / spp 持续增长 / epoch= 栏、[tlas-health] 行（v0.5.0 起全程应无死亡行）、[compose] 首帧几何行 blit_src 应为 720×~332）+ **`pathtrace_frame.png`** + **`pathtrace_live.png`**（**8s**——旧死亡窗内的稳定画面证据）+ **`pathtrace_live_final.png`**（55s——**两张快照对比 + 树冠/玻璃屏摄（树叶应见孔洞、树影应斑驳、玻璃应透）即本版交付证据**）。**若闪退**：iOS Documents 根目录的 `hs_err_pid*.log` + `fatal_trace.txt` + `ame273_crash_report.txt` 一并回报。
+6. **开关**：`-Dpathtrace.twin=true`（恢复 v0.4.8/0.4.9 的 90s 取证协议——t=10s 孪生装填、t=30s 定谳）/ `-Dpathtrace.pingpong=false`（关替换件——死亡循环行为保留，对照用）/ `-Dpathtrace.rtW=480`（回退旧分辨率档）/ `-Dpathtrace.spp=4`（回退旧稳态样本）；`-Dpathtrace.bisect=true`（复现 v0.4.7 五段梯实验）；旧 `-Dpathtrace.atlas=false` / `-Dpathtrace.compose=false` 仍有效。
 
 > 若合成疑似干扰排查：加 `-Dpathtrace.compose=false` 启动——累积/快照照常，仅不上屏（判定 `LIVE_OK_NO_COMPOSE`，语义即自证 A/B）。
 

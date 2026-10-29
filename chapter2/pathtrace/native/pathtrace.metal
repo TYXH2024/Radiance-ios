@@ -6,6 +6,22 @@
 //                     ② present_kernel: Reinhard extended with white point
 //                        W=2 (v0.4.8 plain Reinhard peaked at ~0.67 gray —
 //                        the "washed-out haze" in the field screenshots).
+//  v0.5.0 "CANOPY": ③ alpha-tested transparency (cutout) in the pathtrace
+//                        core. Minecraft leaves/grass-tufts/glass are
+//                        cutout-layer geometry: texels with alpha < 0.5 are
+//                        HOLES. v0.4.x shaded every committed hit as opaque,
+//                        so canopies rendered their transparent texels
+//                        (atlas RGB is black there — the "green/black
+//                        speckle canopy" in the field screenshots) and leaf
+//                        shadows were solid slabs. cutoutTrace() tests the
+//                        atlas alpha at the committed hit; a transparent
+//                        texel advances the ray (tMin = dist + eps) and
+//                        re-queries — same committed-query API proven on
+//                        device since 2.0 (reset/next/commit/
+//                        get_committed_*). The shadow ray shares the
+//                        treatment (dappled canopy light). scene_trace_kernel
+//                        (2.1 instrument) stays VERBATIM — sentinel/census
+//                        lines keep byte-level comparability.
 //
 //  Three kernels in one metallib:
 //
@@ -185,18 +201,125 @@ static inline float3 skyAmbient(float3 n) {
     return float3(0.55f, 0.65f, 0.90f) * (0.55f + 0.45f * clamp(n.y, 0.0f, 1.0f));
 }
 
-// Any-hit occlusion query — the shadow ray. One candidate is enough:
-// the scene is fully opaque in v0.1 (no alpha-tested transparency yet).
+// ---- v0.5.0: alpha-tested transparency (cutout) constants ----
+// Minecraft's cutout threshold is 0.5 (RenderLayer.getCutoutAlphaTest).
+// Camera/path rays get 8 passes, shadow rays 6 — exhausting them is a
+// ~0.3^6..8 texel run (a grazing ray punching 6-8 consecutive transparent
+// texels): camera-side treats it as pass-through (sky), shadow-side
+// conservatively occludes. Both fallbacks are visually nothing.
+static const float kCutoutAlphaMin     = 0.5f;
+static const int   kCutoutPassesCam    = 8;
+static const int   kCutoutPassesShadow = 6;
+static const float kCutoutEps          = 0.002f;
+
+// v0.5.0: alpha-tested nearest-hit trace ("cutout trace"). Issues up to
+// kCutoutPassesCam committed queries; a committed hit whose atlas alpha
+// is below threshold is a hole — the ray advances past it (tMin =
+// dist + eps) and re-queries. Returns false on miss (or pass exhaustion
+// — treated as pass-through). UV-sentinel layers (no UV0 element) and
+// the no-atlas 1x1 white fallback are opaque by construction (alpha=1).
+// Every issued query is counted into rayStats[0] — the Mray/s column
+// stays an honest measured number (cutout re-queries are real GPU work).
+struct CutoutHit {
+    float dist;
+    uint32_t inst;
+    uint32_t prim;
+    float2 bary;
+};
+
+static inline bool cutoutTrace(
+    raytracing::acceleration_structure<raytracing::instancing> scene,
+    device const uint *instTriBase,
+    device const packed_float2 *triUVs,
+    texture2d<float> atlasTex,
+    sampler atlasSampler,
+    device atomic_uint *rayStats,
+    float3 origin, float3 dir, float tEnd,
+    thread CutoutHit &outHit)
+{
+    float tMin = 0.001f;
+    for (int k = 0; k < kCutoutPassesCam; ++k) {
+        raytracing::intersection_params params;
+        raytracing::intersection_query<raytracing::instancing, raytracing::triangle_data> q;
+        q.reset(raytracing::ray(origin, dir, tMin, tEnd),
+                scene, 0xFFFFFFFFu, params);
+        atomic_fetch_add_explicit(rayStats, 1u, memory_order_relaxed);
+        while (q.next()) {
+            q.commit_triangle_intersection();
+        }
+        if (q.get_committed_intersection_type()
+                != raytracing::intersection_type::triangle) {
+            return false;                       // miss — sky / pass-through
+        }
+        outHit.dist = q.get_committed_distance();
+        outHit.inst = q.get_committed_instance_id();
+        outHit.prim = q.get_committed_primitive_id();
+        outHit.bary = q.get_committed_triangle_barycentric_coord();
+
+        const uint32_t tri = instTriBase[outHit.inst] + outHit.prim;
+        const float w0 = 1.0f - outHit.bary.x - outHit.bary.y;
+        const float2 uv = float2(triUVs[tri * 3 + 0]) * w0
+                        + float2(triUVs[tri * 3 + 1]) * outHit.bary.x
+                        + float2(triUVs[tri * 3 + 2]) * outHit.bary.y;
+        float alpha = 1.0f;                     // sentinel / white fallback
+        if (uv.x >= 0.0f) {
+            alpha = atlasTex.sample(atlasSampler, uv).a;
+        }
+        if (alpha >= kCutoutAlphaMin) {
+            return true;                        // opaque surface — shade it
+        }
+        tMin = outHit.dist + kCutoutEps;        // hole — continue past it
+    }
+    return false;                               // exhausted — pass-through
+}
+
+// Any-hit occlusion query — the shadow ray. v0.5.0: alpha-tested —
+// transparent texels (leaf holes, glass) no longer occlude, so canopies
+// cast dappled light instead of solid slabs. Up to kCutoutPassesShadow
+// re-queries; exhaustion is conservatively occluded. Shadow queries stay
+// uncounted in rayStats (v0.4.x metric continuity — camera/bounce queries
+// only).
 static inline bool occluded(
     raytracing::acceleration_structure<raytracing::instancing> scene,
+    device const uint *instTriBase,
+    device const packed_float2 *triUVs,
+    texture2d<float> atlasTex,
+    sampler atlasSampler,
     float3 origin, float3 dir, float maxDist)
 {
-    raytracing::intersection_params params;
-    raytracing::intersection_query<raytracing::instancing, raytracing::triangle_data> q;
-    q.reset(raytracing::ray(origin, dir, 0.001f, maxDist),
-            scene, 0xFFFFFFFFu, params);
-    if (q.next()) { return true; }   // candidate present = triangle hit
-    return false;
+    float tMin = 0.001f;
+    for (int k = 0; k < kCutoutPassesShadow; ++k) {
+        raytracing::intersection_params params;
+        raytracing::intersection_query<raytracing::instancing, raytracing::triangle_data> q;
+        q.reset(raytracing::ray(origin, dir, tMin, maxDist),
+                scene, 0xFFFFFFFFu, params);
+        while (q.next()) {
+            q.commit_triangle_intersection();
+        }
+        if (q.get_committed_intersection_type()
+                != raytracing::intersection_type::triangle) {
+            return false;                       // clear sky above
+        }
+        const float dist = q.get_committed_distance();
+        const uint32_t inst = q.get_committed_instance_id();
+        const uint32_t prim = q.get_committed_primitive_id();
+        const float2 bary = q.get_committed_triangle_barycentric_coord();
+
+        const uint32_t tri = instTriBase[inst] + prim;
+        const float w0 = 1.0f - bary.x - bary.y;
+        const float2 uv = float2(triUVs[tri * 3 + 0]) * w0
+                        + float2(triUVs[tri * 3 + 1]) * bary.x
+                        + float2(triUVs[tri * 3 + 2]) * bary.y;
+        float alpha = 1.0f;                     // sentinel / white fallback
+        if (uv.x >= 0.0f) {
+            alpha = atlasTex.sample(atlasSampler, uv).a;
+        }
+        if (alpha >= kCutoutAlphaMin) {
+            return true;                        // opaque occluder
+        }
+        tMin = dist + kCutoutEps;               // hole — keep looking
+    }
+    return true;                                // exhausted — conservative
 }
 
 // Cosine-weighted hemisphere sample around n.
@@ -248,16 +371,12 @@ kernel void pathtrace_kernel(
         float3 radiance = float3(0.0f);
 
         for (uint32_t b = 0; b <= u.maxBounces; b++) {
-            raytracing::intersection_params params;
-            raytracing::intersection_query<raytracing::instancing, raytracing::triangle_data> q;
-            q.reset(raytracing::ray(origin, dir, 0.001f, 1024.0f),
-                    scene, 0xFFFFFFFFu, params);
-            atomic_fetch_add_explicit(rayStats, 1u, memory_order_relaxed);
-            while (q.next()) {
-                q.commit_triangle_intersection();
-            }
-            if (q.get_committed_intersection_type()
-                    != raytracing::intersection_type::triangle) {
+            // v0.5.0: cutout trace — transparent texels (leaf holes, glass)
+            // are passed through; up to kCutoutPassesCam committed queries.
+            CutoutHit ch;
+            if (!cutoutTrace(scene, instTriBase, triUVs, atlasTex,
+                             atlasSampler, rayStats, origin, dir, 1024.0f,
+                             ch)) {
                 // v0.4.9: camera rays keep the sun disk; indirect escapes
                 // use the disk-less sky (firefly path removed).
                 radiance += throughput
@@ -271,10 +390,10 @@ kernel void pathtrace_kernel(
                                           memory_order_relaxed);
             }
 
-            const float dist = q.get_committed_distance();
-            const uint32_t inst = q.get_committed_instance_id();
-            const uint32_t prim = q.get_committed_primitive_id();
-            const float2 bary = q.get_committed_triangle_barycentric_coord();
+            const float dist = ch.dist;
+            const uint32_t inst = ch.inst;
+            const uint32_t prim = ch.prim;
+            const float2 bary = ch.bary;
             const uint32_t tri = instTriBase[inst] + prim;
 
             float3 n = float3(triNormals[tri]);
@@ -310,9 +429,12 @@ kernel void pathtrace_kernel(
             const float3 hitP = origin + dir * dist;
 
             // Sun direct light + shadow ray (NEE toward the sun disk).
+            // v0.5.0: shadow ray is alpha-tested — dappled canopy light.
             float ndl = dot(n, sunDir);
             if (ndl > 0.0f
-                    && !occluded(scene, hitP + n * 0.002f, sunDir, 1024.0f)) {
+                    && !occluded(scene, instTriBase, triUVs, atlasTex,
+                                 atlasSampler, hitP + n * 0.002f, sunDir,
+                                 1024.0f)) {
                 radiance += throughput * albedo
                           * float3(1.0f, 0.95f, 0.85f) * (ndl * 2.2f);
             }

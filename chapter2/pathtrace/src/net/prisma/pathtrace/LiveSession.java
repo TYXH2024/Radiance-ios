@@ -67,16 +67,19 @@ import java.nio.file.Paths;
  */
 final class LiveSession implements Runnable {
 
-    /** 观察窗时长（ms）——报告判定块在此窗口末写入。v0.4.8: 90s =
-     *  基线（0-10s）+ 孪生零接触窗口（10-30s）+ ping-pong 时代（30s+）。 */
+    /** 观察窗时长（ms）——报告判定块在此窗口末写入。v0.5.0: 90s 全程
+     *  ping-pong 在岗（孪生默认关——双机定谳已归档；-Dpathtrace.twin=true
+     *  恢复 v0.4.8/0.4.9 的 90s 取证协议：0-10s 基线 + 10-30s 孪生 +
+     *  30s+ ping-pong）。 */
     private static final long LIVE_WINDOW_MS = 90_000L;
-    /** v0.4.8: 孪生零接触窗口——t=10s 装填，t=30s 定谳 + ping-pong 激活。 */
+    /** v0.4.8: 孪生零接触窗口——t=10s 装填，t=30s 定谳 + ping-pong 激活。
+     *  v0.5.0 起仅取证复现模式（-Dpathtrace.twin=true）使用。 */
     private static final long TWIN_ARM_MS = 10_000L;
     private static final long TWIN_CHECK_MS = 30_000L;
-    /** 快照时刻（ms，窗内）：早期收敛证据 + 高 spp 收敛证据。v0.4.8: 15s
-     *  落在孪生窗（死亡循环期），55s 落在 ping-pong 时代——两张 PNG 的
-     *  对比即 v0.4.8 交付证据。 */
-    private static final long SNAP1_MS = 15_000L;
+    /** 快照时刻（ms，窗内）：早期收敛证据 + 高 spp 收敛证据。v0.5.0:
+     *  SNAP1 8s——落在 v0.4.x 基线死亡窗内（旧协议 0-30s 的死亡闪屏期），
+     *  ping-pong 自 t=0 在岗后该时刻应已有稳定画面（开场无闪屏证据）。 */
+    private static final long SNAP1_MS = 8_000L;
     private static final long SNAP2_MS = 55_000L;
     /** 工作线程帧间隔（ms）——Metal 侧自身串行化，此为节流。 */
     private static final long FRAME_SLEEP_MS = 8L;
@@ -372,14 +375,20 @@ final class LiveSession implements Runnable {
      * 孪生窗口编排：t=10s twinArmNative（服役件同步刷新至同生同刻，孪生
      * 零接触 parked）→ t=30s twinProbeNative 一锤定谳 + ping-pong 激活。
      * 读法：孪生 0/6 命中 ⇒ 零接触死亡 ⇒ 外部写手（驱动层）铁证；
-     * 孪生 ≥3/6 ⇒ 射线接触是杀伤必要条件（查询链归责）。twin=false 时
-     * ping-pong 提前至 t=10s 直接激活（跳过科学环节）。
+     * 孪生 ≥3/6 ⇒ 射线接触是杀伤必要条件（查询链归责）。
+     * v0.5.0: 孪生默认关（M3 0/6 外部写手 / A20 Pro 两型均已归档——
+     * ping-pong 同等压制）→ ping-pong 于首个 tick（t≈0）即激活：
+     * 替换件年龄恒 <0.5s，基线期死亡循环（= 用户反馈的开场闪屏：
+     * 全 miss 帧渲染成天空色铺满，每次 5-10s）自本版起不存在。
      */
     private void twinTick(long elapsedMs) {
         if (!PathtraceMod.twinEnabled()) {
-            if (!twinChecked && elapsedMs >= TWIN_ARM_MS) {
+            // v0.5.0 默认路径：t≈0 即保护（探针线程 500ms 节拍 ≤0.5s 后
+            // 开始替换；t=0 时 AS 为新鲜构建——见 [live] 0s 行 age≈0.2s）。
+            if (!twinChecked) {
                 twinChecked = true;
-                activatePingPong(elapsedMs, "twin=false（-Dpathtrace.twin=false）");
+                activatePingPong(elapsedMs,
+                        "twin 默认关闭（v0.5.0 协议：t=0 即保护）");
             }
             return;
         }
@@ -1047,11 +1056,13 @@ final class LiveSession implements Runnable {
                         + " 各段判定行与收口行为准");
             }
             if (!bisectOn) {
-                // v0.4.8 收口行：孪生定谳 + ping-pong 状态 + 基线期死亡对照
+                // v0.5.0 收口行：孪生状态 + ping-pong 状态 + 窗内死亡对照
+                // （ping-pong 自 t=0 在岗时基线期不存在——窗内死亡应恒零）
                 r.pass(String.format(
-                        "[v0.4.8 收口] 孪生：%s | ping-pong：%s | 基线期 canary "
-                                + "死亡 %d 次 | resets=%d（场景纪元/相机移动/"
-                                + "毒帧守卫——ping-pong 时代应趋零） | spp=%d",
+                        "[pingpong 收口] 孪生：%s | ping-pong：%s | 窗内 canary "
+                                + "死亡 %d 次（ping-pong 自 t=0 在岗应恒零）"
+                                + " | resets=%d（场景纪元/相机移动/"
+                                + "毒帧守卫） | spp=%d",
                         twinEcho,
                         PathtraceMod.pingPongActive ? "在岗（500ms 替换件）" : "关闭",
                         windowDeaths, st[2], st[1]));

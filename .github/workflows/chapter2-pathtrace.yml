@@ -42,16 +42,16 @@ jobs:
           set -ex
           chmod +x chapter2/pathtrace/build.sh
           bash chapter2/pathtrace/build.sh
-          JAR="chapter2/pathtrace/pathtrace-0.4.9.jar"
+          JAR="chapter2/pathtrace/pathtrace-0.5.0.jar"
           test -f "$JAR"
-          cp "$JAR" ./pathtrace-0.4.9.jar
+          cp "$JAR" ./pathtrace-0.5.0.jar
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: pathtrace-jar
           path: |
-            pathtrace-0.4.9.jar
+            pathtrace-0.5.0.jar
             chapter2/pathtrace/build/native/libradiance_pathtrace.dylib
             chapter2/pathtrace/build/native/pathtrace.metallib
           if-no-files-found: error
@@ -120,7 +120,7 @@ jobs:
           file "$METALLIB"
           test -s "$METALLIB"
           # JAR 内容验证：mixin 类 + mixins.json 必须在包内
-          JAR="chapter2/pathtrace/pathtrace-0.4.9.jar"
+          JAR="chapter2/pathtrace/pathtrace-0.5.0.jar"
           unzip -l "$JAR" | grep -q "net/prisma/pathtrace/mixin/PathtraceWindowMixin.class" \
             && echo "JAR_MIXIN_CLASS_OK"
           unzip -l "$JAR" | grep -q "pathtrace.mixins.json" \
@@ -128,57 +128,56 @@ jobs:
           unzip -l "$JAR" | grep -q "fabric.mod.json" \
             && echo "JAR_FABRIC_MOD_OK"
 
-      - name: Release (pathtrace-v0.4.9, prerelease)
+      - name: Release (pathtrace-v0.5.0, prerelease)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -ex
-          TAG="pathtrace-v0.4.9"
-          TITLE="pathtrace v0.4.9 CLARITY — 画质轮：分辨率 720×窗口比（像素密度×1.84，射线预算守恒）+ atlas NEAREST 像素质感 + 噪点双修（早期加档×4 + firefly 拆分）+ Reinhard 白点——孪生/ping-pong 协议不变"
+          TAG="pathtrace-v0.5.0"
+          TITLE="pathtrace v0.5.0 CANOPY — 树叶/玻璃/草丛 alpha 镂空（cutoutTrace + 阴影射线镂空：树冠见孔、树影斑驳）+ ping-pong 自 t=0（孪生默认关——开场闪屏消亡）——噪点按指示不动（性能优先）"
           NOTES_FILE=release-notes.md
           cat > "$NOTES_FILE" <<'EOF'
-          # pathtrace v0.4.9 — CLARITY（画质轮）
+          # pathtrace v0.5.0 — CANOPY（树叶镂空 + 开场无闪屏）
           
-          **背景**：v0.4.8 双机零死亡收敛闭环（M3 孪生 0/6 外部写手 / A20 Pro 孪生存活接触必要性——两代驱动毒化机制分岔，ping-pong 同等压制）。用户首张真机屏摄三问：阴影✓、材质模糊、噪点——本轮对症下刀（VLM 屏摄鉴定 + 代码级诊断双源定谳）。
+          **背景**：v0.4.9 CLARITY 真机回收（A20 Pro 完整 90s 窗）：画质四刀全部生效——用户判词「画质可以了（原来的感觉像抗锯齿）」，阴影 ✓，LIVE_OK 收口；ping-pong 时代零死亡、spp 6404（104s 仍在收敛）、稳态吞吐 ~107-110 Mray/s、resets 30s 后冻结。三问剩两：①树叶不透明——截屏树冠「绿黑像素交错」= alpha 镂空缺失（透明纹素被当不透明面着色，atlas 透明纹素处 RGB 为黑）②开场闪屏——旧协议 0-30s 基线期 5 次死亡、每次 5-10s 全 miss 帧（天空色铺满，即用户描述的「灰色遮罩/全世界材质丢失呈天空色」）。
           
-          **四刀**：
-          1. **分辨率**：480×270 → 720×窗口比（默认档；-Dpathtrace.rtW 可调）。
-             v0.4.8 的 480×270 拉伸 5.8× 是“整图发软”主因；720 档像素密度
-             ~1.84×，同时 spp/帧 4→2 使每帧射线预算反而略降——模糊立消、
-             帧率不掉。RT 宽高比随窗（v0.4.8 的 16:9 RT 对 19.5:9 窗口横向
-             拉伸 1.35×，方块全变胖）——方形像素 + 顺带省 ~18% 射线。
-          2. **atlas NEAREST**：LINEAR 双线性把 16×16 像素画抹成糊斑
-             （“材质模糊”第二成因）+ atlas 格间 bleed。NEAREST 恢复原版硬
-             像素质感；远处 minification 走样由累积循环内的逐样本射线抖动
-             带限（抖动 × NEAREST 收敛 = 箱式滤波——不是抹平）。
-          3. **噪点双修**：①早期收敛加档——累积重启（移动/场景变化/毒帧）
-             后头 512 spp 自动 ×4 档（spp/帧 2→8），噪点可见期缩短 ~4×；
-             ②firefly 拆分——间接反弹的逃逸射线不再采样太阳盘（盘面
-             radiance 8.0 vs 天空 ~1.0，cosine 采样命中盘面的概率极小但
-             贡献巨大 = 亮斑方差炸弹；太阳直射已由 NEE 项计入，移除后无
-             欠采样偏差）。
-          4. **tonemap 对比度**：Reinhard extended 白点 W=2——v0.4.8 平原
-             Reinhard 峰值 ~0.67 灰（屏摄“灰雾/发闷”判词）；白点后高光可
-             到纯白、暗部不动、中间调抬升。
+          **两刀**：
+          1. **alpha cutout（pathtrace.metal，唯一内核改动）**：新增
+             cutoutTrace()——命中后采样 atlas alpha，低于 0.5（MC cutout
+             阈值）的纹素视为孔洞，射线推进 tMin 重查（≤8 轮）；阴影射线
+             同样处理（≤6 轮，耗尽保守遮挡）。效果：树叶见孔、玻璃透亮、
+             草丛成簇，树影变斑驳光影而非实心黑板。UV 哨兵层与无 atlas
+             白纹理回退天然不透明（零行为变化）。每轮重查如实计入
+             rayStats——Mray/s 仍是诚实计量值。scene_trace_kernel
+             （2.1 仪器）逐字不动：哨兵/census 行字节级可比。
+          2. **ping-pong 自 t=0（协议默认翻转，纯 Java）**：孪生默认关
+             （M3 0/6 外部写手 / A20 Pro 两型定谳均已归档——科学环节功成
+             身退）→ ping-pong 于 LiveSession 首个 tick（t≈0）激活：
+             替换件年龄恒 <0.5s，基线期死亡循环（=开场闪屏）自本版起
+             不存在。-Dpathtrace.twin=true 恢复 v0.4.8/0.4.9 的 90s
+             取证协议（t=10s 装填 → t=30s 定谳）。
           
-          **使用协议（不变：90s 孪定定谳 + ping-pong，之后无限运行）**：
-          替换 mods/ 内旧 JAR，同一存档静止同一姿态保持游戏开着。回报
-          pathtrace_report.txt + 三 PNG，v0.4.9 新增重点行：
-          - **[S8.0]** 实时会话开启行——分辨率 + 宽高比随窗 + 早期加档说明
-          - **[live] session begun** 行的 `early=8 until 512, adaptive`
-          - **[live] 早期收敛窗口完成** 行（重启后每次加档窗收口都打一条）
-          - [compose] 首帧几何行（blit_src 应为 720×~332——与窗口比一致）
-          - 双快照对比（15s vs 55s）+ 屏摄对比（纹理像素块应清晰可辨）
+          **噪点按用户指示不动**（性能优先）：cutout 会小幅增加树冠
+          视角的查询数（每帧 ~1.3-2×，全部计入计量）——若帧率不可接受
+          回报 [live] 行的 f/s 与场景描述。
           
-          开关：-Dpathtrace.rtW=480（回退旧分辨率档）/
-          -Dpathtrace.spp=4（回退旧稳态样本）/
+          **使用协议（简化：进世界即稳定）**：替换 mods/ 内旧 JAR，
+          同一存档静止同一姿态。回报 pathtrace_report.txt + 三 PNG，
+          v0.5.0 新增重点行：
+          - **[pingpong] 激活 @0s**——开场闪屏消亡的直接证据
+          - **[pingpong 收口]** 行——窗内 canary 死亡应为 0
+            （旧称 [v0.4.8 收口]）
+          - **SNAP1 改 8s**（旧死亡窗内的稳定画面证据）
+          - 树冠/玻璃屏摄：树叶应见孔洞、树影应斑驳、玻璃应透
+          
+          开关：-Dpathtrace.twin=true（复现 90s 取证协议）/
           -Dpathtrace.pingpong=false（对照）/
-          -Dpathtrace.twin=false（跳过孪生直接稳定）
+          -Dpathtrace.rtW=480（回退旧分辨率档）
           EOF
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release upload "$TAG" ./pathtrace-0.4.9.jar --clobber --repo "$GITHUB_REPOSITORY"
+            gh release upload "$TAG" ./pathtrace-0.5.0.jar --clobber --repo "$GITHUB_REPOSITORY"
           else
-            gh release create "$TAG" ./pathtrace-0.4.9.jar \
+            gh release create "$TAG" ./pathtrace-0.5.0.jar \
                  --title "$TITLE" --notes-file "$NOTES_FILE" \
                  --prerelease --repo "$GITHUB_REPOSITORY"
           fi

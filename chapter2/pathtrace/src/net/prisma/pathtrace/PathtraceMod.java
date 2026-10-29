@@ -89,7 +89,7 @@ public final class PathtraceMod {
             return;
         }
         ProbeReport r = new ProbeReport("pathtrace_report.txt");
-        r.header("路径追踪探针 (pathtrace 0.4.9)");
+        r.header("路径追踪探针 (pathtrace 0.5.0)");
         r.info("触发方式: " + triggerSource);
 
         if (isDisabled()) {
@@ -856,9 +856,11 @@ public final class PathtraceMod {
     }
 
     // ---- v0.4.8: ping-pong 替换件 + 孪生零接触（毒化写手工程解）----
-    /** ping-pong 激活（LiveSession t=30s 定谳后置位；twin=false 时 t=10s）。
-     *  探针线程 500ms 强制同内容重建——替换件年龄恒 <0.5s，写手 1.0s 最小
-     *  得手延迟永远追不上；同内容重建不清累积（场景纪元豁免）+ 毒帧守卫。 */
+    /** ping-pong 激活标志。v0.5.0: LiveSession 首个 tick（t≈0）即置位
+     *  （孪生默认关——双机定谳已归档；旧时间线 t=30s 定谳后/t=10s 跳过
+     *  孪生仅在 -Dpathtrace.twin=true 取证复现模式保留）。探针线程
+     *  500ms 强制同内容重建——替换件年龄恒 <0.5s，写手 1.0s 最小得手
+     *  延迟永远追不上；同内容重建不清累积（场景纪元豁免）+ 毒帧守卫。 */
     static volatile boolean pingPongActive = false;
 
     /** -Dpathtrace.pingpong=false：禁用替换件（保留死亡循环行为——对照用）。 */
@@ -866,9 +868,12 @@ public final class PathtraceMod {
         return flagProp("pathtrace.pingpong", true);
     }
 
-    /** -Dpathtrace.twin=false：跳过孪生窗口（ping-pong 提前至 t=10s 激活）。 */
+    /** 孪生零接触取证窗口。v0.5.0: 默认 false——M3（0/6 外部写手）与
+     *  A20 Pro（两型）定谳均已归档，科学环节功成身退；ping-pong 自
+     *  t=0 在岗（开场闪屏消亡）。-Dpathtrace.twin=true 恢复 v0.4.8/
+     *  0.4.9 的 90s 取证协议（t=10s 装填 → t=30s 定谳 + ping-pong）。 */
     static boolean twinEnabled() {
-        return flagProp("pathtrace.twin", true);
+        return flagProp("pathtrace.twin", false);
     }
 
     // ---- v0.4.2 探针线程交叉复测通道（worker→probe 的单向请求）----

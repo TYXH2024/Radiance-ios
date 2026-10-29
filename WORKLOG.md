@@ -512,3 +512,29 @@ Work Log:
 Stage Summary:
 - v0.4.9 CLARITY：画质四刀齐落——模糊（分辨率+采样双根因）、噪点（firefly+早期加档双修）、灰雾（白点 tonemap）一次对症；孪生/ping-pong 协议不变，生存性改动为零（不碰 TLAS/重建/守卫路径）
 - 待办：①CI 过绿 + Release pathtrace-v0.4.9 ②用户真机回报（重点：屏摄纹理像素块清晰度、噪点可见期是否缩短、方块是否不再变胖、双快照对比）③Apple bug report 提交（A20 Pro 最小复现为主案）④2.4 议程：事件驱动摄取、GI 质量、阴影 ray 复用、移动相机累积策略（重建降噪/时域复用）
+
+---
+
+## 2026-10-29（二十六）· pathtrace v0.4.9 真机回收判读（A20 Pro：画质四刀全部生效、开场闪屏=基线期死亡循环实锚、树叶不透明=alpha 镂空缺失）→ v0.5.0 CANOPY 两刀（cutoutTrace alpha 镂空 + ping-pong 自 t=0）
+
+Task: 回收用户 v0.4.9 A20 Pro 三件套（1418 行报告 + 三 PNG）→ 判读落档 → 回答三问（画质/树叶/闪屏 + 为何不直接改 jar）→ v0.5.0 落地
+
+Work Log:
+- **v0.4.9 判读（LIVE_OK，双证据 PNG：live.png@15s 与 live_final.png@55s 即用户屏摄的白桦树场景）**：
+  - 画质：用户判词「画质可以了（原来的感觉像抗锯齿）」——四刀全部生效（720×332 窗口比 + NEAREST + 白点 tonemap；「像抗锯齿」直觉与 480→2796 线性拉伸发软的根因一致）
+  - ping-pong 时代（30-104s）：零死亡、camHit 恒 99.7-100%、spp 8→6404 单调（104s 仍在收敛）、稳态吞吐 ~107-110 Mray/s（加档窗瞬时峰值 194.6）、resets 30s 后冻结 2430（59s 两次相机移动重置=用户实际在走动后重新收敛）、epoch=28 恒定、compose 心跳全零错、wall 78 f/s
+  - 基线期（0-30s）5 次死亡：t=1.20/3.78/8.68/16.03/26.07s，年龄 1.32/1.25/1.26/1.78/1.48s（定时器签名第 8 轮复现）；死亡屏幕 episode 时长 1.6/3.9/6.3/9.0/~4s——**与用户「开场闪几次、一次大概 5-10s」精确对齐：不是灰色遮罩也不是材质丢失，是毒化 TLAS 的全 miss 帧把天空色铺满全屏（camHit=0.2%）**；自愈等待哨兵双死确认拉长了后期 episode
+  - 孪生 0/6（孪生龄 20.0s，服役件同期 5 死）——外部写手定谳；与 v0.4.8 A20（孪生存活 5/6 接触必要性型）分岔，两型并列归档，ping-pong 同等压制
+  - 摄取 880 段/28 TLAS 构建全部完成于 live 开启前（构建#29 起跑，age 0.2s 新鲜）
+- **三问定谳**：①树叶不透明——截屏树冠「绿黑像素交错」= 透明纹素被当不透明面着色（atlas 透明纹素处 RGB 为黑），alpha 镂空缺失（v0.4.x 注释自认 "no alpha-tested transparency yet"）②开场闪屏=基线期死亡循环（上）③噪点按用户指示不动（性能优先）
+- **v0.5.0 CANOPY 两刀**：
+  1. alpha cutout（pathtrace.metal，唯一内核改动）：cutoutTrace() 命中后采样 atlas alpha（GL_RGBA 回读链路 alpha 完好），<0.5（MC cutout 阈值）纹素视为孔洞，射线推进 tMin 重查（相机/反弹 ≤8 轮，耗尽=穿透）；occluded() 同样处理（阴影 ≤6 轮，耗尽保守遮挡）——树叶见孔、玻璃透亮、草丛成簇、树影斑驳；UV 哨兵层与白纹理回退天然不透明（零行为变化）；cutout 重查如实计入 rayStats[0]（Mray/s 仍是诚实计量）；scene_trace_kernel 逐字不动（哨兵/census 字节级可比）
+  2. ping-pong 自 t=0（纯 Java）：twinEnabled 默认 true→false（双机定谳已归档，科学环节功成身退）；twinTick 首个 tick（t≈0）即 activatePingPong——t=0 时 AS 为新鲜构建（age≈0.2s）+ 探针线程 500ms 节拍 ⇒ 替换件年龄恒 <0.5s，基线期死亡循环自本版起不存在；-Dpathtrace.twin=true 恢复 90s 取证协议；收口行更名 [pingpong 收口]（窗内 canary 死亡应恒 0）；SNAP1 15s→8s（旧死亡窗内稳定画面证据）
+- 改动面：pathtrace.metal（cutoutTrace + occluded 重写）/ LiveSession.java（twinTick t=0 + SNAP1 + 收口行）/ PathtraceMod.java（twin 默认 + 报告头）/ build.sh + fabric.mod.json + workflow（0.5.0，tag pathtrace-v0.5.0）/ README（v0.4.9 回收行 + v0.5.0 协议）；**零新增 JNI 符号**（workflow nm 验证面不变）
+- 现场归档：A20Pro-v0.4.9-report.txt（1418 行）+ A20Pro-v0.4.9-frame.png（480×270 S7 离屏，字节级可比锚点未动）+ A20Pro-v0.4.9-live.png（15s）+ A20Pro-v0.4.9-live-final.png（55s，spp 3590 白桦树收敛像）
+- 性能预算评估：cutout 只在树冠/草丛视角增加查询（~1.3-2×/帧，全部计量）；A20 Pro 稳态 13ms 帧预算有富余；噪点档位不动（用户指示）
+
+Stage Summary:
+- v0.4.9 回收闭环：画质轮四刀真机全部生效；开场闪屏根因实锚（基线期死亡 episode 时长与用户描述精确对齐）；树叶问题定谳为 alpha 镂空缺失
+- v0.5.0 CANOPY：树叶/玻璃/草丛镂空 + 开场无闪屏（ping-pong 自 t=0）——从「取证协议」转为「产品协议」的第一版
+- 待办：①CI 过绿 + Release pathtrace-v0.5.0 ②用户真机回报（重点：树冠孔洞/树影斑驳/玻璃透亮、[pingpong] 激活 @0s、[tlas-health] 全程无死亡行、SNAP1@8s 有画面）③Apple bug report 提交（素材齐：死亡签名 + audit 双净 + 孪生两型 + AS 驱动托管分配）④2.4 议程：事件驱动摄取、GI 质量（黑洞穴=无反弹直射的物理正确行为，GI 后自然解决）、阴影 ray 复用、移动相机累积策略
