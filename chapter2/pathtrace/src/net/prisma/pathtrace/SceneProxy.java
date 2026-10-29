@@ -73,6 +73,8 @@ final class SceneProxy {
     // 统计
     int polls = 0;
     int rebuilds = 0;
+    /** v0.4.7: bisect Phase D 摄取暂停已回显（一次性行）。 */
+    private boolean ingestPauseEchoed = false;
     private boolean colorOffsetEchoed = false;
     private boolean uvElemEchoed = false;
     int invalidations = 0;
@@ -136,6 +138,17 @@ final class SceneProxy {
             if (announced) {
                 r.pass("已进入世界，开始网格发现");
                 announced = false;
+            }
+
+            // v0.4.7: bisect Phase D——摄取暂停（BLAS 构建/池写入全停，TLAS
+            // 冻结在换段重锚态）。轮询空转保持响应（世界退出/恢复检测不变）。
+            if (PathtraceMod.bisectIngestOff) {
+                if (!ingestPauseEchoed) {
+                    ingestPauseEchoed = true;
+                    r.pass("[bisect] SceneProxy 摄取暂停（Phase D——BLAS/池写入"
+                            + "全停，TLAS 冻结；轮询空转）");
+                }
+                continue;
             }
 
             // v0.3：相机位置缓存（S6 容错；失败不影响摄取）

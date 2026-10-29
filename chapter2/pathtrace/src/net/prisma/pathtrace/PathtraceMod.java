@@ -78,7 +78,7 @@ public final class PathtraceMod {
             return;
         }
         ProbeReport r = new ProbeReport("pathtrace_report.txt");
-        r.header("路径追踪探针 (pathtrace 0.4.6)");
+        r.header("路径追踪探针 (pathtrace 0.4.7)");
         r.info("触发方式: " + triggerSource);
 
         if (isDisabled()) {
@@ -451,8 +451,13 @@ public final class PathtraceMod {
                 // TLAS 对 live 射线全 miss；本次为 A/B 后半段：探针构建 +
                 // worker 查询，[S8.4] 行留证，[live]/[live-sentinel] 行
                 // 前后对比自证）。
+                // v0.4.7: 二分梯模式下观察窗扩到五段（+尾量）——deadline
+                // 同步加长，保证重锚/交叉复测消费器活到梯子收口。
+                long watchDeadlineMs = PathtraceMod.bisectEnabled()
+                        ? PathtraceMod.bisectWindowMs() + 30_000L
+                        : 100_000L;
+                long deadline = System.nanoTime() + watchDeadlineMs * 1_000_000L;
                 boolean anchored = false;
-                long deadline = System.nanoTime() + 100_000_000_000L;
                 int healExecuted = 0; // v0.4.4: 自愈重锚执行计数（[S8.7] 行序号）
                 while (!live.windowDone && System.nanoTime() < deadline) {
                     try {
@@ -506,8 +511,8 @@ public final class PathtraceMod {
                     }
                 }
                 if (!live.windowDone) {
-                    r.info("[S8.6] 观察窗 100s 未收口（异常）——实时判定块可能"
-                            + "延迟，会话仍在运行");
+                    r.info("[S8.6] 观察窗 " + (watchDeadlineMs / 1000)
+                            + "s 未收口（异常）——实时判定块可能延迟，会话仍在运行");
                 }
             } else {
                 r.fail("[S8.0] liveBeginNative 拒绝（见 [live] 行）——实时会话"
@@ -740,6 +745,35 @@ public final class PathtraceMod {
      */
     static boolean atlasEnabled() {
         return flagProp("pathtrace.atlas", true);
+    }
+
+    // ---- v0.4.7: 毒化写手五段二分梯（LiveSession 换段置位；单调摘除）----
+    // A 基线（全部写手在岗）→ B atlas 链灭活 → C 合成链关停 → D 摄取暂停
+    // → E live 派发停。每段 40s；换段即重锚 TLAS（新段从已知存活态起步）
+    // + census 普查 + 段判定行（canary 死亡采样 + camHit 归零采样）。
+    // 死亡在哪一段首次停止 ⇒ 凶手=该段摘除的写手集合。
+    /** Phase B: atlas 链灭活（native 纹理/暂存退休 + 上传拒绝 + 顶点色回退）。 */
+    static volatile boolean bisectAtlasOff = false;
+    /** Phase C: 合成链关停（present kernel/GPU 回读/glTexSubImage2D/blit 全停）。 */
+    static volatile boolean bisectComposeOff = false;
+    /** Phase D: 摄取暂停（SceneProxy 空转——BLAS 构建/池写入全停，TLAS 冻结）。 */
+    static volatile boolean bisectIngestOff = false;
+    /** Phase E: live 派发停（累积冻结——仅金丝瑞/哨兵/census 触碰 TLAS）。 */
+    static volatile boolean bisectLiveOff = false;
+
+    /** 二分梯总开关（默认开——本次运行即实验；-Dpathtrace.bisect=false 恢复 v0.4.6 行为）。 */
+    static boolean bisectEnabled() {
+        return flagProp("pathtrace.bisect", true);
+    }
+
+    /** 每段时长（ms，默认 40s）。 */
+    static long bisectPhaseMs() {
+        return Long.getLong("pathtrace.bisect.phaseMs", 40_000L);
+    }
+
+    /** 二分梯观察窗（五段 + 10s 尾量；LiveSession 判定块与探针线程 deadline 用）。 */
+    static long bisectWindowMs() {
+        return 5 * bisectPhaseMs() + 10_000L;
     }
 
     // ---- v0.4.2 探针线程交叉复测通道（worker→probe 的单向请求）----

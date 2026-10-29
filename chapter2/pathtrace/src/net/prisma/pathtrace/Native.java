@@ -194,8 +194,9 @@ final class Native {
     /** 呈现图像回读（0xAARRGGBB，PNG 证据写入用；RT 工作线程）。 */
     static native int[] liveReadbackNative();
 
-    /** 会话计数器：long[8] {frames, sppTotal, resets, refreshes, totalQueries,
-     * lastQueries, lastCamHits, atlasMode(0=白色/顶点色, 1=ATLAS_RGB)}。 */
+    /** 会话计数器：long[10] {frames, sppTotal, resets, refreshes, totalQueries,
+     * lastQueries, lastCamHits, atlasMode(0=白色/顶点色, 1=ATLAS_RGB),
+     * tlasBuilds, tlasAgeMs(-1=从未构建——v0.4.7 死亡行 age=)}。 */
     static native long[] liveStatsNative();
 
     /** 会话尺寸 int[2] {w, h}；未开启返回 null。 */
@@ -209,6 +210,10 @@ final class Native {
 
     /** 将暂存缓冲中的块图集像素（RGBA8）上传为 MTLTexture，切换 ATLAS_RGB。 */
     static native boolean uploadAtlasNative(int width, int height);
+
+    /** v0.4.7 bisect Phase B：整条 atlas 链运行时灭活（纹理+暂存退休、
+     * 后续上传拒绝、albedo 回落顶点色）。 */
+    static native void setAtlasEnabledNative(boolean enabled);
 
     /** 工作线程周期性 TLAS 重锚（v0.3 实证模式：射线前新鲜 AS build）。 */
     static native void liveRefreshNative();

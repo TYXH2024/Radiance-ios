@@ -226,6 +226,11 @@ static int g_liveAtlasMode = 0;              // 0=white/vertex-color 1=atlas RGB
 static id<MTLBuffer> g_atlasStaging = nil;   // GL readback target (shared)
 static uint8_t *g_atlasStagingData = NULL;   // v0.4.3: contents + kGuardPad
 static uint64_t g_atlasStagingBytes = 0;
+// v0.4.7: bisect Phase B kill-switch —— 整条 atlas 链（纹理+暂存+上传
+// 通道）可运行时灭活；TLAS 构建时刻记录供死亡行打 age=（“重建后 ~1s
+// 即死”签名直接量化）。
+static BOOL g_atlasEnabled = YES;
+static double g_lastTlasBuildMs = -1.0;
 /** v0.4.3: staging 头尾 guard pad（字节）。 */
 static const NSUInteger kGuardPad = 64 * 1024;
 
@@ -592,6 +597,7 @@ static void rebuild_tlas_locked(void) {
 
     // Ready only after the new TLAS completed — safe to drop retired objects.
     flush_retired();
+    g_lastTlasBuildMs = clockms(); // v0.4.7: build-age 基准（[tlas-health] 死亡行 age=）
     rp("[tlas] rebuilt in %.2f ms (instances=%u, as=%llu B, tris=%u, "
        "colorSlots=%u, pools=%llu+%llu B, total=%llu builds)",
        ms, n, (unsigned long long)sizes.accelerationStructureSize,
@@ -2572,16 +2578,18 @@ Java_net_prisma_pathtrace_Native_liveReadbackNative(JNIEnv *env, jclass cls) {
     }
 }
 
-// Live counters for the report. Returns jlong[9]: frames, sppTotal, resets,
+// Live counters for the report. Returns jlong[10]: frames, sppTotal, resets,
 // refreshes, totalQueries, lastQueries, lastCamHits, atlasMode(0/1),
-// tlasBuilds(v0.4.4).
+// tlasBuilds(v0.4.4), tlasAgeMs(v0.4.7).
 JNIEXPORT jlongArray JNICALL
 Java_net_prisma_pathtrace_Native_liveStatsNative(JNIEnv *env, jclass cls) {
     (void)cls;
     // v0.4.4: [8] = TLAS build 计数（g_stats[3] 的宽恕竞读——与 liveFrameNative
     // 的重置检测同级别的提示读；[live] 行打出 tlas=build#N，camHit 衰减与
     // build 年龄的相关性一眼可见）。
-    jlong out[9] = { 0, 0, 0, 0, 0, 0, 0, 0, 0 };
+    // v0.4.7: [9] = 当前 TLAS 年龄 ms（-1=从未构建）——死亡行 age= 与
+    // “重建后 ~1s 即死”签名一行对照。
+    jlong out[10] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
     @synchronized (g_liveLock) {
         out[0] = (jlong)g_liveFrames;
         out[1] = (jlong)g_liveSppTotal;
@@ -2592,9 +2600,11 @@ Java_net_prisma_pathtrace_Native_liveStatsNative(JNIEnv *env, jclass cls) {
         out[6] = (jlong)g_liveLastCamHits;
         out[7] = (jlong)(g_atlasTexture != nil ? 1 : 0);
         out[8] = (jlong)g_stats[3];
+        out[9] = (g_lastTlasBuildMs < 0.0) ? (jlong)-1
+                : (jlong)(clockms() - g_lastTlasBuildMs);
     }
-    jlongArray result = (*env)->NewLongArray(env, 9);
-    if (result != NULL) { (*env)->SetLongArrayRegion(env, result, 0, 9, out); }
+    jlongArray result = (*env)->NewLongArray(env, 10);
+    if (result != NULL) { (*env)->SetLongArrayRegion(env, result, 0, 10, out); }
     return result;
 }
 
@@ -2658,6 +2668,11 @@ Java_net_prisma_pathtrace_Native_uploadAtlasNative(
     (void)env; (void)cls;
     // ---- validation under the session lock ----
     @synchronized (g_liveLock) {
+        // v0.4.7: bisect Phase B 之后整条链已灭活——上传直接拒绝（防迟到写手）。
+        if (!g_atlasEnabled) {
+            rp("[bisect] atlas upload reject: chain torn down (Phase B)");
+            return JNI_FALSE;
+        }
         if (g_atlasStaging == nil) {
             rp("[live] atlas upload reject: no staging buffer");
             return JNI_FALSE;
@@ -2686,6 +2701,43 @@ Java_net_prisma_pathtrace_Native_uploadAtlasNative(
            "(albedo path: ATLAS_RGB x vertex tint)", width, height);
     }
     return JNI_TRUE;
+}
+
+// v0.4.7: bisect Phase B——整条 atlas 链灭活。MTLTexture 与 GL 回读暂存
+// 缓冲一并入 g_retired（下一次 TLAS 构建完成时 flush——换段重锚紧接着
+// 触发，即“灭活→重锚→flush”同一拍完成）；albedo 路径回落顶点色（内核
+// 绑定侧 g_atlasTexture==nil 时自动用 g_whiteTexture）；此后所有上传被
+// 拒绝。锁序：liveLock→sceneLock（与 liveFrameNative 同序——g_retired
+// 的另一路变更都在 sceneLock 下，双锁嵌套排除并发 flush）。
+JNIEXPORT void JNICALL
+Java_net_prisma_pathtrace_Native_setAtlasEnabledNative(
+        JNIEnv *env, jclass cls, jboolean enabled) {
+    (void)env; (void)cls;
+    @synchronized (g_liveLock) {
+        BOOL wasEnabled = g_atlasEnabled;
+        g_atlasEnabled = (enabled == JNI_TRUE) ? YES : NO;
+        if (g_atlasEnabled) {
+            rp("[bisect] native atlas chain re-enabled (无操作——除非重新采集)");
+            return;
+        }
+        if (!wasEnabled) { return; }
+        @synchronized (g_sceneLock) {
+            if (g_atlasTexture != nil) {
+                [g_retired addObject:g_atlasTexture];
+                g_atlasTexture = nil;
+            }
+            if (g_atlasStaging != nil) {
+                [g_retired addObject:g_atlasStaging];
+                g_atlasStaging = nil;
+            }
+            g_atlasStagingData = NULL;
+            g_atlasStagingBytes = 0;
+            g_liveAtlasMode = 0;
+            g_liveAtlasDispatched = 0;
+        }
+        rp("[bisect] native atlas chain torn down（MTLTexture+暂存入 retired"
+           "——随下次 TLAS 构建释放；albedo=顶点色；后续上传拒绝）");
+    }
 }
 
 // Worker-thread re-anchor. v0.4.1: NOT called by the live loop anymore —
@@ -2766,6 +2818,8 @@ Java_net_prisma_pathtrace_Native_shutdownNative(JNIEnv *env, jclass cls) {
     // v0.4.5: 毒化仪器状态（影子/金丝瑞/首帧标记）。
     g_sharedCanary = nil;
     g_liveAtlasDispatched = 0;
+    g_atlasEnabled = YES;   // v0.4.7: bisect 灭活随会话关闭复位（重开世界=新实验）
+    g_lastTlasBuildMs = -1.0;
     if (g_instanceShadow != NULL) {
         free(g_instanceShadow);
         g_instanceShadow = NULL;

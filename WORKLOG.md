@@ -410,3 +410,21 @@ Stage Summary:
 - v0.4.5 判读定谳：相机段饿死（数组序+回绕布局+35s 窗口三件套）；"眼前 void/脚底检测不到/tlas-health t=0 死亡"三症状同根因；[census]/[audit] 毒化追凶仪器的既望结论需按此重读（"幸存带"方向修正）
 - v0.4.6 交付：pathtrace-v0.4.6——摄取相机距离近先；预期真机：[camera-first] 行出现、S6 `camera section not ready` 消失、-Y 金丝雀命中、眼前 void 消失、camHit 稳定不归零
 - 待办：①CI 过绿 + Release pathtrace-v0.4.6 ②用户同存档同姿态 60s 真机回报（重点 [camera-first]/[tlas-health]/[live] camHit）③毒化判读若仍现（camHit 归零），用 v0.4.5 三仪在**修复后的相机带**上重新定谳 ④2.4 事件驱动摄取（mixin 化 SceneProxy——TLAS 冻结于摄取窗口的架构限制一并解除）
+
+## 2026-10-29（二十一）· pathtrace v0.4.6 真机回收判读：近景 void 闭环 + 毒化显形"重建后 ~1s 即死"精确定时器签名 → v0.4.7 五段二分梯
+
+Task: 回收 v0.4.6 真机产物（M3 单机 report + 三 PNG + 用户雾图截图目检）→ 判读 → v0.4.7（用户批准的 atlas 灭活二分，扩展为单次运行五段梯）
+
+Work Log:
+- **CI/Release 闭环**：chapter2-pathtrace run 17 success；pathtrace-v0.4.6.jar（113928 B）已上传已下载运行 ✓（run 19 metal-probe cancelled = paths 过宽重复构建，无碍）
+- **近景 void 修复验证通过**：`[camera-first] 相机段 (0,64,-16) 已摄取（rebuild #1）`——v0.4.6 相机距离优先摄取生效；每次 TLAS 重建后探针 4/6 命中：**-Y 脚下 1.62 格**（instance=737 → section=(0,64,-16) 相机段本体）、±Z 1.5 格、-X 21.5 格。用户实测两症状（眼前四五格 void / 检测不到脚底）同根消除
+- **毒化真面目显形（本轮最大发现）**：不再是模糊的"几十秒后死"——**每次重建后存活精确 ~1.0s 即死**（复活 t=8.86→死 9.86；19.92→20.92；29.96→…）——精确定时器级签名。回溯：v0.4.1 已埋下同签名（camHit 1s=100% → (1s,2s) 永久归零，注释在案但当时未定谳）。用户雾图截图 = camHit=0.1% 时满屏天空色（99.9% 主射线 miss），pathtrace_frame.png = TLAS 新鲜时的离屏帧——渲染器本体无病
+- **写手画像收窄**：audit 行持续"实例缓冲=干净 金丝雀=干净"⇒ GPU 私有内存写手；census 445/752→0/752（t=30.61→33.01，2.4s 渐进全灭）⇒ 持续型写入而非一次性损坏；死亡时刻与 atlas epoch 相关性弱（atlas 上传仅 t≈0.01s 一次，解释不了周期性死亡）⇒ 嫌疑集中于**持续型写手**：每帧 pathtrace/present 派发、每帧 GL 合成、每秒 5-6 次 BLAS 池写
+- **v0.4.7 设计（用户批准方案①扩展为单次运行定谳）**：五段单调摘除二分梯——A(0-40s) 基线 → B(40-80s) atlas 链灭活（native setAtlasEnabledNative：MTLTexture+暂存入 retired、上传拒绝、顶点色回退；锁序 liveLock→sceneLock 与 liveFrameNative 同序）→ C(80-120s) 合成链关停（hook 跳过 livePresentNative+present；画面回落原版帧）→ D(120-160s) 摄取暂停（SceneProxy 空转）→ E(160-200s) live 派发停（仅金丝雀/哨兵/census 触碰 TLAS）。换段动作：上一段判定行（canary 死亡采样主判 + camHit 归零副证）→ 摘除 → census 换段普查 → reanchorReq 重锚（新段从存活态起步）
+- **配套仪器**：liveStatsNative 扩 [10]（[9]=TLAS 年龄 ms——[tlas-health] 死亡/复活行与 [live] 行新增 age= 栏，"~1s 即死"签名直接量化）；PathtraceMod watchdog deadline 100s→二分窗+30s（否则梯子后半程无人消费重锚请求——本轮发现的隐性约束）；观察窗 60s→210s；段判定解读自动化（死亡比首次归零的段=凶手被摘除段；全高=凶手在仅存仪器/驱动层）
+- 冒烟：ecj 14 类零错误 / metal_pathtrace.m 剥离注释字符串后括号平衡 {}422:422 []630:630 ()1305:1305 / JNI 符号 setAtlasEnabledNative 双侧对齐；版本链 bump 0.4.7（build.sh/fabric.mod.json/报告头/workflow TAG+jar 名+notes/README 协议重写）；现场归档 M3-v0.4.6-report.txt
+
+Stage Summary:
+- v0.4.6 判读定谳：近景 void/脚底检测闭环 ✓；毒化签名升级为"重建后 ~1s 即死"（定时器级）+ GPU 私有内存写手 + 持续型写入
+- v0.4.7 交付：pathtrace-v0.4.7——五段二分梯（单次真机运行 210s 定谳写手）；预期报告自带 [bisect] 五段判定行 + 收口行
+- 待办：①CI 过绿 + Release pathtrace-v0.4.7 ②用户单次 210s 真机回报（静止同姿态，重点 [bisect] 段判定行/收口行/age= 栏）③按凶手段位定 v0.4.8 定点修复（B=atlas 链→修采集/纹理通道；C=合成链→修 present/GL；D=摄取链→查池写/BLAS；E=pathtrace 内核 OOB→审计内核绑定与缓冲尺寸；全高=驱动层→分配隔离绕行）

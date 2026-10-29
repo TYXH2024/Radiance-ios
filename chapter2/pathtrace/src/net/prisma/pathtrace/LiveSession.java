@@ -106,6 +106,25 @@ final class LiveSession implements Runnable {
      * 卡住（S8.7 全程未触发）；2.0 覆盖残存命中量级，仍远低于健康值。 */
     private static final double CAMHIT_DEAD_PCT = 2.0;
 
+    // ---- v0.4.7: 毒化写手五段二分梯（单调摘除，换段即重锚）----
+    /** 观察窗（ms）：二分梯=五段+尾量；否则 v0.4.6 原 60s。 */
+    private final long windowMs = PathtraceMod.bisectEnabled()
+            ? PathtraceMod.bisectWindowMs() : LIVE_WINDOW_MS;
+    /** 二分梯是否启用（构造时定格——与探针线程 deadline 一致）。 */
+    private final boolean bisectOn = PathtraceMod.bisectEnabled();
+    /** 当前段（0=A … 4=E；收口后重5）。 */
+    private int bisectPhase = 0;
+    /** 收口标志（E 段结束打总收口行）。 */
+    private boolean bisectDone = false;
+    /** 段内 canary 采样分母/分子（healthCheck 每次 tick 计数）。 */
+    private int phaseHealthTicks = 0;
+    private int phaseHealthDeadTicks = 0;
+    /** 段内 camHit 归零采样（reportProgress 每 1s/5s 行计数；E 段不适用）。 */
+    private int phaseCamHitSamples = 0;
+    private int phaseCamHitZeros = 0;
+    /** 各段 canary 死亡比快照（收口行汇总用）。 */
+    private final int[] phaseDeadPct = new int[6];
+
     private final ProbeReport r;
     private final long startNs = System.nanoTime();
 
@@ -200,7 +219,7 @@ final class LiveSession implements Runnable {
                     r.info("[live] 相机不可读（退出世界/切换场景？）——累积暂停，"
                             + "已累积画面保留；回到世界自动恢复");
                 }
-                if (elapsedMs >= LIVE_WINDOW_MS && !windowDone) {
+                if (elapsedMs >= windowMs && !windowDone) {
                     finishWindow();
                 }
                 continue;
@@ -217,8 +236,10 @@ final class LiveSession implements Runnable {
             lastPitch = pose[4];
             poseValid = true;
 
-            // ---- 累积一帧 ----
-            Native.liveFrameNative(pose[0], pose[1], pose[2], pose[3], pose[4]);
+            // ---- 累积一帧（v0.4.7: E 段派发停——累积冻结，仅监视仪器在岗）----
+            if (!PathtraceMod.bisectLiveOff) {
+                Native.liveFrameNative(pose[0], pose[1], pose[2], pose[3], pose[4]);
+            }
             wallFrames++;
 
             // ---- v0.4.2: atlas epoch 括号（首循环前基线 + epoch 变化即时）----
@@ -238,6 +259,12 @@ final class LiveSession implements Runnable {
             if (lastHealthMs < 0 || elapsedMs - lastHealthMs >= healthCadence) {
                 lastHealthMs = elapsedMs;
                 healthCheck(elapsedMs);
+            }
+
+            // ---- v0.4.7: 毒化写手二分梯（A 基线→B 关atlas→C 关合成→D 停摄取
+            // →E 停派发；每段 40s，换段即 census+重锚+段判定行）----
+            if (bisectOn && !bisectDone) {
+                bisectTick(elapsedMs);
             }
 
             // ---- v0.4.5: 实例普查编排（基线→稳态→新鲜→再衰减→晚窗）----
@@ -307,10 +334,134 @@ final class LiveSession implements Runnable {
             }
 
             // ---- 观察窗收口（报告判定块；会话继续）----
-            if (elapsedMs >= LIVE_WINDOW_MS && !windowDone) {
+            if (elapsedMs >= windowMs && !windowDone) {
                 finishWindow();
             }
         }
+    }
+
+    // ------------------------------------------------------------------
+    // v0.4.7: 毒化写手五段二分梯（单调摘除——单次真机运行定谳）
+    // ------------------------------------------------------------------
+
+    /**
+     * 换段调度：段边界（40s/80s/120s/160s/200s，可调 pathtrace.bisect.phaseMs）。
+     * 每次换段：①上一段判定行（canary 死亡采样 + camHit 归零采样）；
+     * ②摘除写手（置位 + native 灬活）；③census 智查（幸存分布随段对照）；
+     * ④reanchorReq=true（探针线程重建 TLAS——新段从已知存活态起步，
+     * retired 里刚退休的 atlas 资源也随本次构建 flush）。
+     */
+    private void bisectTick(long elapsedMs) {
+        long pms = PathtraceMod.bisectPhaseMs();
+        int phase = (int) Math.min(5L, elapsedMs / pms);
+        if (phase <= bisectPhase) {
+            return;
+        }
+        phaseVerdict((char) ('A' + bisectPhase), elapsedMs);
+        bisectPhase = phase;
+        phaseHealthTicks = 0;
+        phaseHealthDeadTicks = 0;
+        phaseCamHitSamples = 0;
+        phaseCamHitZeros = 0;
+        if (phase >= 5) {
+            bisectDone = true;
+            StringBuilder recap = new StringBuilder();
+            for (int i = 0; i < 5; i++) {
+                if (i > 0) { recap.append('，'); }
+                recap.append((char) ('A' + i)).append("=")
+                        .append(phaseDeadPct[i]).append('%');
+            }
+            r.pass("[bisect] 五段梯收口 @" + (5 * pms / 1000) + "s——canary 死亡比："
+                    + recap + "。死亡比首次归零的段 ⇒ 凶手=该段摘除的写手；"
+                    + "全部高 ⇒ 凶手在仅存仪器（金丝瑞/哨兵射线派发或 TLAS 构建"
+                    + "编码器本身）——驱动层/内核 OOB 考虑范围。会话继续运行");
+            return;
+        }
+        switch (phase) {
+            case 1: // A→B: atlas 链灭活
+                PathtraceMod.bisectAtlasOff = true;
+                try {
+                    Native.setAtlasEnabledNative(false);
+                } catch (Throwable t) {
+                    r.fail("[bisect] setAtlasEnabledNative 异常: " + t);
+                }
+                r.pass(String.format(
+                        "[bisect] A→B @%.0fs：atlas 链灭活（MTLTexture+暂存退休、"
+                                + "上传拒绝、albedo=顶点色）——B 段死亡停止 ⇒"
+                                + " 写手=atlas 上传/驻留链；继续死 ⇒ 向上摘除",
+                        elapsedMs / 1000.0));
+                break;
+            case 2: // B→C: 合成链关停
+                PathtraceMod.bisectComposeOff = true;
+                r.pass(String.format(
+                        "[bisect] B→C @%.0fs：合成链关停（present 内核/GPU 回读/"
+                                + "glTexSubImage2D/blit 全停——画面回落原版帧）——"
+                                + "C 段死亡停止 ⇒ 写手=合成链；继续死 ⇒ 向上摘除",
+                        elapsedMs / 1000.0));
+                break;
+            case 3: // C→D: 摄取暂停
+                PathtraceMod.bisectIngestOff = true;
+                r.pass(String.format(
+                        "[bisect] C→D @%.0fs：摄取暂停（BLAS 构建/池写入全停，"
+                                + "TLAS 冻结）——D 段死亡停止 ⇒ 写手=摄取链"
+                                + "（池写/BLAS 构建/实例增长）；继续死 ⇒ 向上摘除",
+                        elapsedMs / 1000.0));
+                break;
+            case 4: // D→E: live 派发停
+                PathtraceMod.bisectLiveOff = true;
+                r.pass(String.format(
+                        "[bisect] D→E @%.0fs：live 派发停（累积冻结——仅金丝瑞/"
+                                + "哨兵/census 触碰 TLAS；[live] 行 camHit 栏"
+                                + "本段不适用，以 canary 为准）——E 段死亡停止 ⇒"
+                                + " 写手=每帧 pathtrace 派发（内核 OOB 首要嫌疑）；"
+                                + "继续死 ⇒ 凶手在仅存仪器/驱动层",
+                        elapsedMs / 1000.0));
+                break;
+            default:
+        }
+        // 换段普查（重锚前打——测量上一段末状态）+ TLAS 重锚（新段从存活态起步）
+        census("bisect " + (char) ('A' + phase - 1) + "→" + (char) ('A' + phase)
+                + " 换段", elapsedMs);
+        PathtraceMod.reanchorReq = true;
+    }
+
+    /** 段判定行：canary 死亡采样为主判（全段适用），camHit 归零采样为副证
+     * （E 段无派发不适用）。死亡比首次归零的段 = 凶手被摘除的那一段。 */
+    private void phaseVerdict(char phase, long elapsedMs) {
+        int idx = phase - 'A';
+        int pct = phaseHealthTicks > 0
+                ? (int) Math.round(phaseHealthDeadTicks * 100.0 / phaseHealthTicks)
+                : -1;
+        if (idx >= 0 && idx < phaseDeadPct.length) {
+            phaseDeadPct[idx] = pct;
+        }
+        String removed;
+        switch (phase) {
+            case 'A': removed = "无（基线——全部写手在岗）"; break;
+            case 'B': removed = "atlas 链"; break;
+            case 'C': removed = "合成链（present/回读/GL 上传）"; break;
+            case 'D': removed = "摄取（BLAS/池写）"; break;
+            default:  removed = "live 派发（pathtrace kernel）"; break;
+        }
+        String interp;
+        if (pct < 0) {
+            interp = "本段无 canary 采样（异常——对照 [tlas-health] 行）";
+        } else if (pct <= 5) {
+            interp = "死亡停止 ⇒ 凶手坐实=本段摘除的 " + removed;
+        } else if (pct >= 50) {
+            interp = "死亡持续 ⇒ " + removed + " 洗清，凶手在后续段候选中";
+        } else {
+            interp = "部分死亡（边界态）——对照 [tlas-health] 行死亡时刻与 age=";
+        }
+        String camHitNote = phase == 'E'
+                ? "（无 live 派发——camHit 栏不适用）"
+                : String.format("，camHit 归零 %d/%d 采样",
+                        phaseCamHitZeros, phaseCamHitSamples);
+        r.pass(String.format(
+                "[bisect] Phase %c 段判定 @%.0fs（本段已摘除：%s）：canary 死亡"
+                        + " %d/%d 采样（%d%%）%s —— %s",
+                phase, elapsedMs / 1000.0, removed, phaseHealthDeadTicks,
+                phaseHealthTicks, pct, camHitNote, interp));
     }
 
     private boolean moved(float[] pose) {
@@ -357,6 +508,16 @@ final class LiveSession implements Runnable {
             // v0.4.3 现场的 "探针 2/6 / worker 0/6" 分歧与查询变慢 7 倍
             // 都指向这一栏）。
             String tlasTag = st.length >= 9 ? String.format(" tlas=build#%d", st[8]) : "";
+            if (st.length >= 10 && st[9] >= 0) {
+                tlasTag += String.format(" age=%.1fs", st[9] / 1000.0);
+            }
+            // v0.4.7: 二分梯段内 camHit 归零采样（段判定行副证；E 段无派发不计）。
+            if (bisectOn && !bisectDone && !PathtraceMod.bisectLiveOff) {
+                phaseCamHitSamples++;
+                if (camHit < CAMHIT_DEAD_PCT) {
+                    phaseCamHitZeros++;
+                }
+            }
             r.info(String.format(
                     "[live] %.0fs: frames=%d (%.1f f/s) wall=%.1f f/s loop=%.0fHz"
                             + " spp=%d resets=%d%s | 上帧 %d 查询 camHit=%.1f%%"
@@ -516,30 +677,41 @@ final class LiveSession implements Runnable {
     private void healthCheck(long elapsedMs) {
         try {
             // 首帧 ATLAS_RGB 时刻（st[7]==1 首次为真）——死亡行关联事件。
-            if (!atlasFrameSeen) {
-                long[] st = Native.liveStatsNative();
-                if (st != null && st.length >= 8 && st[7] == 1) {
-                    atlasFrameSeen = true;
-                    firstAtlasFrameMs = elapsedMs;
-                }
+            long[] st = Native.liveStatsNative();
+            if (!atlasFrameSeen && st != null && st.length >= 8 && st[7] == 1) {
+                atlasFrameSeen = true;
+                firstAtlasFrameMs = elapsedMs;
             }
+            // v0.4.7: 当前 TLAS 年龄（死亡/复活行 age=——“重建后 ~1s 即死”
+            // 签名直接量化；换段对照的硬指标）。
+            String ageTag = (st != null && st.length >= 10 && st[9] >= 0)
+                    ? String.format(" | build 年龄=%.2fs", st[9] / 1000.0) : "";
             float[] pose = PathtraceMod.cameraPose();
             float[] res = Native.castRayNative(pose[0], pose[1], pose[2],
                     0f, -1f, 0f, 512f);
             boolean alive = res != null && res[0] > 0.5f;
+            // v0.4.7: 二分梯段内 canary 采样计数（段判定行分子/分母）。
+            if (bisectOn && !bisectDone) {
+                phaseHealthTicks++;
+                if (!alive) {
+                    phaseHealthDeadTicks++;
+                }
+            }
             if (alive != healthAlive || !healthEchoed) {
                 healthAlive = alive;
                 healthEchoed = true;
                 String ev = deathContext(elapsedMs);
                 if (alive) {
                     r.pass(String.format(
-                            "[tlas-health] t=%.2fs 复活（-Y 脚下 %.2f 格命中）| %s",
-                            elapsedMs / 1000.0, res != null ? res[1] : -1f, ev));
+                            "[tlas-health] t=%.2fs 复活（-Y 脚下 %.2f 格命中）"
+                                    + "%s | %s",
+                            elapsedMs / 1000.0, res != null ? res[1] : -1f,
+                            ageTag, ev));
                 } else {
                     r.fail(String.format(
                             "[tlas-health] t=%.2fs 死亡（-Y 金丝瑞 miss——相机"
-                                    + "正下方本有地板）| %s",
-                            elapsedMs / 1000.0, ev));
+                                    + "正下方本有地板）%s | %s",
+                            elapsedMs / 1000.0, ageTag, ev));
                 }
                 sharedAudit(elapsedMs);
             }
@@ -731,7 +903,12 @@ final class LiveSession implements Runnable {
             int blits = PathtraceHook.blitCount;
             int glErrs = PathtraceHook.glErrors;
 
-            r.stage("S8.6 实时会话判定（60s 观察窗收口）");
+            r.stage("S8.6 实时会话判定（" + (windowMs / 1000) + "s 观察窗收口）");
+            if (bisectOn) {
+                r.info("[bisect] 二分梯模式：本判定块基于整窗常规统计（E 段无派发"
+                        + "时 camHit/blit 栏为冻结值）——毒化定谳以上方 [bisect]"
+                        + " 各段判定行与收口行为准");
+            }
             double frameSamples = (double) rtW() * rtH() * PathtraceMod.LIVE_SPP;
             double lastCamHit = frameSamples > 0
                     ? st[6] * 100.0 / Math.max(1, (long) frameSamples) : 0;

@@ -11,27 +11,26 @@
 > **v0.4.2 真机回收（2026-10-28 17:55）：camHit 恢复（35.7%）+ 真噪点出屏，但 live ~1.5s 后 SIGSEGV 闪退 → v0.4.3。**TLAS 构建职责迁移修复坐实：camHit=35.7%（v0.4.1 永久 0.0%→本版恢复）、atlas 上传前后哨兵均 3/6（bind 冲突/相机污染两假说双排除）、102 f/s / 82.89 Mray/s。闪退归因（hs_err 铁证）：渲染线程 GlComposer.present → glTexSubImage2D → OSMesa/zink `_platform_memmove` **读源侧** SEGV_ACCERR，寄存器拼图 317216+201184=518400 恰为整帧字节数——源指针被正向平移出缓冲尾部；LWJGL 3 不做 buffer 边界检查，native 越界直接杀进程。统一根因判读：v0.4.2 只重置 UNPACK ROW_LENGTH/ALIGNMENT、**漏 SKIP_PIXELS/SKIP_ROWS**——遗留 SKIP 把上传源正向平移：v0.4 底部花屏条（错位行）与 v0.4.2 SIGSEGV（平移撞保护页）同源。v0.4.3 四重防御：完整 UNPACK/PACK 五元组归零 + Java 容量闸门 + 分段上传（≤64 行/段）+ native staging 头尾 64KB guard pad。现场记录：`docs/chapter2-pathtrace-field/`
 > **v0.4.3 真机回收（2026-10-28 17:55/18:20 双 run）：防崩生效（进程存活、skipRows=112 现场捕获坐实）但两新 P0 → v0.4.4。**①黑屏：每帧 chunked texSubImage2D 首段 GL_INVALID_ENUM → break 弃帧（texSubErr=2815/2816 帧全灭）→ RT 纹理永黑 = 用户"黑块"；根因：present 缺预排空——进队早于本帧的错误被段 0 后第一个 glGetError 误记到上传头上（v0.4.2 同采样 89s 仅 10 错 vs v0.4.3 每帧必错，时间线直指每帧新增的五元组读写）。②TLAS 毒化：live ~1s 后全员归零（worker+probe 双 0/6）；30s 探针重建后 probe 2/6 恢复而 worker 仍 0/6；同 518400 全 miss 查询从 ~10ms 涨到 ~77ms（慢 miss = 垃圾遍历签名）。v0.4.4：present 四件套（预排空/pname 掩码/首帧归因梯/段级重试）+ captureAtlas PACK 回读验证 + g_verifiedTlas 双句柄 A/B + TLAS 身份/耗时仪器 + 自愈重锚 [S8.7]。现场记录：`docs/chapter2-pathtrace-field/`
 > **v0.4.4 真机回收（2026-10-28 19:45，A20 Pro——文件名"M3-"系误标，设备以 S8.1 行为准）：判 LIVE_OK——黑屏 P0-1 修复坐实；TLAS 毒化定谳为【时间级】非线程级 → v0.4.5。**①黑屏已修：归因梯全 0x0000、心跳零真错（texSubErr=0 chunkFail=0）、blit=4753 帧上屏、进程全程存活、retryOk=4862（全部为排空前遗留误记，无一真失败）——四件套直接闭环。②毒化定谳：同一 TLAS#30（探针 30s 重建）：探针线程 30.05s 查询 2/6 命中，**32s 探针（交叉复测 #3）+worker 双 0/6**；TLAS#29 同样 atlas 后 ~1s 由活转死（epoch=1 即时 2/6 → 1.5s 双亡）——**新建 AS 在 ~2s 内被原地打坏，与查询线程无关**；残存 camHit=0.6% 与快照 0.40% 非平坦像素（相机正下方一小片几何，15s/55s 同形）精确对应 = 稳定部分态。用户"灰蒙渐变+中途一次重置再渐变" = camHit 归零后全屏地平线色 + S8.4 30s 重锚（非 S8.7——阈值 bug：camHit<0.5 被现场 0.6% 残存卡死，自愈全程未触发）。v0.4.5：实例普查 [census] + 共享内存审计 [audit]（实例缓冲影子 memcmp + 64KB 金丝瑞）+ 健康监视器 [tlas-health]（250ms 金丝瑞射线+死亡时刻事件关联）+ S8.7 阈值 0.5→2.0 修复 + 5s 自愈冷却。现场记录：`docs/chapter2-pathtrace-field/`
+> **v0.4.5 真机回收（六份：A20 Pro×3 + M3×3，归档.zip 2026-10-28 16:30）：三症状同根定谳——相机段被数组序饿死 → v0.4.6 摄取相机距离近先。**用户实测"视角附近四五格的方块不渲染"即 v0.4.4 起"检测不到脚底"同一件事：相机自身区块段从未进入 TLAS（index = relZ·408+relY·17+relX 回绕布局，相机段落数组尾 408 槽；旧摄取数组序 + 5-6 段/s + 35s 窗 ⇒ 永不抵达）。零负 z rebuild 铁证；探针 +Z 命中踩在缺失条带边界 z=1.00（眼前 5.4 格 void）。现场记录：`docs/chapter2-pathtrace-field/`
+> **v0.4.6 真机回收（M3，2026-10-29 09:10）：近景 void 修复验证通过；TLAS 毒化显形为【重建后 ~1s 即死】精确定时器签名 → v0.4.7 五段二分梯。**①`[camera-first] 相机段 (0,64,-16) 已摄取（rebuild #1）`——首轮入库；每次重建后探针 4/6：**-Y 脚下 1.62 格命中**、±Z 1.5 格——用户两症状同根消除。②毒化真面目：复活 t=8.86→死 9.86、19.92→20.92……每次重建存活精确 ~1.0s（v0.4.1 已埋下同签名：camHit 1s=100% → (1s,2s) 归零）；audit 持续双净（实例缓冲+金丝雀）⇒ GPU 私有内存写手；census 445/752→0/752（2.4s 渐进全灭）⇒ 持续型写入；摄取 5-6 段/s 持续到会话尾（BLAS 池写同为候选）。**v0.4.7：五段单调摘除二分梯（A 基线→B 关 atlas→C 关合成→D 停摄取→E 停派发，每段 40s，换段即重锚+census+段判定行）——单次真机运行锁定写手**；死亡行新增 build 年龄=；`-Dpathtrace.bisect=false` 可关。现场记录：`docs/chapter2-pathtrace-field/M3-v0.4.6-report.txt`
 
 ## 取成品（两个通道，内容相同）
 
 | 通道 | 位置 | 说明 |
 |---|---|---|
-| **A · 工作流运行页成品文件** | Actions → `chapter2-pathtrace` → 任意绿勾运行 → 页面底部 **Artifacts** 区 → `pathtrace-jar` | 每次绿勾必有；zip 内含 `pathtrace-0.4.5.jar` + dylib + metallib。**运行中途被取消的运行没有 artifact**（也不会发布 Release——可能遗留草稿） |
-| **B · GitHub Release（正式交付）** | https://github.com/TYXH2024/Radiance-ios/releases/tag/pathtrace-v0.4.5 → `pathtrace-0.4.5.jar` | 幂等 `--clobber` 重传；若 Releases 页看不到，先检查页面底部"Drafts"区（被取消的运行可能遗留未发布草稿） |
+| **A · 工作流运行页成品文件** | Actions → `chapter2-pathtrace` → 任意绿勾运行 → 页面底部 **Artifacts** 区 → `pathtrace-jar` | 每次绿勾必有；zip 内含 `pathtrace-0.4.7.jar` + dylib + metallib。**运行中途被取消的运行没有 artifact**（也不会发布 Release——可能遗留草稿） |
+| **B · GitHub Release（正式交付）** | https://github.com/TYXH2024/Radiance-ios/releases/tag/pathtrace-v0.4.7 → `pathtrace-0.4.7.jar` | 幂等 `--clobber` 重传；若 Releases 页看不到，先检查页面底部"Drafts"区（被取消的运行可能遗留未发布草稿） |
 
 > v0.1 首发 workflow 遗漏了 artifact 上传步骤（2.0/2.1 均有）——导致"绿勾了但运行页看不到 jar"。v0.1.1 已补齐：**以后看绿勾运行页最下方的 Artifacts 即可直接下载**。
 
 ## 使用（2.3 实时版）
 
-1. 删除 `mods/` 内旧探针 JAR（scene-ingestion / metal-rt-probe / rt-probe / 旧版 pathtrace），放入 `pathtrace-0.4.5.jar`——同存档、同启动器档位（Vulkan/MoltenVK 档，OSMesa 宿主实测兼容）。**回报文件名按设备命名（如 A20Pro-default.txt）**——v0.4.3/0.4.4 的"M3-"前缀实为 A20 Pro 运行（设备以报告 S8.1 行 renderer 为准），教训立此存照。
+1. 删除 `mods/` 内旧探针 JAR（scene-ingestion / metal-rt-probe / rt-probe / 旧版 pathtrace），放入 `pathtrace-0.4.7.jar`——同存档、同启动器档位（Vulkan/MoltenVK 档，OSMesa 宿主实测兼容）。**回报文件名按设备命名（如 A20Pro-default.txt）**——v0.4.3/0.4.4 的"M3-"前缀实为 A20 Pro 运行（设备以报告 S8.1 行 renderer 为准），教训立此存照。
 2. 进入世界后：摄取约 19s → 离屏首帧（2.2 链路原样跑一遍，落 `pathtrace_frame.png`）→ **实时会话自动开启（S8）——游戏画面自此被路径追踪帧整帧替换**（480×270 线性放大至窗口分辨率）。
-3. 建议动作序列（60s 观察窗内）：**静止 ~20s** 看噪点随累积收敛 → **缓慢转动视角** 看累积自动重置（重新变噪）→ **再静止 ~20s** 看重新收敛。移动整个身体（位移）同样触发重置。v0.4.1 注：30s 处有一次刻意的探针线程重锚（[S8.4]）→ 累积重置一次，属预期仪器行为（A/B 后半段）。**v0.4.4 注：若 camHit 连续归零 + 哨兵双死，会自动触发 [S8.7] 自愈重锚（累积重置 + 探针重建）——若持续型毒化，你将看到周期性重新变噪而非永久黑屏，此为预期自愈行为。**
-4. 停留 **≥75s**（60s 观察窗 + 判定收口），随后退出世界/游戏均可（会话资源随进程退出释放，报告在 windowDone 时已写全）。
-5. 回报 game 目录下四个文件：**`pathtrace_report.txt`**（全量报告，v0.4.5 重点行：**[tlas-health]** 死亡/复活行（死亡时刻 + 事件关联——atlas 上传/首帧 ATLAS_RGB/合成帧序）、**[census] 五点**（基线/稳态/S8.4 新鲜/再衰减/晚窗——幸存实例地图：连续索引区段=TLAS 实例记录线性扫写 / 空间聚集=距离选择性失效 / 散布=BLAS 层）、**[audit]**（实例缓冲影子 memcmp + 64KB 金丝瑞——共享侧越界写手当场落网）、**[S8.7] 自愈周期**（v0.4.5 阈值修复后应周期触发）、[live] 的 camHit + tlas=build#、[live-sentinel]/[probe-sentinel] 电池、[compose] 心跳与归因梯、[addr] 地址图（TLAS/实例缓冲/金丝瑞/会话缓冲——邻居越界写布局证据））+ **`pathtrace_frame.png`**（离屏首帧）+ **`pathtrace_live.png`**（实时 15s 快照）+ **`pathtrace_live_final.png`**（实时 55s 快照）。**若再闪退**：iOS Documents 根目录的 `hs_err_pid*.log` + `fatal_trace.txt` + `ame273_crash_report.txt` 一并回报。
-6. **三轮二分协议（v0.4.5 起为标准协议——关键）**：同一存档同一姿态：
-   - **轮 1 默认** 60s（预期复现毒化：[tlas-health] 死亡 + [S8.7] 周期自愈）；
-   - **轮 2 `-Dpathtrace.atlas=false`** 60s——TLAS 全程存活（无死亡行/无自愈）⇒ atlas 链（glReadPixels 回读 / Metal 纹理创建 / ATLAS_RGB 采样帧）凶手坐实；
-   - **轮 3 `-Dpathtrace.compose=false`** 60s——存活 ⇒ 合成器 GL 链（chunked texSubImage2D / blit / GL 状态污染）凶手坐实；两轮均死 ⇒ 渲染环或驱动层（[audit] 若双净 = GPU 私有内存写手）。
+3. **v0.4.7 起为【五段二分梯单次运行协议】（取代 v0.4.5 的三轮手动二分）：全程静止同一姿态，保持游戏开着 ~210s。**梯子自动进行：**A 段（0-40s）** 基线（预期复现毒化：周期性噪点→灰蒙）；**B 段（40s）** 画面自动切顶点色（atlas 链灭活）；**C 段（80s）** 画面自动回落原版帧（合成链关停——这是预期行为，不是坏）；**D 段（120s）** 世界几何冻结（摄取暂停）；**E 段（160s）** 累积冻结。期间 [S8.7] 自愈重锚照常周期触发（若毒化持续），均为预期仪器行为。
+4. 停留 **≥210s**（五段梯 + 判定收口），随后退出世界/游戏均可（会话资源随进程退出释放，报告在 windowDone 时已写全）。
+5. 回报 game 目录下四个文件：**`pathtrace_report.txt`**（v0.4.7 重点行：**[bisect] 五条段判定行 + 五段梯收口行**（canary 死亡比 A~E 汇总——**死亡比首次归零的段 = 凶手被摘除的那一段，直接定谳**）、**[tlas-health]** 死亡行的 **build 年龄=**（"重建后 ~1s 即死"签名量化）、各换段 **[census]**（幸存分布随段对照）、[live] 的 camHit + tlas=build# age=、[live-sentinel]/[probe-sentinel] 电池、[audit] 双净行）+ **`pathtrace_frame.png`** + **`pathtrace_live.png`** + **`pathtrace_live_final.png`**。**若闪退**：iOS Documents 根目录的 `hs_err_pid*.log` + `fatal_trace.txt` + `ame273_crash_report.txt` 一并回报。
+6. **段长与开关**：`-Dpathtrace.bisect.phaseMs=40000`（默认 40s/段）；`-Dpathtrace.bisect=false` 关梯子（恢复 v0.4.6 行为）；旧 `-Dpathtrace.atlas=false` / `-Dpathtrace.compose=false` 开关仍有效（与梯子叠加时相应段提前生效）。
 
 > 若合成疑似干扰排查：加 `-Dpathtrace.compose=false` 启动——累积/快照照常，仅不上屏（判定 `LIVE_OK_NO_COMPOSE`，语义即自证 A/B）。
 

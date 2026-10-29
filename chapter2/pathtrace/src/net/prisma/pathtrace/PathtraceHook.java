@@ -88,6 +88,11 @@ public final class PathtraceHook {
                 state = ACTIVE;
             }
             if (state == ACTIVE) {
+                // v0.4.7: bisect Phase C——合成链关停（present 内核/GPU 回读/
+                // glTexSubImage2D/blit 全停；画面回落原版帧）。零副作用直退。
+                if (PathtraceMod.bisectComposeOff) {
+                    return;
+                }
                 ByteBuffer px = Native.livePresentNative();
                 if (px != null) {
                     composer.present(px);
